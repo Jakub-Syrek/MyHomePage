@@ -1,3 +1,4 @@
+@namespace MyHomePage.Components
 @page "/edit-video/{VideoId:int}"
 @inject VideoService VideoService
 @inject NavigationManager Navigation
@@ -22,7 +23,7 @@
                 <h3>Preview</h3>
                 <div class="video-preview">
                     <video controls>
-                        <source src="/videos/@video.FileName" />
+                        <source src="/videos/@video.Id/@video.FileName" />
                     </video>
                 </div>
             </div>

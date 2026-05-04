@@ -1,3 +1,4 @@
+@namespace MyHomePage.Components
 @implements IAsyncDisposable
 @inject VideoService VideoService
 @inject NavigationManager Navigation
@@ -40,7 +41,7 @@
                 <div class="video-card" @key="video.Id">
                     <div class="card-image">
                         <video controls>
-                            <source src="/videos/@video.FileName" />
+                            <source src="/videos/@video.Id/@video.FileName" />
                         </video>
                     </div>
                     <div class="card-content">
@@ -70,7 +71,7 @@
 @code {
     private List<Video>? videos;
     private bool showUpload = false;
-    private bool isAdmin = false;
+    private bool isAdmin = true;
 
     protected override async Task OnInitializedAsync()
     {
