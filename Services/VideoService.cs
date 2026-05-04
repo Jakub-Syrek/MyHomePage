@@ -8,7 +8,7 @@ public class VideoService(IWebHostEnvironment environment)
 {
     private readonly IWebHostEnvironment _environment = environment;
     private const string VIDEOS_FOLDER = "videos";
-    private const long MAX_FILE_SIZE = 1024 * 1024 * 500; // 500 MB
+    private const long MAX_FILE_SIZE = 1024L * 1024 * 1024 * 2; // 2 GB
     private static readonly string[] AllowedExtensions = [".mp4", ".webm", ".mkv", ".avi"];
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

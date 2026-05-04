@@ -91,7 +91,7 @@ Strona do edycji metadanych istniejącego wideo.
 
 ## Limitacje
 
-- Max 500 MB na plik
+- Max 2 GB na plik
 - Obsługiwane formaty: MP4, WebM, MKV, AVI
 - Przechowywanie lokalne (nie cloud)
 
