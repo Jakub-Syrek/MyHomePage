@@ -1,0 +1,95 @@
+﻿@inherits LayoutComponentBase
+
+<PageTitle>My Home Page</PageTitle>
+
+<div class="layout">
+    <header class="app-header">
+        <div class="header-content">
+            <a href="/" class="logo">
+                🏔️ My Mountain Adventures
+            </a>
+            <nav class="nav-menu">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="app-main">
+        @Body
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 My Mountain Adventures. All videos captured with passion.</p>
+    </footer>
+</div>
+
+<style>
+    .layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    .app-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-content {
+        max-width: 1400px;
+        margin: 0 auto;
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 40px;
+    }
+
+    .logo {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+        text-decoration: none;
+        transition: transform 0.3s;
+    }
+
+    .logo:hover {
+        transform: scale(1.05);
+    }
+
+    .nav-menu {
+        display: flex;
+        gap: 30px;
+    }
+
+    .nav-menu a {
+        color: white;
+        text-decoration: none;
+        font-weight: 500;
+        transition: opacity 0.3s;
+    }
+
+    .nav-menu a:hover {
+        opacity: 0.8;
+    }
+
+    .app-main {
+        flex: 1;
+    }
+
+    .app-footer {
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        text-align: center;
+        padding: 30px 20px;
+        margin-top: 60px;
+    }
+
+    .app-footer p {
+        margin: 0;
+    }
+</style>

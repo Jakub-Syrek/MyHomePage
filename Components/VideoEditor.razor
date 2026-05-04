@@ -1,0 +1,135 @@
+@page "/edit-video/{VideoId:int}"
+@inject VideoService VideoService
+@inject NavigationManager Navigation
+
+<div class="editor-container">
+    <div class="editor-header">
+        <h1>Edit Video</h1>
+        <button class="btn-back" @onclick="GoBack">← Back</button>
+    </div>
+
+    @if (video == null)
+    {
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else
+    {
+        <div class="editor-content">
+            <div class="preview-panel">
+                <h3>Preview</h3>
+                <div class="video-preview">
+                    <video controls>
+                        <source src="/videos/@video.FileName" />
+                    </video>
+                </div>
+            </div>
+
+            <div class="edit-panel">
+                <form @onsubmit="SaveVideo">
+                    <div class="form-group">
+                        <label>Title *</label>
+                        <input type="text" @bind="editTitle" required />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea @bind="editDescription" rows="5"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" @bind="editLocation" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Uploaded</label>
+                        <input type="text" value="@video.UploadedAt.ToString("MMM dd, yyyy HH:mm")" readonly />
+                    </div>
+
+                    <div class="form-group">
+                        <label>File Size</label>
+                        <input type="text" value="@(video.FileSizeBytes / (1024 * 1024))MB" readonly />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert" style="background: @(isSaveSuccess ? "#d4edda" : "#f8d7da");
+                             color: @(isSaveSuccess ? "#155724" : "#721c24");">
+                            @message
+                        </div>
+                    }
+
+                    <div class="button-group">
+                        <button type="submit" class="btn-save" disabled="@isSaving">
+                            @if (isSaving) { <span>Saving...</span> }
+                            else { <span>💾 Save Changes</span> }
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int VideoId { get; set; }
+
+    private Video? video;
+    private string editTitle = "";
+    private string editDescription = "";
+    private string editLocation = "";
+    private string message = "";
+    private bool isSaveSuccess = false;
+    private bool isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        video = await VideoService.GetVideoByIdAsync(VideoId);
+        if (video != null)
+        {
+            editTitle = video.Title;
+            editDescription = video.Description;
+            editLocation = video.Location ?? "";
+        }
+    }
+
+    private async Task SaveVideo()
+    {
+        isSaving = true;
+        message = "";
+
+        try
+        {
+            var success = await VideoService.UpdateVideoAsync(VideoId, editTitle, editDescription, editLocation);
+            if (success)
+            {
+                isSaveSuccess = true;
+                message = "Changes saved successfully! ✓";
+                video = await VideoService.GetVideoByIdAsync(VideoId);
+            }
+            else
+            {
+                isSaveSuccess = false;
+                message = "Error saving changes.";
+            }
+        }
+        catch (Exception ex)
+        {
+            isSaveSuccess = false;
+            message = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

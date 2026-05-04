@@ -1,0 +1,104 @@
+@implements IAsyncDisposable
+@inject VideoService VideoService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<div class="gallery-container">
+    <div class="gallery-header">
+        <h1>🏔️ Mountain Adventures Gallery</h1>
+        @if (isAdmin)
+        {
+            <button class="btn btn-primary btn-upload" @onclick="() => showUpload = !showUpload">
+                + Upload New Video
+            </button>
+        }
+    </div>
+
+    @if (showUpload)
+    {
+        <VideoUpload OnUploadSuccess="RefreshVideos" />
+    }
+
+    @if (videos == null)
+    {
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading videos...</p>
+        </div>
+    }
+    else if (videos.Count == 0)
+    {
+        <div class="empty-state">
+            <p>No videos yet. Check back soon!</p>
+        </div>
+    }
+    else
+    {
+        <div class="grid">
+            @foreach (var video in videos)
+            {
+                <div class="video-card" @key="video.Id">
+                    <div class="card-image">
+                        <video controls>
+                            <source src="/videos/@video.FileName" />
+                        </video>
+                    </div>
+                    <div class="card-content">
+                        <h3>@video.Title</h3>
+                        <p class="description">@video.Description</p>
+                        <div class="meta">
+                            @if (!string.IsNullOrEmpty(video.Location))
+                            {
+                                <span class="location">📍 @video.Location</span>
+                            }
+                            <span class="date">@video.UploadedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        @if (isAdmin)
+                        {
+                            <div class="card-actions">
+                                <button class="btn-small edit" @onclick="() => EditVideo(video.Id)">Edit</button>
+                                <button class="btn-small delete" @onclick="() => DeleteVideo(video.Id)">Delete</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Video>? videos;
+    private bool showUpload = false;
+    private bool isAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        videos = await VideoService.GetAllVideosAsync();
+    }
+
+    private async Task RefreshVideos()
+    {
+        videos = await VideoService.GetAllVideosAsync();
+        showUpload = false;
+    }
+
+    private void EditVideo(int id)
+    {
+        Navigation.NavigateTo($"/edit-video/{id}");
+    }
+
+    private async Task DeleteVideo(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?"))
+        {
+            await VideoService.DeleteVideoAsync(id);
+            await RefreshVideos();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await ValueTask.CompletedTask;
+    }
+}

@@ -1,0 +1,118 @@
+@inject VideoService VideoService
+
+<div class="upload-panel">
+    <div class="upload-card">
+        <h2>Upload New Video</h2>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="alert" style="background: @(isSuccess ? "#d4edda" : "#f8d7da");
+                 color: @(isSuccess ? "#155724" : "#721c24"); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                @message
+            </div>
+        }
+
+        <div class="form-group">
+            <label>Video Title *</label>
+            <input type="text" @bind="videoTitle" placeholder="e.g., Summer Hike to Mountain Peak" />
+        </div>
+
+        <div class="form-group">
+            <label>Description</label>
+            <textarea @bind="videoDescription" placeholder="Share your experience..." rows="4"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Location</label>
+            <input type="text" @bind="videoLocation" placeholder="e.g., Tatra Mountains" />
+        </div>
+
+        <div class="form-group">
+            <label>Video File * (MP4, WebM, MKV, AVI - max 500MB)</label>
+            <div class="file-input-wrapper">
+                <InputFile OnChange="HandleFileSelected" accept=".mp4,.webm,.mkv,.avi" />
+            </div>
+            @if (selectedFile != null)
+            {
+                <p class="file-info">✓ Selected: @selectedFile.Name (@(selectedFile.Size / (1024 * 1024))MB)</p>
+            }
+        </div>
+
+        <button class="btn-submit" @onclick="UploadVideo" disabled="@(isUploading || selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))">
+            @if (isUploading)
+            {
+                <span class="spinner-small"></span> <span>Uploading...</span>
+            }
+            else
+            {
+                <span>Upload Video</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback OnUploadSuccess { get; set; }
+
+    private IBrowserFile? selectedFile;
+    private string videoTitle = "";
+    private string videoDescription = "";
+    private string videoLocation = "";
+    private string message = "";
+    private bool isSuccess = false;
+    private bool isUploading = false;
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+    }
+
+    private async Task UploadVideo()
+    {
+        if (selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))
+            return;
+
+        isUploading = true;
+        message = "";
+
+        try
+        {
+            var (success, msg, videoId) = await VideoService.UploadVideoAsync(
+                selectedFile,
+                videoTitle,
+                videoDescription,
+                videoLocation);
+
+            if (success)
+            {
+                isSuccess = true;
+                message = "Video uploaded successfully! 🎉";
+                ResetForm();
+                await OnUploadSuccess.InvokeAsync();
+            }
+            else
+            {
+                isSuccess = false;
+                message = msg;
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            message = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        selectedFile = null;
+        videoTitle = "";
+        videoDescription = "";
+        videoLocation = "";
+    }
+}
