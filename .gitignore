@@ -1,0 +1,38 @@
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Build results
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.log
+
+# Package files
+*.nupkg
+*.snupkg
+.nuget/
+
+# Runtime
+appsettings.Local.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.idea/
+*.iml
+*.iws
+
+# Node (if adding frontend tooling)
+node_modules/
+dist/
+.env.local
