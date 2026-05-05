@@ -114,86 +114,110 @@ function closeOverlay() {
     }
 }
 
+function getElementTarget(e) {
+    // mouseenter/mouseleave can fire on text nodes - get the parent element
+    if (!e.target) return null;
+    if (e.target.nodeType === 1) return e.target; // ELEMENT_NODE
+    if (e.target.parentElement) return e.target.parentElement;
+    return null;
+}
+
 document.addEventListener('mouseenter', function(e) {
-    const card = e.target.closest('.video-card');
-    if (card) {
-        // Create overlay if it doesn't exist
-        if (!document.getElementById('video-overlay')) {
-            const overlay = document.createElement('div');
-            overlay.id = 'video-overlay';
-            overlay.style.position = 'fixed';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.right = '0';
-            overlay.style.bottom = '0';
-            overlay.style.zIndex = '999';
-            overlay.style.display = 'flex';
-            overlay.style.alignItems = 'center';
-            overlay.style.justifyContent = 'center';
-            overlay.style.background = 'rgba(0, 0, 0, 0.3)';
-            overlay.style.cursor = 'pointer';
+    const target = getElementTarget(e);
+    if (!target || typeof target.closest !== 'function') return;
 
-            // Close on background click
-            overlay.addEventListener('click', function(e) {
-                if (e.target === overlay) {
-                    closeOverlay();
-                }
-            });
+    const card = target.closest('.video-card');
+    if (!card) return;
 
-            // Close on Escape key
-            const closeOnEscape = function(e) {
-                if (e.key === 'Escape') {
-                    closeOverlay();
-                    document.removeEventListener('keydown', closeOnEscape);
-                }
-            };
-            document.addEventListener('keydown', closeOnEscape);
+    // Don't expand if hovering over action buttons (Edit/Delete)
+    // - this lets the user click them on the original card
+    if (target.closest('.card-actions')) return;
 
-            const clone = card.cloneNode(true);
-            clone.style.width = '700px';
-            clone.style.maxWidth = '90vw';
-            clone.style.maxHeight = '90vh';
-            clone.style.position = 'relative';
-            clone.style.zIndex = '1001';
+    // Create overlay if it doesn't exist
+    if (!document.getElementById('video-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'video-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.right = '0';
+        overlay.style.bottom = '0';
+        overlay.style.zIndex = '999';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.background = 'rgba(0, 0, 0, 0.3)';
+        overlay.style.cursor = 'pointer';
 
-            // Add close button
-            const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '×';
-            closeBtn.style.position = 'absolute';
-            closeBtn.style.top = '-30px';
-            closeBtn.style.right = '0';
-            closeBtn.style.background = 'none';
-            closeBtn.style.border = 'none';
-            closeBtn.style.color = 'white';
-            closeBtn.style.fontSize = '40px';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.style.padding = '0';
-            closeBtn.style.width = '40px';
-            closeBtn.style.height = '40px';
-            closeBtn.style.display = 'flex';
-            closeBtn.style.alignItems = 'center';
-            closeBtn.style.justifyContent = 'center';
-            closeBtn.style.zIndex = '1002';
-            closeBtn.onclick = function(e) {
-                e.stopPropagation();
+        // Close on background click
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
                 closeOverlay();
-            };
+            }
+        });
 
-            const container = document.createElement('div');
-            container.style.position = 'relative';
-            container.appendChild(closeBtn);
-            container.appendChild(clone);
+        // Close on Escape key
+        const closeOnEscape = function(e) {
+            if (e.key === 'Escape') {
+                closeOverlay();
+                document.removeEventListener('keydown', closeOnEscape);
+            }
+        };
+        document.addEventListener('keydown', closeOnEscape);
 
-            overlay.appendChild(container);
-            document.body.appendChild(overlay);
-        }
+        const clone = card.cloneNode(true);
+        clone.style.width = '700px';
+        clone.style.maxWidth = '90vw';
+        clone.style.maxHeight = '90vh';
+        clone.style.position = 'relative';
+        clone.style.zIndex = '1001';
+
+        // Remove action buttons from clone - they are DOM clones and don't have
+        // working Blazor event handlers. User must close overlay to access them.
+        const clonedActions = clone.querySelector('.card-actions');
+        if (clonedActions) clonedActions.remove();
+
+        // Add close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = '-30px';
+        closeBtn.style.right = '0';
+        closeBtn.style.background = 'none';
+        closeBtn.style.border = 'none';
+        closeBtn.style.color = 'white';
+        closeBtn.style.fontSize = '40px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.padding = '0';
+        closeBtn.style.width = '40px';
+        closeBtn.style.height = '40px';
+        closeBtn.style.display = 'flex';
+        closeBtn.style.alignItems = 'center';
+        closeBtn.style.justifyContent = 'center';
+        closeBtn.style.zIndex = '1002';
+        closeBtn.onclick = function(e) {
+            e.stopPropagation();
+            closeOverlay();
+        };
+
+        const container = document.createElement('div');
+        container.style.position = 'relative';
+        container.appendChild(closeBtn);
+        container.appendChild(clone);
+
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
     }
 }, true);
 
 document.addEventListener('mouseleave', function(e) {
     const overlay = document.getElementById('video-overlay');
-    if (overlay && !overlay.contains(e.relatedTarget)) {
-        closeOverlay();
-    }
+    if (!overlay) return;
+
+    // Only close if leaving to a target outside the overlay
+    const related = e.relatedTarget;
+    if (related && related.nodeType === 1 && overlay.contains(related)) return;
+
+    closeOverlay();
 }, true);
 </script>
