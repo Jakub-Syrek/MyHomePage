@@ -21,7 +21,15 @@ public class HostModel : PageModel
 
     public async Task OnGetAsync()
     {
-        OgBaseUrl = $"{Request.Scheme}://{Request.Host}";
+        // Detect HTTPS from X-Forwarded-Proto header (set by ngrok/proxies)
+        var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
+        // Ensure HTTPS for social media crawlers
+        if (scheme.Equals("https", StringComparison.OrdinalIgnoreCase) || Request.Host.Host.Contains("ngrok"))
+        {
+            scheme = "https";
+        }
+        OgBaseUrl = $"{scheme}://{Request.Host}";
+
         var path = Request.Path.Value ?? "";
 
         var videoMatch = Regex.Match(path, @"^/video/(\d+)/?$");
