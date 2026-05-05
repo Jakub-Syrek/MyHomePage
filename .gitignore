@@ -37,12 +37,28 @@ node_modules/
 dist/
 .env.local
 
-# Video files (too large for git)
-wwwroot/videos/*/video.mp4
-wwwroot/videos/*/*.mp4
-wwwroot/videos/*/*.webm
-wwwroot/videos/*/*.mkv
-wwwroot/videos/*/*.avi
+# Media files (project runs locally - media stays on disk only)
+# Video files
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.mov
+*.flv
+*.wmv
+*.m4v
+
+# Image files in wwwroot
+wwwroot/images/
+wwwroot/videos/
+
+# Audio files
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.aac
+*.m4a
 
 # Claude settings
 .claude/settings.local.json
