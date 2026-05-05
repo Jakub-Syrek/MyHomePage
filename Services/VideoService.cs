@@ -140,23 +140,26 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
     {
         try
         {
-            // Aggressive compression for smooth streaming over slow connections (e.g., ngrok)
-            // - Scale to max 720p height (1280x720) - smaller resolution = faster streaming
-            // - CRF 32 for stronger compression
-            // - Bitrate cap at 1.5 Mbps for predictable bandwidth
-            // - AAC 64k audio (still good quality for speech/ambient)
+            // Very aggressive compression for streaming over throttled connections (free ngrok)
+            // - Scale to max 480p (854x480) - 4x less pixels than 720p
+            // - 24 fps cap (halves the data rate vs 60fps source)
+            // - CRF 36 for very strong compression
+            // - Bitrate cap at 600 kbps video (smooth on ~1 Mbps connections)
+            // - AAC 48k mono audio (sufficient for speech/ambient)
             // - +faststart puts metadata at file start so playback can begin immediately
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
-                .AddParameter("-vf \"scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease\"")
+                .AddParameter("-vf \"scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease,fps=24\"")
                 .AddParameter("-c:v libx264")
-                .AddParameter("-crf 32")
-                .AddParameter("-preset fast")
-                .AddParameter("-maxrate 1500k")
-                .AddParameter("-bufsize 3000k")
+                .AddParameter("-crf 36")
+                .AddParameter("-preset medium")
+                .AddParameter("-maxrate 600k")
+                .AddParameter("-bufsize 1200k")
+                .AddParameter("-profile:v main")
+                .AddParameter("-level 3.1")
                 .AddParameter("-c:a aac")
-                .AddParameter("-b:a 64k")
-                .AddParameter("-ac 2")
+                .AddParameter("-b:a 48k")
+                .AddParameter("-ac 1")
                 .AddParameter("-movflags +faststart")
                 .AddParameter("-pix_fmt yuv420p")
                 .AddParameter("-y")
