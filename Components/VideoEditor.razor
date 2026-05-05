@@ -131,6 +131,15 @@
 
     private void GoBack()
     {
-        Navigation.NavigateTo("/");
+        // Return to the category page the video belongs to
+        var categoryUrl = video?.Category switch
+        {
+            VideoCategories.Gory => "/gory",
+            VideoCategories.WspinaczkaSkalowa => "/wspinaczka-skalowa",
+            VideoCategories.Bouldering => "/bouldering",
+            VideoCategories.ProwadzieniHala => "/prowadzeni-hala",
+            _ => "/"
+        };
+        Navigation.NavigateTo(categoryUrl);
     }
 }
