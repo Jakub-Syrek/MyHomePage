@@ -16,25 +16,25 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px;">
             <a href="/gory" class="category-card">
-                <div class="category-card-emoji">⛰️</div>
+                <img src="/images/icons/mountains.svg" alt="Mountains" class="category-card-icon" />
                 <div class="category-card-title">Mountains</div>
                 <div class="category-card-description">Mountain hikes and adventures</div>
             </a>
 
             <a href="/wspinaczka-skalowa" class="category-card">
-                <div class="category-card-emoji">🧗</div>
+                <img src="/images/icons/rock-climbing.svg" alt="Rock Climbing" class="category-card-icon" />
                 <div class="category-card-title">Rock Climbing</div>
                 <div class="category-card-description">Climbing on rocks and walls</div>
             </a>
 
             <a href="/bouldering" class="category-card">
-                <div class="category-card-emoji">🪨</div>
+                <img src="/images/icons/bouldering.svg" alt="Bouldering" class="category-card-icon" />
                 <div class="category-card-title">Bouldering</div>
                 <div class="category-card-description">Bouldering and climbing problems</div>
             </a>
 
             <a href="/prowadzeni-hala" class="category-card">
-                <div class="category-card-emoji">🏢</div>
+                <img src="/images/icons/indoor-climbing.svg" alt="Indoor Climbing" class="category-card-icon" />
                 <div class="category-card-title">Indoor Climbing</div>
                 <div class="category-card-description">Sport climbing in the gym</div>
             </a>
@@ -64,10 +64,17 @@
         box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
     }
 
-    .category-card-emoji {
-        font-size: 3rem;
-        margin-bottom: 15px;
-        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    .category-card-icon {
+        width: 96px;
+        height: 96px;
+        margin: 0 auto 15px auto;
+        display: block;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
+        transition: transform 0.3s ease;
+    }
+
+    .category-card:hover .category-card-icon {
+        transform: scale(1.08);
     }
 
     .category-card-title {
