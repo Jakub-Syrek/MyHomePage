@@ -140,17 +140,25 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
     {
         try
         {
-            // Compression: scale to max 1280px width, H.264 CRF 30, AAC 96k audio
-            // This typically achieves 10-30x size reduction depending on source
+            // Aggressive compression for smooth streaming over slow connections (e.g., ngrok)
+            // - Scale to max 720p height (1280x720) - smaller resolution = faster streaming
+            // - CRF 32 for stronger compression
+            // - Bitrate cap at 1.5 Mbps for predictable bandwidth
+            // - AAC 64k audio (still good quality for speech/ambient)
+            // - +faststart puts metadata at file start so playback can begin immediately
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
-                .AddParameter("-vf \"scale='min(1280,iw)':-2\"")
+                .AddParameter("-vf \"scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease\"")
                 .AddParameter("-c:v libx264")
-                .AddParameter("-crf 30")
+                .AddParameter("-crf 32")
                 .AddParameter("-preset fast")
+                .AddParameter("-maxrate 1500k")
+                .AddParameter("-bufsize 3000k")
                 .AddParameter("-c:a aac")
-                .AddParameter("-b:a 96k")
+                .AddParameter("-b:a 64k")
+                .AddParameter("-ac 2")
                 .AddParameter("-movflags +faststart")
+                .AddParameter("-pix_fmt yuv420p")
                 .AddParameter("-y")
                 .SetOutput(outputPath);
 

@@ -22,8 +22,8 @@
             <div class="preview-panel">
                 <h3>Preview</h3>
                 <div class="video-preview">
-                    <video controls>
-                        <source src="/videos/@video.Id/@video.FileName" />
+                    <video controls preload="metadata" playsinline>
+                        <source src="/videos/@video.Id/@video.FileName" type="video/mp4" />
                     </video>
                 </div>
             </div>
