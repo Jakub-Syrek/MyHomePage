@@ -155,7 +155,7 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
 
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
-                .AddParameter("-vf \"scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease,fps=24\"")
+                .AddParameter("-vf \"scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=24\"")
                 .AddParameter("-c:v libx264")
                 .AddParameter("-crf 36")
                 .AddParameter("-preset medium")
