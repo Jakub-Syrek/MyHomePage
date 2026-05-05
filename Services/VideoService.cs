@@ -147,6 +147,12 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
             // - Bitrate cap at 600 kbps video (smooth on ~1 Mbps connections)
             // - AAC 48k mono audio (sufficient for speech/ambient)
             // - +faststart puts metadata at file start so playback can begin immediately
+            // Delete output if it already exists - Xabe.FFmpeg uses -n by default
+            if (File.Exists(outputPath))
+            {
+                try { File.Delete(outputPath); } catch { /* ignore */ }
+            }
+
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
                 .AddParameter("-vf \"scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease,fps=24\"")
@@ -162,7 +168,6 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
                 .AddParameter("-ac 1")
                 .AddParameter("-movflags +faststart")
                 .AddParameter("-pix_fmt yuv420p")
-                .AddParameter("-y")
                 .SetOutput(outputPath);
 
             await conversion.Start();
