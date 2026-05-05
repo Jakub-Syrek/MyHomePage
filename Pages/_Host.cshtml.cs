@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MyHomePage.Models;
 using MyHomePage.Services;
@@ -7,6 +8,7 @@ using System.Text.RegularExpressions;
 namespace MyHomePage.Pages;
 
 [AllowAnonymous]
+[IgnoreAntiforgeryToken]
 public class HostModel : PageModel
 {
     private readonly VideoService _videoService;

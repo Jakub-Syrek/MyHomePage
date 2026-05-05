@@ -24,7 +24,8 @@
       "Bash(taskkill /F /IM dotnet.exe)",
       "Bash(curl -s http://localhost:5132/video/4)",
       "Bash(curl -v https://cruxbeta.com.ngrok.dev/video/4)",
-      "Bash(curl -s https://cruxbeta.com.ngrok.dev/video/4)"
+      "Bash(curl -s https://cruxbeta.com.ngrok.dev/video/4)",
+      "Bash(curl -I https://cruxbeta.com.ngrok.dev/video/4)"
     ]
   }
 }
