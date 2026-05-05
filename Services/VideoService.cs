@@ -140,12 +140,12 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
     {
         try
         {
-            // Very aggressive compression for streaming over throttled connections (free ngrok)
-            // - Scale to max 480p (854x480) - 4x less pixels than 720p
-            // - 24 fps cap (halves the data rate vs 60fps source)
-            // - CRF 36 for very strong compression
-            // - Bitrate cap at 600 kbps video (smooth on ~1 Mbps connections)
-            // - AAC 48k mono audio (sufficient for speech/ambient)
+            // Balanced compression - good quality, ~4x larger than the previous very aggressive preset
+            // - Scale to max 720p (1280x720) - 2.25x more pixels than 480p
+            // - 30 fps cap (matches typical source framerate)
+            // - CRF 30 for moderate compression with good visual quality
+            // - Bitrate cap at 2.5 Mbps video
+            // - AAC 96k stereo audio (good quality)
             // - +faststart puts metadata at file start so playback can begin immediately
             // Delete output if it already exists - Xabe.FFmpeg uses -n by default
             if (File.Exists(outputPath))
@@ -155,17 +155,17 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
 
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
-                .AddParameter("-vf \"scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=24\"")
+                .AddParameter("-vf \"scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30\"")
                 .AddParameter("-c:v libx264")
-                .AddParameter("-crf 36")
+                .AddParameter("-crf 30")
                 .AddParameter("-preset medium")
-                .AddParameter("-maxrate 600k")
-                .AddParameter("-bufsize 1200k")
+                .AddParameter("-maxrate 2500k")
+                .AddParameter("-bufsize 5000k")
                 .AddParameter("-profile:v main")
-                .AddParameter("-level 3.1")
+                .AddParameter("-level 4.0")
                 .AddParameter("-c:a aac")
-                .AddParameter("-b:a 48k")
-                .AddParameter("-ac 1")
+                .AddParameter("-b:a 96k")
+                .AddParameter("-ac 2")
                 .AddParameter("-movflags +faststart")
                 .AddParameter("-pix_fmt yuv420p")
                 .SetOutput(outputPath);
