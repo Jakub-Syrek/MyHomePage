@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MyHomePage.Models;
 using MyHomePage.Services;
@@ -5,6 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace MyHomePage.Pages;
 
+[AllowAnonymous]
 public class HostModel : PageModel
 {
     private readonly VideoService _videoService;

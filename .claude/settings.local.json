@@ -20,7 +20,8 @@
       "Read(//tmp/**)",
       "Bash(curl -s \"http://localhost:5000/video/4\")",
       "Bash(curl -s \"http://localhost:5132/video/4\")",
-      "Bash(pkill -f \"dotnet run\")"
+      "Bash(pkill -f \"dotnet run\")",
+      "Bash(taskkill /F /IM dotnet.exe)"
     ]
   }
 }
