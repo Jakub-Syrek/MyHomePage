@@ -1,5 +1,7 @@
 @page "/video/{VideoId:int}"
 @layout MainLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
 @inject VideoService VideoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
