@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="gymBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE5B4"/>
+      <stop offset="100%" stop-color="#FFC785"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5DADE2"/>
+      <stop offset="100%" stop-color="#2874A6"/>
+    </linearGradient>
+  </defs>
+  <!-- Indoor warm light background -->
+  <circle cx="64" cy="64" r="60" fill="url(#gymBg)"/>
+  <!-- Climbing wall (angled) -->
+  <path d="M 20 15 L 95 25 L 95 115 L 20 110 Z" fill="url(#wall)"/>
+  <!-- Wall edge highlight -->
+  <path d="M 20 15 L 95 25" stroke="white" stroke-width="1.5" opacity="0.5"/>
+  <!-- Climbing holds (colorful holds at various heights) -->
+  <!-- Red triangular hold -->
+  <path d="M 35 35 L 42 32 L 40 42 Z" fill="#E74C3C"/>
+  <!-- Yellow round hold -->
+  <circle cx="60" cy="32" r="4" fill="#F1C40F"/>
+  <!-- Green pinch hold -->
+  <ellipse cx="80" cy="38" rx="5" ry="3" fill="#27AE60" transform="rotate(-15 80 38)"/>
+  <!-- Purple jug hold -->
+  <path d="M 32 55 Q 35 50 42 52 Q 45 58 40 62 Z" fill="#9B59B6"/>
+  <!-- Orange crimp -->
+  <rect x="55" y="55" width="8" height="3" rx="1" fill="#E67E22" transform="rotate(10 59 56)"/>
+  <!-- Blue sloper -->
+  <ellipse cx="78" cy="60" rx="6" ry="4" fill="#3498DB"/>
+  <!-- Pink hold -->
+  <circle cx="40" cy="78" r="3.5" fill="#EC7063"/>
+  <!-- Cyan hold -->
+  <path d="M 60 75 L 67 73 L 65 82 L 58 80 Z" fill="#16A085"/>
+  <!-- Magenta hold -->
+  <ellipse cx="82" cy="80" rx="4" ry="3" fill="#D63384"/>
+  <!-- Bottom holds -->
+  <circle cx="35" cy="98" r="3" fill="#F39C12"/>
+  <ellipse cx="60" cy="100" rx="5" ry="3" fill="#8E44AD"/>
+  <circle cx="80" cy="98" r="3.5" fill="#1ABC9C"/>
+  <!-- Climber on the wall -->
+  <!-- Body -->
+  <circle cx="58" cy="65" r="4" fill="#FCD2BD"/>
+  <!-- Head/hair -->
+  <path d="M 54 64 Q 54 60 58 60 Q 62 60 62 64" fill="#3E2723"/>
+  <!-- Torso -->
+  <path d="M 56 69 L 56 82 L 62 82 L 62 69 Z" fill="#E74C3C"/>
+  <!-- Arm reaching up -->
+  <path d="M 58 70 Q 65 65 70 60" stroke="#FCD2BD" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Arm holding -->
+  <path d="M 60 72 Q 52 70 48 65" stroke="#FCD2BD" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Leg up -->
+  <path d="M 56 82 Q 50 90 50 96" stroke="#2C3E50" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Leg down -->
+  <path d="M 62 82 Q 65 92 64 100" stroke="#2C3E50" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Floor mat -->
+  <rect x="15" y="115" width="100" height="8" rx="2" fill="#2C3E50"/>
+  <!-- Mat highlight -->
+  <rect x="15" y="115" width="100" height="2" rx="1" fill="#34495E"/>
+</svg>

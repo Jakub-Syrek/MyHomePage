@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87CEEB"/>
+      <stop offset="100%" stop-color="#E0F6FF"/>
+    </linearGradient>
+    <linearGradient id="mountain1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5A6B7D"/>
+      <stop offset="100%" stop-color="#34495e"/>
+    </linearGradient>
+    <linearGradient id="mountain2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7B8E9F"/>
+      <stop offset="100%" stop-color="#4A5C6E"/>
+    </linearGradient>
+    <linearGradient id="mountain3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9CB0BF"/>
+      <stop offset="100%" stop-color="#6B7E91"/>
+    </linearGradient>
+  </defs>
+  <!-- Sky background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#sky)"/>
+  <!-- Sun -->
+  <circle cx="92" cy="42" r="10" fill="#FFE082" opacity="0.9"/>
+  <!-- Back mountain -->
+  <path d="M 8 110 L 38 50 L 60 80 L 80 60 L 120 110 Z" fill="url(#mountain3)"/>
+  <!-- Middle mountain -->
+  <path d="M 4 115 L 30 70 L 50 95 L 70 75 L 95 115 Z" fill="url(#mountain2)"/>
+  <!-- Front mountain (largest) -->
+  <path d="M 0 120 L 40 55 L 70 100 L 90 80 L 128 120 Z" fill="url(#mountain1)"/>
+  <!-- Snow caps -->
+  <path d="M 32 70 L 40 55 L 48 70 L 44 65 L 40 67 L 36 65 Z" fill="white"/>
+  <path d="M 82 88 L 90 80 L 98 88 L 94 85 L 90 86 L 86 85 Z" fill="white"/>
+  <!-- Ground -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+</svg>

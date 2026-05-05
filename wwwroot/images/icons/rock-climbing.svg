@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="rockBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB347"/>
+      <stop offset="100%" stop-color="#FF8C42"/>
+    </linearGradient>
+    <linearGradient id="rockFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#A67B5B"/>
+      <stop offset="50%" stop-color="#8B5A3C"/>
+      <stop offset="100%" stop-color="#6B4226"/>
+    </linearGradient>
+  </defs>
+  <!-- Sunset sky background -->
+  <circle cx="64" cy="64" r="60" fill="url(#rockBg)"/>
+  <!-- Rock face -->
+  <path d="M 0 0 L 75 0 L 80 20 L 70 35 L 85 50 L 75 70 L 90 85 L 80 110 L 90 128 L 0 128 Z" fill="url(#rockFace)"/>
+  <!-- Rock texture lines -->
+  <path d="M 30 25 L 50 30 M 20 60 L 45 55 M 35 90 L 60 85" stroke="#5A3A22" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  <!-- Rope (going up-right) -->
+  <path d="M 88 110 Q 95 90 100 70 Q 105 50 110 30" stroke="#E74C3C" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Climber body -->
+  <circle cx="78" cy="62" r="5" fill="#2C3E50"/>
+  <!-- Climber torso -->
+  <path d="M 76 67 L 76 80 L 84 80 L 84 67 Z" fill="#3498DB"/>
+  <!-- Climber arm reaching up -->
+  <path d="M 78 68 Q 90 58 95 50" stroke="#2C3E50" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Climber leg 1 -->
+  <path d="M 78 80 Q 78 90 72 95" stroke="#2C3E50" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Climber leg 2 -->
+  <path d="M 82 80 Q 88 88 88 98" stroke="#2C3E50" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Hand grip on rock -->
+  <circle cx="95" cy="50" r="3" fill="#5A3A22"/>
+  <!-- Foot grip -->
+  <circle cx="72" cy="95" r="2.5" fill="#5A3A22"/>
+  <circle cx="88" cy="98" r="2.5" fill="#5A3A22"/>
+</svg>

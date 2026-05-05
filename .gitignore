@@ -48,8 +48,9 @@ dist/
 *.wmv
 *.m4v
 
-# Image files in wwwroot
-wwwroot/images/
+# Image files in wwwroot (large media), but keep SVG icons folder
+wwwroot/images/*
+!wwwroot/images/icons/
 wwwroot/videos/
 
 # Audio files

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="boulderBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A8E6CF"/>
+      <stop offset="100%" stop-color="#7FB069"/>
+    </linearGradient>
+    <linearGradient id="boulderRock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B7355"/>
+      <stop offset="50%" stop-color="#6F5641"/>
+      <stop offset="100%" stop-color="#4A3A2C"/>
+    </linearGradient>
+    <linearGradient id="smallRock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A89481"/>
+      <stop offset="100%" stop-color="#7A6453"/>
+    </linearGradient>
+    <radialGradient id="chalk" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="white" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Nature background -->
+  <circle cx="64" cy="64" r="60" fill="url(#boulderBg)"/>
+  <!-- Ground -->
+  <ellipse cx="64" cy="105" rx="55" ry="8" fill="#5A8A4A" opacity="0.7"/>
+  <!-- Small back rock -->
+  <ellipse cx="30" cy="92" rx="20" ry="13" fill="url(#smallRock)"/>
+  <!-- Main boulder -->
+  <path d="M 35 95 Q 30 75 40 60 Q 50 45 70 45 Q 95 45 100 65 Q 105 80 100 95 Q 90 105 65 105 Q 45 105 35 95 Z" fill="url(#boulderRock)"/>
+  <!-- Boulder texture -->
+  <path d="M 50 70 Q 55 65 60 70" stroke="#3A2D22" stroke-width="1.5" fill="none" opacity="0.6"/>
+  <path d="M 75 60 Q 80 55 85 60" stroke="#3A2D22" stroke-width="1.5" fill="none" opacity="0.6"/>
+  <path d="M 65 80 Q 70 75 78 80" stroke="#3A2D22" stroke-width="1.5" fill="none" opacity="0.6"/>
+  <!-- Highlight on top of boulder -->
+  <path d="M 50 55 Q 55 48 65 47 Q 75 46 82 50" stroke="white" stroke-width="2" fill="none" opacity="0.4"/>
+  <!-- Climber on boulder (small) -->
+  <circle cx="70" cy="42" r="3.5" fill="#E74C3C"/>
+  <path d="M 68 45 L 68 55 L 73 55 L 73 45 Z" fill="#3498DB"/>
+  <path d="M 68 48 Q 60 45 58 40" stroke="#3498DB" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 73 48 Q 80 50 85 48" stroke="#3498DB" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 68 55 Q 65 60 65 65" stroke="#2C3E50" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 73 55 Q 76 60 76 65" stroke="#2C3E50" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Chalk dust -->
+  <circle cx="58" cy="40" r="6" fill="url(#chalk)"/>
+  <!-- Crash pad below -->
+  <rect x="40" y="105" width="50" height="6" rx="2" fill="#9B59B6" opacity="0.7"/>
+</svg>
