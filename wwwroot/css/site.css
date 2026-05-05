@@ -94,7 +94,7 @@ select {
 /* Gallery Styles */
 .gallery-container {
     width: 100% !important;
-    height: 90vh !important;
+    min-height: 90vh !important;
     padding: 40px 20px;
     background-size: cover !important;
     background-position: center !important;
