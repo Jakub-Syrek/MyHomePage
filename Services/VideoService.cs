@@ -56,6 +56,20 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
         return JsonSerializer.Deserialize<Video>(json);
     }
 
+    public async Task EnsureThumbnailExistsAsync(int id)
+    {
+        var video = await GetVideoByIdAsync(id);
+        if (video == null) return;
+
+        var thumbnailPath = Path.Combine(GetVideoPath(id), "thumbnail.jpg");
+        if (File.Exists(thumbnailPath)) return;
+
+        var videoFilePath = Path.Combine(GetVideoPath(id), video.FileName);
+        if (!File.Exists(videoFilePath)) return;
+
+        await GenerateThumbnailAsync(videoFilePath, thumbnailPath);
+    }
+
     public async Task<(bool Success, string Message, int? VideoId)> UploadVideoAsync(
         IBrowserFile file,
         string title,
@@ -112,6 +126,11 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
             {
                 _logger.LogWarning("Compression failed, keeping original file");
             }
+
+            // Generate thumbnail for social media previews (Open Graph)
+            var thumbnailPath = Path.Combine(videoDir, "thumbnail.jpg");
+            var sourceForThumbnail = compressed ? compressedPath : originalPath;
+            await GenerateThumbnailAsync(sourceForThumbnail, thumbnailPath);
 
             var video = new Video
             {
@@ -176,6 +195,36 @@ public class VideoService(IWebHostEnvironment environment, ILogger<VideoService>
         catch (Exception ex)
         {
             _logger.LogError(ex, "FFmpeg compression failed for {Input}", inputPath);
+            return false;
+        }
+    }
+
+    private async Task<bool> GenerateThumbnailAsync(string videoPath, string thumbnailPath)
+    {
+        try
+        {
+            if (File.Exists(thumbnailPath))
+            {
+                try { File.Delete(thumbnailPath); } catch { /* ignore */ }
+            }
+
+            // Extract a frame at 2 seconds in, scale to 1280px wide (max), JPEG quality 3 (high)
+            var conversion = FFmpeg.Conversions.New()
+                .AddParameter($"-i \"{videoPath}\"", ParameterPosition.PreInput)
+                .AddParameter("-ss 00:00:02")
+                .AddParameter("-vframes 1")
+                .AddParameter("-vf \"scale='min(1280,iw)':-2\"")
+                .AddParameter("-q:v 3")
+                .SetOutput(thumbnailPath);
+
+            await conversion.Start();
+            var ok = File.Exists(thumbnailPath) && new FileInfo(thumbnailPath).Length > 0;
+            if (ok) _logger.LogInformation("Thumbnail generated: {Path}", thumbnailPath);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Thumbnail generation failed for {Input}", videoPath);
             return false;
         }
     }

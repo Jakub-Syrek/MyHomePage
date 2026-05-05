@@ -10,13 +10,27 @@
     @if (video != null)
     {
         <meta property="og:title" content="@video.Title" />
-        <meta property="og:description" content="@video.Description" />
+        <meta property="og:description" content="@(string.IsNullOrEmpty(video.Description) ? video.Title : video.Description)" />
         <meta property="og:type" content="video.other" />
-        <meta property="og:url" content="@Navigation.Uri" />
-        <meta property="og:video" content="@($"{baseUrl}/videos/{video.Id}/{video.FileName}")" />
+        <meta property="og:url" content="@directLink" />
+        <meta property="og:site_name" content="My Mountain Adventures" />
+        <meta property="og:image" content="@thumbnailUrl" />
+        <meta property="og:image:secure_url" content="@thumbnailUrl" />
+        <meta property="og:image:width" content="1280" />
+        <meta property="og:image:height" content="720" />
+        <meta property="og:image:type" content="image/jpeg" />
+        <meta property="og:video" content="@videoFileUrl" />
+        <meta property="og:video:secure_url" content="@videoFileUrl" />
         <meta property="og:video:type" content="video/mp4" />
+        <meta property="og:video:width" content="1280" />
+        <meta property="og:video:height" content="720" />
         <meta name="twitter:card" content="player" />
+        <meta name="twitter:title" content="@video.Title" />
+        <meta name="twitter:description" content="@(string.IsNullOrEmpty(video.Description) ? video.Title : video.Description)" />
+        <meta name="twitter:image" content="@thumbnailUrl" />
         <meta name="twitter:player" content="@($"{baseUrl}/embed/{video.Id}")" />
+        <meta name="twitter:player:width" content="1280" />
+        <meta name="twitter:player:height" content="720" />
     }
 </HeadContent>
 
@@ -218,6 +232,8 @@
     private string baseUrl = "";
     private string directLink = "";
     private string embedCode = "";
+    private string thumbnailUrl = "";
+    private string videoFileUrl = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,8 +245,13 @@
 
         if (video != null)
         {
+            // Auto-generate thumbnail for older videos that don't have one
+            await VideoService.EnsureThumbnailExistsAsync(video.Id);
+
             directLink = $"{baseUrl}/video/{video.Id}";
             embedCode = $"<iframe src=\"{baseUrl}/embed/{video.Id}\" width=\"800\" height=\"450\" frameborder=\"0\" allow=\"autoplay; fullscreen\" allowfullscreen></iframe>";
+            thumbnailUrl = $"{baseUrl}/videos/{video.Id}/thumbnail.jpg";
+            videoFileUrl = $"{baseUrl}/videos/{video.Id}/{video.FileName}";
         }
     }
 
