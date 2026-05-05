@@ -37,12 +37,15 @@
             {
                 <p class="file-info">✓ Selected: @selectedFile.Name (@(selectedFile.Size / (1024 * 1024))MB)</p>
             }
+            <p style="color: #7f8c8d; font-size: 0.85rem; margin-top: 8px;">
+                ℹ️ Videos are automatically compressed (~20x smaller). Large files may take a few minutes.
+            </p>
         </div>
 
         <button class="btn-submit" @onclick="UploadVideo" disabled="@(isUploading || selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))">
             @if (isUploading)
             {
-                <span class="spinner-small"></span> <span>Uploading...</span>
+                <span class="spinner-small"></span> <span>Uploading & compressing...</span>
             }
             else
             {

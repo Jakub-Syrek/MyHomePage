@@ -60,5 +60,8 @@ wwwroot/videos/
 *.aac
 *.m4a
 
+# FFmpeg binaries (auto-downloaded on first run)
+ffmpeg/
+
 # Claude settings
 .claude/settings.local.json

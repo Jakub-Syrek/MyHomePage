@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Forms;
 using MyHomePage.Models;
+using Xabe.FFmpeg;
 
 namespace MyHomePage.Services;
 
-public class VideoService(IWebHostEnvironment environment)
+public class VideoService(IWebHostEnvironment environment, ILogger<VideoService> logger)
 {
     private readonly IWebHostEnvironment _environment = environment;
+    private readonly ILogger<VideoService> _logger = logger;
     private const string VIDEOS_FOLDER = "videos";
     private const long MAX_FILE_SIZE = 1024L * 1024 * 1024 * 2; // 2 GB
     private static readonly string[] AllowedExtensions = [".mp4", ".webm", ".mkv", ".avi"];
@@ -77,22 +79,49 @@ public class VideoService(IWebHostEnvironment environment)
             var videoDir = GetVideoPath(videoId);
             Directory.CreateDirectory(videoDir);
 
-            var fileName = $"video{ext}";
-            var filePath = Path.Combine(videoDir, fileName);
+            // Save uploaded file as original
+            var originalFileName = $"original{ext}";
+            var originalPath = Path.Combine(videoDir, originalFileName);
 
-            await using var stream = file.OpenReadStream(MAX_FILE_SIZE);
-            await using var fs = new FileStream(filePath, FileMode.Create);
-            await stream.CopyToAsync(fs);
+            await using (var stream = file.OpenReadStream(MAX_FILE_SIZE))
+            await using (var fs = new FileStream(originalPath, FileMode.Create))
+            {
+                await stream.CopyToAsync(fs);
+            }
+
+            _logger.LogInformation("Saved original file: {Path} ({Size} MB)", originalPath, file.Size / (1024 * 1024));
+
+            // Compress to video.mp4 (target: ~20x smaller)
+            var compressedFileName = "video.mp4";
+            var compressedPath = Path.Combine(videoDir, compressedFileName);
+
+            string finalFileName = originalFileName;
+            long finalSize = file.Size;
+
+            bool compressed = await CompressVideoAsync(originalPath, compressedPath);
+            if (compressed && File.Exists(compressedPath))
+            {
+                finalFileName = compressedFileName;
+                finalSize = new FileInfo(compressedPath).Length;
+                try { File.Delete(originalPath); } catch { /* keep original if delete fails */ }
+                _logger.LogInformation("Compressed: {OldSize} MB -> {NewSize} MB ({Ratio}x)",
+                    file.Size / (1024 * 1024), finalSize / (1024 * 1024),
+                    finalSize > 0 ? file.Size / finalSize : 0);
+            }
+            else
+            {
+                _logger.LogWarning("Compression failed, keeping original file");
+            }
 
             var video = new Video
             {
                 Id = videoId,
                 Title = title,
                 Description = description,
-                FileName = fileName,
+                FileName = finalFileName,
                 Location = location,
                 Category = category,
-                FileSizeBytes = file.Size,
+                FileSizeBytes = finalSize,
                 UploadedAt = DateTime.UtcNow
             };
 
@@ -104,6 +133,34 @@ public class VideoService(IWebHostEnvironment environment)
         catch (Exception ex)
         {
             return (false, $"Upload error: {ex.Message}", null);
+        }
+    }
+
+    private async Task<bool> CompressVideoAsync(string inputPath, string outputPath)
+    {
+        try
+        {
+            // Compression: scale to max 1280px width, H.264 CRF 30, AAC 96k audio
+            // This typically achieves 10-30x size reduction depending on source
+            var conversion = FFmpeg.Conversions.New()
+                .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
+                .AddParameter("-vf \"scale='min(1280,iw)':-2\"")
+                .AddParameter("-c:v libx264")
+                .AddParameter("-crf 30")
+                .AddParameter("-preset fast")
+                .AddParameter("-c:a aac")
+                .AddParameter("-b:a 96k")
+                .AddParameter("-movflags +faststart")
+                .AddParameter("-y")
+                .SetOutput(outputPath);
+
+            await conversion.Start();
+            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FFmpeg compression failed for {Input}", inputPath);
+            return false;
         }
     }
 

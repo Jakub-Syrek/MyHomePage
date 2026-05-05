@@ -1,8 +1,23 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using MyHomePage.Services;
 using System.Security.Claims;
+using Xabe.FFmpeg;
+using Xabe.FFmpeg.Downloader;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Ensure FFmpeg is available (auto-download on first run)
+var ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg");
+Directory.CreateDirectory(ffmpegPath);
+FFmpeg.SetExecutablesPath(ffmpegPath);
+
+var ffmpegExe = Path.Combine(ffmpegPath, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
+if (!File.Exists(ffmpegExe))
+{
+    Console.WriteLine("Downloading FFmpeg (one-time setup)...");
+    await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, ffmpegPath);
+    Console.WriteLine("FFmpeg ready.");
+}
 
 builder.Services.AddLogging(logging =>
 {
