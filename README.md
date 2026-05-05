@@ -1,53 +1,57 @@
 # My Mountain Adventures - Home Page
 
-Nowoczesna strona do hostowania filmików z wycieczek górskich, zbudowana z ASP.NET Core i Blazor.
+A modern website for hosting mountain adventure videos, built with ASP.NET Core and Blazor.
 
-## Cechy
+## Features
 
-✨ **Nowoczesny design** — responsywny interfejs z animacjami
-📹 **Galerka wideo** — przesyłanie i zarządzanie filmami
-🎨 **Piękny UI** — gradientu, karty, animacje CSS
-🔐 **Edycja zawartości** — tytuł, opis, lokalizacja każdego wideo
-📁 **Przechowywanie w folderze** — żadna baza danych, wszystko w plikach JSON
-⚡ **Szybkie działanie** — bez zależności od SQL Server
+✨ **Modern Design** — Responsive interface with animations  
+📹 **Video Gallery** — Upload and manage videos  
+🎨 **Beautiful UI** — Gradients, cards, CSS animations, glassmorphism effects  
+🔐 **Content Editing** — Edit title, description, location for each video  
+📁 **File Storage** — No database, everything stored in JSON files  
+⚡ **Fast Performance** — No SQL Server dependency  
+🎬 **Interactive Cards** — Hover expansion with close options (X button, background click, Escape key)
 
-## Wymagania
+## Requirements
 
-- .NET 8.0 lub nowszy
+- .NET 8.0 or newer
 - Windows/Linux/macOS
 
-## Instalacja i uruchomienie
+## Installation and Running
 
 ```bash
-# Klonuj repo
+# Clone the repository
 git clone https://github.com/Jakub-Syrek/MyHomePage.git
 cd MyHomePage
 
-# Przywróć pakiety
+# Restore packages
 dotnet restore
 
-# Uruchom serwer
+# Run the server
 dotnet run
 ```
 
-Otwórz http://localhost:5000 (lub https://localhost:5001) w przeglądarce.
+Open http://localhost:5000 (or https://localhost:5001) in your browser.
 
-## Struktura folderów
+## Folder Structure
 
 ```
 wwwroot/
-├── videos/              # Wideo organizowane w podfoldery
+├── videos/              # Videos organized in subfolders
 │   ├── 1/              # Video ID
-│   │   ├── video.mp4   # Plik wideo
+│   │   ├── video.mp4   # Video file
 │   │   └── metadata.json
 │   ├── 2/
 │   └── 3/
 ├── css/
-│   └── site.css        # Globalne style
-└── ...
+│   └── site.css        # Global styles
+├── images/
+│   └── *.jpg           # Background images
+└── js/
+    └── video-handlers.js
 ```
 
-## Struktura metadata.json
+## metadata.json Structure
 
 ```json
 {
@@ -57,48 +61,84 @@ wwwroot/
   "FileName": "video.mp4",
   "Location": "Tatra Mountains",
   "UploadedAt": "2026-05-04T12:30:00Z",
+  "Category": "Mountains",
   "FileSizeBytes": 524288000
 }
 ```
 
-## Technologia
+## Technology Stack
 
-- **Frontend:** Blazor Server, HTML, CSS z animacjami
+- **Frontend:** Blazor Server, HTML, CSS with animations and glassmorphism
 - **Backend:** ASP.NET Core 8.0
-- **Storage:** Pliki JSON + foldery (bez bazy danych)
-- **Wzorce:** Dependency Injection, Service Pattern
+- **Storage:** JSON files + folders (no database)
+- **Patterns:** Dependency Injection, Service Pattern, Event Delegation
+- **UI Effects:** Hover expansion overlays, backdrop filters, CSS transitions
 
-## API Endpoints
+## Features
 
-Komponenty Blazor komunikują się z `VideoService`:
+### Video Expansion
+- Hover over a video card to expand it (2x size)
+- Close with: X button, background click, or Escape key
+- Dark overlay background for focus
+- Original card stays in grid layout
 
-- `GetAllVideosAsync()` — lista wszystkich wideo
-- `GetVideoByIdAsync(id)` — szczegóły wideo
-- `UploadVideoAsync(file, title, desc, location)` — upload
-- `UpdateVideoAsync(id, title, desc, location)` — edycja
-- `DeleteVideoAsync(id)` — usunięcie
+### Video Gallery Pages
+- **Home** (/) — Category overview
+- **Mountains** (/gory) — Mountain hiking videos
+- **Rock Climbing** (/wspinaczka-skalowa) — Rock climbing videos
+- **Bouldering** (/bouldering) — Bouldering problem videos
+- **Indoor Climbing** (/prowadzeni-hala) — Gym climbing videos
 
-## Komponenty
+## Components
 
-### VideoGallery.razor
-Główna galerka wyświetlająca wszystkie wideo w siatce z możliwością edycji.
+### Pages
+- **Index.razor** — Home page with category cards
+- **Gory.razor** — Mountains gallery
+- **WspinaczkaSkalowa.razor** — Rock climbing gallery
+- **Bouldering.razor** — Bouldering gallery
+- **ProwadzieniHala.razor** — Indoor climbing gallery
 
-### VideoUpload.razor
-Panel do przesyłania nowych filmów z walidacją.
+### Shared
+- **MainLayout.razor** — Main layout with navigation, video expansion JavaScript
+- **VideoUploadCategory.razor** — Upload component with category support
+- **VideoEditForm.razor** — Edit video metadata form
 
-### VideoEditor.razor
-Strona do edycji metadanych istniejącego wideo.
+## Services
 
-## Limitacje
+### VideoService
+Core service for video operations:
+- `GetVideosByCategoryAsync(category)` — Get videos by category
+- `GetVideoByIdAsync(id)` — Get specific video details
+- `UploadVideoAsync(file, title, description, location, category)` — Upload new video
+- `UpdateVideoAsync(id, title, description, location)` — Update video metadata
+- `DeleteVideoAsync(id)` — Delete video
 
-- Max 2 GB na plik
-- Obsługiwane formaty: MP4, WebM, MKV, AVI
-- Przechowywanie lokalne (nie cloud)
+## Styling Features
 
-## Desarrollador
+- **Glassmorphism** — Semi-transparent cards with backdrop blur
+- **Gradient backgrounds** — Purple/blue gradients
+- **Responsive grid** — Auto-fill grid layout
+- **Smooth transitions** — CSS animations on all interactive elements
+- **Dark overlay** — Focus effect on expanded cards
+
+## Limitations
+
+- Max 2 GB per file
+- Supported formats: MP4, WebM, MKV, AVI (check VideoService for exact list)
+- Local file storage only (not cloud-based)
+- Videos stored in wwwroot/videos/ folder
+
+## Performance Tips
+
+- Compress large video files before upload (recommended: 50-200 MB)
+- Use H.264 or H.265 codec for better compatibility
+- Target bitrate: 2-5 Mbps for good quality/size balance
+
+## Developer
 
 Jakub Syrek
 
 ---
 
-💡 Chcesz dodać logowanie? Możemy dodać ASP.NET Core Identity!
+💡 Want to add authentication? We can add ASP.NET Core Identity!  
+📱 Want mobile app? Mobile-first responsive design included!

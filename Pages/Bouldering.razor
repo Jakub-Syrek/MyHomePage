@@ -1,12 +1,17 @@
-@namespace MyHomePage.Components
-@implements IAsyncDisposable
+@page "/bouldering"
+@layout MainLayout
+@using Microsoft.AspNetCore.Components.Authorization
 @inject VideoService VideoService
 @inject NavigationManager Navigation
-@inject IJSRuntime JSRuntime
 
-<div class="gallery-container">
+<PageTitle>Bouldering - My Mountain Adventures</PageTitle>
+
+<div class="gallery-container" style="background-image: url('/images/bouldering-bg.jpg'); background-size: 100% 100%;">
     <div class="gallery-header">
-        <h1>🏔️ Gallery</h1>
+        <div>
+            <button class="btn-back" @onclick="GoHome">← Back</button>
+            <h1>🧗 Bouldering</h1>
+        </div>
         <AuthorizeView>
             <Authorized>
                 <button class="btn btn-primary btn-upload" @onclick="() => showUpload = !showUpload">
@@ -18,7 +23,7 @@
 
     @if (showUpload)
     {
-        <VideoUpload OnUploadSuccess="RefreshVideos" />
+        <VideoUploadCategory Category="@VideoCategories.Bouldering" OnUploadSuccess="RefreshVideos" />
     }
 
     @if (videos == null)
@@ -31,7 +36,7 @@
     else if (videos.Count == 0)
     {
         <div class="empty-state">
-            <p>No videos yet. Check back soon!</p>
+            <p>No bouldering videos yet. Send your first problem!</p>
         </div>
     }
     else
@@ -76,12 +81,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        videos = await VideoService.GetAllVideosAsync();
+        videos = await VideoService.GetVideosByCategoryAsync(VideoCategories.Bouldering);
     }
 
     private async Task RefreshVideos()
     {
-        videos = await VideoService.GetAllVideosAsync();
+        videos = await VideoService.GetVideosByCategoryAsync(VideoCategories.Bouldering);
         showUpload = false;
     }
 
@@ -92,15 +97,12 @@
 
     private async Task DeleteVideo(int id)
     {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?"))
-        {
-            await VideoService.DeleteVideoAsync(id);
-            await RefreshVideos();
-        }
+        await VideoService.DeleteVideoAsync(id);
+        await RefreshVideos();
     }
 
-    public async ValueTask DisposeAsync()
+    private void GoHome()
     {
-        await ValueTask.CompletedTask;
+        Navigation.NavigateTo("/");
     }
 }

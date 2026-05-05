@@ -36,3 +36,13 @@ Thumbs.db
 node_modules/
 dist/
 .env.local
+
+# Video files (too large for git)
+wwwroot/videos/*/video.mp4
+wwwroot/videos/*/*.mp4
+wwwroot/videos/*/*.webm
+wwwroot/videos/*/*.mkv
+wwwroot/videos/*/*.avi
+
+# Claude settings
+.claude/settings.local.json

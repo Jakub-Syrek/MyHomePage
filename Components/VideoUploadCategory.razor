@@ -15,7 +15,7 @@
 
         <div class="form-group">
             <label>Video Title *</label>
-            <input type="text" @bind="videoTitle" placeholder="e.g., Summer Hike to Mountain Peak" />
+            <input type="text" @bind="videoTitle" placeholder="e.g., Amazing climb..." />
         </div>
 
         <div class="form-group">
@@ -54,6 +54,9 @@
 
 @code {
     [Parameter]
+    public string Category { get; set; } = "";
+
+    [Parameter]
     public EventCallback OnUploadSuccess { get; set; }
 
     private IBrowserFile? selectedFile;
@@ -83,7 +86,8 @@
                 selectedFile,
                 videoTitle,
                 videoDescription,
-                videoLocation);
+                videoLocation,
+                Category);
 
             if (success)
             {

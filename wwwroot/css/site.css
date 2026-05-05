@@ -93,9 +93,13 @@ select {
 
 /* Gallery Styles */
 .gallery-container {
-    max-width: 1400px;
-    margin: 0 auto;
+    width: 100% !important;
+    height: 90vh !important;
     padding: 40px 20px;
+    background-size: cover !important;
+    background-position: center !important;
+    background-attachment: fixed !important;
+    background-clip: border-box !important;
 }
 
 .gallery-header {
@@ -136,11 +140,13 @@ select {
 }
 
 .video-card {
-    background: white;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .video-card:hover {

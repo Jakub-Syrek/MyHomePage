@@ -39,6 +39,12 @@ public class VideoService(IWebHostEnvironment environment)
         return videos;
     }
 
+    public async Task<List<Video>> GetVideosByCategoryAsync(string category)
+    {
+        var allVideos = await GetAllVideosAsync();
+        return allVideos.Where(v => v.Category == category).ToList();
+    }
+
     public async Task<Video?> GetVideoByIdAsync(int id)
     {
         var metadataPath = GetMetadataPath(id);
@@ -52,14 +58,15 @@ public class VideoService(IWebHostEnvironment environment)
         IBrowserFile file,
         string title,
         string description,
-        string? location)
+        string? location,
+        string category = "")
     {
         if (file.Size > MAX_FILE_SIZE)
-            return (false, $"Plik zbyt duży. Maksimum: {MAX_FILE_SIZE / (1024 * 1024)} MB", null);
+            return (false, $"File too large. Maximum: {MAX_FILE_SIZE / (1024 * 1024)} MB", null);
 
         var ext = Path.GetExtension(file.Name).ToLowerInvariant();
         if (!AllowedExtensions.Contains(ext))
-            return (false, $"Format nie obsługiwany. Dozwolone: {string.Join(", ", AllowedExtensions)}", null);
+            return (false, $"Unsupported format. Allowed: {string.Join(", ", AllowedExtensions)}", null);
 
         try
         {
@@ -84,6 +91,7 @@ public class VideoService(IWebHostEnvironment environment)
                 Description = description,
                 FileName = fileName,
                 Location = location,
+                Category = category,
                 FileSizeBytes = file.Size,
                 UploadedAt = DateTime.UtcNow
             };

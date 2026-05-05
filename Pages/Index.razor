@@ -1,5 +1,95 @@
 ﻿@page "/"
+@layout MainLayout
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
 
 <PageTitle>My Home Page - Mountain Adventures</PageTitle>
 
-<VideoGallery />
+<div style="background-image: url('/images/mountains-bg.jpg'); background-size: cover; background-attachment: fixed; background-position: center; padding: 40px 20px; height: 90vh;">
+    <div style="max-width: 1200px; margin: 0 auto;">
+        @if (showSuccessMessage)
+        {
+            <div style="background: #d4edda; color: #155724; padding: 15px 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #28a745;">
+                <strong>✓ Success!</strong> Welcome back! You have successfully logged in.
+            </div>
+        }
+
+        <h1 style="text-align: center; color: #2c3e50; margin-bottom: 40px; font-size: 2.5rem;">🏔️ My Mountain Adventures</h1>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px;">
+            <a href="/gory" class="category-card">
+                <div class="category-card-emoji">⛰️</div>
+                <div class="category-card-title">Mountains</div>
+                <div class="category-card-description">Mountain hikes and adventures</div>
+            </a>
+
+            <a href="/wspinaczka-skalowa" class="category-card">
+                <div class="category-card-emoji">🧗</div>
+                <div class="category-card-title">Rock Climbing</div>
+                <div class="category-card-description">Climbing on rocks and walls</div>
+            </a>
+
+            <a href="/bouldering" class="category-card">
+                <div class="category-card-emoji">🪨</div>
+                <div class="category-card-title">Bouldering</div>
+                <div class="category-card-description">Bouldering and climbing problems</div>
+            </a>
+
+            <a href="/prowadzeni-hala" class="category-card">
+                <div class="category-card-emoji">🏢</div>
+                <div class="category-card-title">Indoor Climbing</div>
+                <div class="category-card-description">Sport climbing in the gym</div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .category-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        text-align: center;
+    }
+
+    .category-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .category-card-emoji {
+        font-size: 3rem;
+        margin-bottom: 15px;
+    }
+
+    .category-card-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+
+    .category-card-description {
+        font-size: 0.95rem;
+        color: #7f8c8d;
+        line-height: 1.5;
+    }
+</style>
+
+@code {
+    private bool showSuccessMessage = false;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("loginSuccess", out var message))
+        {
+            showSuccessMessage = true;
+        }
+    }
+}
