@@ -6,33 +6,8 @@
 
 <PageTitle>@(video?.Title ?? "Video") - My Mountain Adventures</PageTitle>
 
-<HeadContent>
-    @if (video != null)
-    {
-        <meta property="og:title" content="@video.Title" />
-        <meta property="og:description" content="@(string.IsNullOrEmpty(video.Description) ? video.Title : video.Description)" />
-        <meta property="og:type" content="video.other" />
-        <meta property="og:url" content="@directLink" />
-        <meta property="og:site_name" content="My Mountain Adventures" />
-        <meta property="og:image" content="@thumbnailUrl" />
-        <meta property="og:image:secure_url" content="@thumbnailUrl" />
-        <meta property="og:image:width" content="1280" />
-        <meta property="og:image:height" content="720" />
-        <meta property="og:image:type" content="image/jpeg" />
-        <meta property="og:video" content="@videoFileUrl" />
-        <meta property="og:video:secure_url" content="@videoFileUrl" />
-        <meta property="og:video:type" content="video/mp4" />
-        <meta property="og:video:width" content="1280" />
-        <meta property="og:video:height" content="720" />
-        <meta name="twitter:card" content="player" />
-        <meta name="twitter:title" content="@video.Title" />
-        <meta name="twitter:description" content="@(string.IsNullOrEmpty(video.Description) ? video.Title : video.Description)" />
-        <meta name="twitter:image" content="@thumbnailUrl" />
-        <meta name="twitter:player" content="@($"{baseUrl}/embed/{video.Id}")" />
-        <meta name="twitter:player:width" content="1280" />
-        <meta name="twitter:player:height" content="720" />
-    }
-</HeadContent>
+@* Open Graph meta tags are rendered server-side in _Host.cshtml so social media
+   crawlers (Facebook, Twitter, Discord) reliably see them in the initial HTML. *@
 
 <div class="video-page-container" style="background-image: url('/images/mountains-bg.jpg');">
     <div class="video-page-content">
