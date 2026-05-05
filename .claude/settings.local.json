@@ -26,7 +26,13 @@
       "Bash(curl -v https://cruxbeta.com.ngrok.dev/video/4)",
       "Bash(curl -s https://cruxbeta.com.ngrok.dev/video/4)",
       "Bash(curl -I https://cruxbeta.com.ngrok.dev/video/4)",
-      "Bash(curl -I -H \"User-Agent: facebookexternalthit/1.1\" https://cruxbeta.com.ngrok.dev/video/4)"
+      "Bash(curl -I -H \"User-Agent: facebookexternalthit/1.1\" https://cruxbeta.com.ngrok.dev/video/4)",
+      "Bash(curl -s http://127.0.0.1:4040/api/requests/http)",
+      "Bash(python -c \"import sys, json; data = json.load\\(sys.stdin\\); [print\\(f\\\\\"{r.get\\('request', {}\\).get\\('method', '?'\\)} {r.get\\('request', {}\\).get\\('uri', '?'\\)} -> {r.get\\('response', {}\\).get\\('status_code', '?'\\)} | UA: {r.get\\('request', {}\\).get\\('headers', {}\\).get\\('User-Agent', ['?']\\)[0][:80]}\\\\\"\\) for r in data.get\\('requests', []\\)[-15:]]\")",
+      "Bash(curl -I -H \"User-Agent: facebookexternalhit/1.1 \\(+http://www.facebook.com/externalhit_uatext.php\\)\" https://cruxbeta.com.ngrok.dev/video/4)",
+      "Bash(python -c ' *)",
+      "Bash(curl -s http://127.0.0.1:4040/api/tunnels)",
+      "Bash(ngrok http *)"
     ]
   }
 }

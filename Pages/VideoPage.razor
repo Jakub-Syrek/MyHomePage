@@ -1,15 +1,10 @@
 @page "/video/{VideoId:int}"
 @layout MainLayout
-@using Microsoft.AspNetCore.Authorization
-@attribute [AllowAnonymous]
 @inject VideoService VideoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
 <PageTitle>@(video?.Title ?? "Video") - My Mountain Adventures</PageTitle>
-
-@* Open Graph meta tags are rendered server-side in _Host.cshtml so social media
-   crawlers (Facebook, Twitter, Discord) reliably see them in the initial HTML. *@
 
 <div class="video-page-container" style="background-image: url('/images/mountains-bg.jpg');">
     <div class="video-page-content">
@@ -209,8 +204,6 @@
     private string baseUrl = "";
     private string directLink = "";
     private string embedCode = "";
-    private string thumbnailUrl = "";
-    private string videoFileUrl = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -222,13 +215,8 @@
 
         if (video != null)
         {
-            // Auto-generate thumbnail for older videos that don't have one
-            await VideoService.EnsureThumbnailExistsAsync(video.Id);
-
             directLink = $"{baseUrl}/video/{video.Id}";
             embedCode = $"<iframe src=\"{baseUrl}/embed/{video.Id}\" width=\"800\" height=\"450\" frameborder=\"0\" allow=\"autoplay; fullscreen\" allowfullscreen></iframe>";
-            thumbnailUrl = $"{baseUrl}/videos/{video.Id}/thumbnail.jpg";
-            videoFileUrl = $"{baseUrl}/videos/{video.Id}/{video.FileName}";
         }
     }
 

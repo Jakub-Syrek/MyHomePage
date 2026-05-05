@@ -1,10 +1,7 @@
-﻿@page "/{*route}"
+@page "/"
 @using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.Authorization
 @namespace MyHomePage.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-@attribute [AllowAnonymous]
-@model HostModel
 
 <!DOCTYPE html>
 <html lang="en">
@@ -15,56 +12,7 @@
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link href="css/site.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png"/>
-
-    @if (Model.OgVideo != null)
-    {
-        var ogTitle = Model.OgVideo.Title;
-        var ogDescription = string.IsNullOrEmpty(Model.OgVideo.Description) ? Model.OgVideo.Title : Model.OgVideo.Description;
-        var ogUrl = $"{Model.OgBaseUrl}/video/{Model.OgVideo.Id}";
-        var ogImage = $"{Model.OgBaseUrl}/videos/{Model.OgVideo.Id}/thumbnail.jpg";
-        var ogVideoFile = $"{Model.OgBaseUrl}/videos/{Model.OgVideo.Id}/{Model.OgVideo.FileName}";
-        var ogEmbed = $"{Model.OgBaseUrl}/embed/{Model.OgVideo.Id}";
-        <title>@ogTitle - My Mountain Adventures</title>
-        
-        <!-- Basic Open Graph -->
-        <meta property="og:title" content="@ogTitle" />
-        <meta property="og:description" content="@ogDescription" />
-        <meta property="og:type" content="video.other" />
-        <meta property="og:url" content="@ogUrl" />
-        <meta property="og:site_name" content="My Mountain Adventures" />
-        
-        <!-- Image for Facebook preview -->
-        <meta property="og:image" content="@ogImage" />
-        <meta property="og:image:secure_url" content="@ogImage" />
-        <meta property="og:image:type" content="image/jpeg" />
-        <meta property="og:image:width" content="1280" />
-        <meta property="og:image:height" content="720" />
-        <meta property="og:image:alt" content="@ogTitle" />
-        
-        <!-- Video properties (optional for Facebook) -->
-        <meta property="og:video" content="@ogVideoFile" />
-        <meta property="og:video:secure_url" content="@ogVideoFile" />
-        <meta property="og:video:type" content="video/mp4" />
-        <meta property="og:video:width" content="1280" />
-        <meta property="og:video:height" content="720" />
-        
-        <!-- Twitter Card for better sharing on Twitter -->
-        <meta name="twitter:card" content="player" />
-        <meta name="twitter:title" content="@ogTitle" />
-        <meta name="twitter:description" content="@ogDescription" />
-        <meta name="twitter:image" content="@ogImage" />
-        <meta name="twitter:player" content="@ogEmbed" />
-        <meta name="twitter:player:width" content="1280" />
-        <meta name="twitter:player:height" content="720" />
-    }
-    else
-    {
-        <title>My Mountain Adventures</title>
-        <meta property="og:title" content="My Mountain Adventures" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="@Model.OgBaseUrl" />
-        <meta property="og:site_name" content="My Mountain Adventures" />
-    }
+    <title>My Mountain Adventures</title>
 
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>
