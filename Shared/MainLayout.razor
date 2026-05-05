@@ -129,9 +129,9 @@ document.addEventListener('mouseenter', function(e) {
     const card = target.closest('.video-card');
     if (!card) return;
 
-    // Don't expand if hovering over action buttons (Edit/Delete)
-    // - this lets the user click them on the original card
-    if (target.closest('.card-actions')) return;
+    // Only expand when hovering over the video (top part of card)
+    // - the bottom part (title, description, Edit/Delete) stays interactive
+    if (!target.closest('.card-image')) return;
 
     // Create overlay if it doesn't exist
     if (!document.getElementById('video-overlay')) {
