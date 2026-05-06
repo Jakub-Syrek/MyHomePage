@@ -30,36 +30,63 @@ public class LoginModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
     {
+        _logger.LogInformation("Login POST received from {IP}",
+            HttpContext.Connection.RemoteIpAddress);
+
         if (!ModelState.IsValid)
+        {
+            var errors = string.Join("; ",
+                ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage));
+            _logger.LogWarning("Login ModelState invalid: {Errors} from {IP}",
+                errors, HttpContext.Connection.RemoteIpAddress);
             return Page();
+        }
+
+        _logger.LogInformation("Validating credentials for {Email} from {IP}",
+            Input.Email, HttpContext.Connection.RemoteIpAddress);
 
         if (_credentials.ValidateCredentials(Input.Email, Input.Password))
         {
-            _logger.LogInformation("Login successful for {Email} from {IP}",
+            _logger.LogInformation("Credentials validated successfully for {Email} from {IP}",
                 Input.Email, HttpContext.Connection.RemoteIpAddress);
 
-            var claims = new List<Claim>
+            try
             {
-                new(ClaimTypes.Email, Input.Email),
-                new(ClaimTypes.Name, Input.Email)
-            };
+                var claims = new List<Claim>
+                {
+                    new(ClaimTypes.Email, Input.Email),
+                    new(ClaimTypes.Name, Input.Email)
+                };
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var properties = new AuthenticationProperties
+                var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                var properties = new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(7)
+                };
+
+                _logger.LogDebug("Creating authentication principal for {Email}", Input.Email);
+
+                await HttpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(identity),
+                    properties);
+
+                _logger.LogInformation("User {Email} signed in successfully, redirecting to home",
+                    Input.Email);
+
+                return LocalRedirect("/?loginSuccess=true");
+            }
+            catch (Exception ex)
             {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddDays(7)
-            };
-
-            await HttpContext.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                new ClaimsPrincipal(identity),
-                properties);
-
-            return LocalRedirect("/?loginSuccess=true");
+                _logger.LogError(ex, "Error during SignInAsync for {Email} from {IP}",
+                    Input.Email, HttpContext.Connection.RemoteIpAddress);
+                ModelState.AddModelError(string.Empty, "An error occurred during login.");
+                return Page();
+            }
         }
 
-        _logger.LogWarning("Failed login attempt for {Email} from {IP}",
+        _logger.LogWarning("Failed login attempt - invalid credentials for {Email} from {IP}",
             Input.Email, HttpContext.Connection.RemoteIpAddress);
 
         ModelState.AddModelError(string.Empty, "Invalid login attempt.");

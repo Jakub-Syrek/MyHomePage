@@ -32,7 +32,15 @@
       "Bash(curl -I -H \"User-Agent: facebookexternalhit/1.1 \\(+http://www.facebook.com/externalhit_uatext.php\\)\" https://cruxbeta.com.ngrok.dev/video/4)",
       "Bash(python -c ' *)",
       "Bash(curl -s http://127.0.0.1:4040/api/tunnels)",
-      "Bash(ngrok http *)"
+      "Bash(ngrok http *)",
+      "Bash(xargs -I{} sh -c 'git show -s --format=\"%H\" {} ; git show -s --format=\"%b\" {} | grep \"Co-Authored-By: Claude\" > /dev/null 2>&1 && echo \"HAS_CLAUDE\"')",
+      "Bash(awk '{print $1}')",
+      "Bash(git filter-branch *)",
+      "Bash(git stash *)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'grep -v \"Co-Authored-By: Claude\"' 214220410f41509e138d16ed7a1e0ba1c535b853^..HEAD)",
+      "Bash(dotnet add *)",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }

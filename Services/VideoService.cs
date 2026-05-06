@@ -89,24 +89,54 @@ public sealed class VideoService : IVideoService
 
     public async Task<OperationResult> UpdateVideoAsync(int id, string title, string description, string? location)
     {
+        _logger.LogInformation("Updating video {Id}: title='{Title}', location='{Location}'",
+            id, title, location);
+
         var video = await _repository.GetByIdAsync(id);
         if (video is null)
+        {
+            _logger.LogWarning("Update failed: Video {Id} not found", id);
             return OperationResult.Failure($"Video {id} not found.");
+        }
 
         video.Title = title;
         video.Description = description;
         video.Location = location;
 
-        await _repository.SaveAsync(video);
-        return OperationResult.Success("Changes saved successfully.");
+        try
+        {
+            await _repository.SaveAsync(video);
+            _logger.LogInformation("Video {Id} updated successfully", id);
+            return OperationResult.Success("Changes saved successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating video {Id}", id);
+            return OperationResult.Failure($"Save error: {ex.Message}");
+        }
     }
 
     public async Task<OperationResult> DeleteVideoAsync(int id)
     {
-        var deleted = await _repository.DeleteAsync(id);
-        return deleted
-            ? OperationResult.Success("Video deleted.")
-            : OperationResult.Failure($"Video {id} not found.");
+        _logger.LogInformation("Deleting video {Id}", id);
+
+        try
+        {
+            var deleted = await _repository.DeleteAsync(id);
+            if (deleted)
+            {
+                _logger.LogInformation("Video {Id} deleted successfully", id);
+                return OperationResult.Success("Video deleted.");
+            }
+
+            _logger.LogWarning("Delete failed: Video {Id} not found", id);
+            return OperationResult.Failure($"Video {id} not found.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting video {Id}", id);
+            return OperationResult.Failure($"Delete error: {ex.Message}");
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

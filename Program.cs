@@ -95,6 +95,44 @@ try
 
     app.UseStaticFiles();
     app.UseRouting();
+
+    // ── HTTP request logging middleware ───────────────────────────────────────
+    app.Use(async (context, next) =>
+    {
+        var request = context.Request;
+        var method = request.Method;
+        var path = request.Path.Value;
+        var queryString = request.QueryString.Value;
+        var remoteIp = context.Connection.RemoteIpAddress;
+
+        Log.Information("HTTP {Method} {Path}{QueryString} from {IP}",
+            method, path, queryString, remoteIp);
+
+        var startTime = DateTime.UtcNow;
+        try
+        {
+            await next();
+            var duration = DateTime.UtcNow - startTime;
+            var statusCode = context.Response.StatusCode;
+
+            if (statusCode >= 400)
+            {
+                Log.Warning("HTTP {Method} {Path} returned {StatusCode} in {DurationMs}ms from {IP}",
+                    method, path, statusCode, duration.TotalMilliseconds, remoteIp);
+            }
+            else
+            {
+                Log.Debug("HTTP {Method} {Path} returned {StatusCode} in {DurationMs}ms",
+                    method, path, statusCode, duration.TotalMilliseconds);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "HTTP {Method} {Path} threw exception", method, path);
+            throw;
+        }
+    });
+
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseAntiforgery();
