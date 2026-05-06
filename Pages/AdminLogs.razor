@@ -1,0 +1,354 @@
+@page "/admin/logs"
+@layout MainLayout
+@inject ILogReaderService LogReader
+@inject IJSRuntime JS
+
+<PageTitle>Admin — Logs</PageTitle>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <div style="max-width:600px;margin:80px auto;text-align:center;color:#7f8c8d;">
+            <h2>Access denied</h2>
+            <p>You must be logged in to view this page.</p>
+            <a href="/login" style="color:#667eea;">Go to login →</a>
+        </div>
+    </NotAuthorized>
+
+    <Authorized>
+        <div class="log-page">
+
+            <!-- Header bar -->
+            <div class="log-header">
+                <h1>📋 Application Logs</h1>
+                <div class="log-controls">
+                    <select @bind="levelFilter" @bind:after="ApplyFilter">
+                        <option value="">All levels</option>
+                        <option value="Debug">Debug</option>
+                        <option value="Information">Information</option>
+                        <option value="Warning">Warning</option>
+                        <option value="Error">Error</option>
+                        <option value="Fatal">Fatal</option>
+                    </select>
+
+                    <input type="text" placeholder="Search…" @bind="searchText" @bind:after="ApplyFilter" />
+
+                    <button class="btn-refresh" @onclick="RefreshAsync">⟳ Refresh</button>
+
+                    <label class="auto-refresh-toggle">
+                        <input type="checkbox" @bind="autoRefresh" @bind:after="OnAutoRefreshChanged" />
+                        Auto (10 s)
+                    </label>
+
+                    <button class="btn-clear" @onclick="ClearLogsAsync">🗑 Clear logs</button>
+                </div>
+            </div>
+
+            <!-- Stats bar -->
+            @if (all != null)
+            {
+                <div class="log-stats">
+                    <span class="stat debug">Debug: @all.Count(e => e.EffectiveLevel == "Debug")</span>
+                    <span class="stat info">Info: @all.Count(e => e.EffectiveLevel == "Information")</span>
+                    <span class="stat warning">Warning: @all.Count(e => e.EffectiveLevel == "Warning")</span>
+                    <span class="stat error">Error: @all.Count(e => e.EffectiveLevel is "Error" or "Fatal")</span>
+                    <span class="stat total">Showing @filtered.Count of @all.Count entries</span>
+                    <span class="stat path" title="@LogReader.LogsDirectory">📁 @LogReader.LogsDirectory</span>
+                </div>
+            }
+
+            <!-- Log table -->
+            @if (loading)
+            {
+                <div class="log-loading"><div class="spinner"></div><p>Loading logs…</p></div>
+            }
+            else if (filtered.Count == 0)
+            {
+                <div class="log-empty">No log entries found.</div>
+            }
+            else
+            {
+                <div class="log-table-wrapper">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Level</th>
+                                <th>Source</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in filtered)
+                            {
+                                <tr class="log-row @LevelClass(entry.EffectiveLevel)"
+                                    @onclick="() => ToggleExpand(entry)"
+                                    title="@(entry.Exception != null ? "Click to see exception" : "")">
+                                    <td class="col-time">@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")<br /><small>@entry.Timestamp.ToLocalTime().ToString("dd.MM.yyyy")</small></td>
+                                    <td class="col-level"><span class="level-badge @LevelClass(entry.EffectiveLevel)">@entry.EffectiveLevel</span></td>
+                                    <td class="col-source">@entry.ShortSource</td>
+                                    <td class="col-msg">@entry.RenderedMessage
+                                        @if (entry.Exception != null)
+                                        {
+                                            <span class="ex-icon" title="Has exception">⚠</span>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (expanded.Contains(entry) && entry.Exception != null)
+                                {
+                                    <tr class="exception-row">
+                                        <td colspan="4">
+                                            <pre class="exception-text">@entry.Exception</pre>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private IReadOnlyList<LogEntry> all = [];
+    private List<LogEntry> filtered = [];
+    private HashSet<LogEntry> expanded = [];
+    private string levelFilter = "";
+    private string searchText = "";
+    private bool loading = true;
+    private bool autoRefresh = false;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        loading = true;
+        StateHasChanged();
+        all = await LogReader.GetEntriesAsync(1000);
+        ApplyFilter();
+        loading = false;
+    }
+
+    private void ApplyFilter()
+    {
+        filtered = all
+            .Where(e => string.IsNullOrEmpty(levelFilter) || e.EffectiveLevel == levelFilter)
+            .Where(e => string.IsNullOrEmpty(searchText) ||
+                        e.RenderedMessage.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        e.ShortSource.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private async Task ClearLogsAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Delete all log entries? This cannot be undone.");
+        if (!confirmed) return;
+        await LogReader.ClearAsync();
+        await RefreshAsync();
+    }
+
+    private void ToggleExpand(LogEntry entry)
+    {
+        if (!expanded.Add(entry)) expanded.Remove(entry);
+    }
+
+    private void OnAutoRefreshChanged()
+    {
+        timer?.Dispose();
+        if (autoRefresh)
+            timer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(RefreshAsync);
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    public void Dispose() => timer?.Dispose();
+
+    private static string LevelClass(string level) => level switch
+    {
+        "Debug"       => "lvl-debug",
+        "Information" => "lvl-info",
+        "Warning"     => "lvl-warning",
+        "Error"       => "lvl-error",
+        "Fatal"       => "lvl-fatal",
+        _             => "lvl-info"
+    };
+}
+
+<style>
+    .log-page {
+        max-width: 1400px;
+        margin: 30px auto;
+        padding: 0 20px 60px;
+    }
+
+    .log-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .log-header h1 {
+        font-size: 1.6rem;
+        color: #2c3e50;
+        margin: 0;
+    }
+
+    .log-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .log-controls select,
+    .log-controls input[type=text] {
+        padding: 7px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+
+    .btn-refresh {
+        padding: 7px 14px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .btn-refresh:hover { background: #5a6fd6; }
+
+    .btn-clear {
+        padding: 7px 14px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .btn-clear:hover { background: #c0392b; }
+
+    .auto-refresh-toggle {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.9rem;
+        color: #7f8c8d;
+        cursor: pointer;
+    }
+
+    /* Stats bar */
+    .log-stats {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+        font-size: 0.85rem;
+    }
+
+    .stat { padding: 4px 10px; border-radius: 12px; font-weight: 500; }
+    .stat.debug   { background: #ecf0f1; color: #7f8c8d; }
+    .stat.info    { background: #d6eaf8; color: #1a5276; }
+    .stat.warning { background: #fef9e7; color: #7d6608; border: 1px solid #f9ca24; }
+    .stat.error   { background: #fdedec; color: #922b21; }
+    .stat.total   { background: #f0f0f0; color: #555; }
+    .stat.path    { background: transparent; color: #aaa; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+
+    /* Table */
+    .log-table-wrapper {
+        overflow-x: auto;
+        border-radius: 10px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .log-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        font-size: 0.875rem;
+    }
+
+    .log-table thead th {
+        background: #2c3e50;
+        color: white;
+        padding: 11px 14px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .log-row {
+        border-bottom: 1px solid #f0f0f0;
+        cursor: default;
+        transition: background 0.15s;
+    }
+
+    .log-row:hover { background: #f8f9fa; }
+
+    .log-row td { padding: 8px 14px; vertical-align: top; }
+
+    .col-time  { white-space: nowrap; color: #7f8c8d; font-size: 0.8rem; }
+    .col-level { white-space: nowrap; }
+    .col-source{ white-space: nowrap; color: #95a5a6; font-size: 0.8rem; }
+    .col-msg   { word-break: break-word; }
+
+    /* Level row tints */
+    .log-row.lvl-debug   { background: #fafafa; }
+    .log-row.lvl-warning { background: #fffdf0; }
+    .log-row.lvl-error   { background: #fff5f5; }
+    .log-row.lvl-fatal   { background: #ffe0e0; }
+
+    /* Level badges */
+    .level-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .level-badge.lvl-debug   { background: #ecf0f1; color: #7f8c8d; }
+    .level-badge.lvl-info    { background: #d6eaf8; color: #1a5276; }
+    .level-badge.lvl-warning { background: #fef9e7; color: #7d6608; border: 1px solid #f9ca24; }
+    .level-badge.lvl-error   { background: #fdedec; color: #922b21; }
+    .level-badge.lvl-fatal   { background: #922b21; color: white; }
+
+    .ex-icon { color: #e74c3c; margin-left: 6px; cursor: pointer; }
+
+    /* Exception row */
+    .exception-row td {
+        background: #1e1e2e;
+        padding: 0;
+    }
+
+    .exception-text {
+        margin: 0;
+        padding: 14px 18px;
+        color: #f8f8f2;
+        font-size: 0.8rem;
+        line-height: 1.6;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    .log-loading, .log-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #7f8c8d;
+    }
+
+    .log-loading { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+</style>

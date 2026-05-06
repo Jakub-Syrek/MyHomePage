@@ -64,5 +64,8 @@ wwwroot/videos/
 # FFmpeg binaries (auto-downloaded on first run)
 ffmpeg/
 
+# Logs
+logs/
+
 # Claude settings
 .claude/settings.local.json
