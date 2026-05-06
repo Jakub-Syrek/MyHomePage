@@ -8,6 +8,7 @@ using System.Security.Claims;
 
 namespace MyHomePage.Pages;
 
+[IgnoreAntiforgeryToken]
 public class LoginModel : PageModel
 {
     private readonly ICredentialRepository _credentials;
