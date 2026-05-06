@@ -20,6 +20,7 @@ obj/
 
 # Runtime
 appsettings.Local.json
+credentials.json
 
 # OS
 .DS_Store
