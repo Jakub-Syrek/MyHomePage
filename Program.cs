@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using MyHomePage.Abstractions;
+using MyHomePage.Options;
 using MyHomePage.Services;
-using System.Security.Claims;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Ensure FFmpeg is available (auto-download on first run)
+// ── FFmpeg setup (auto-download on first run) ─────────────────────────────────
 var ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg");
 Directory.CreateDirectory(ffmpegPath);
 FFmpeg.SetExecutablesPath(ffmpegPath);
@@ -19,12 +20,14 @@ if (!File.Exists(ffmpegExe))
     Console.WriteLine("FFmpeg ready.");
 }
 
+// ── Logging ───────────────────────────────────────────────────────────────────
 builder.Services.AddLogging(logging =>
 {
     logging.AddConsole();
     logging.SetMinimumLevel(LogLevel.Debug);
 });
 
+// ── Authentication ────────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -39,9 +42,35 @@ builder.Services.AddAuthorizationBuilder();
 builder.Services.AddAntiforgery();
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
-builder.Services.AddScoped<VideoService>();
-builder.Services.AddScoped<CredentialService>();
 
+// ── Options pattern ───────────────────────────────────────────────────────────
+// Settings can be overridden in appsettings.json under "VideoStorage" section.
+builder.Services.Configure<VideoStorageOptions>(
+    builder.Configuration.GetSection(VideoStorageOptions.SectionName));
+
+// ── Dependency injection — all registrations use interfaces (DIP) ─────────────
+
+// File system operations
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+
+// Compression strategy (Strategy pattern)
+// To switch to a different codec, change H264CompressionStrategy → YourStrategy here.
+builder.Services.AddScoped<ICompressionStrategy, H264CompressionStrategy>();
+
+// Repository with Decorator pattern: JsonVideoRepository wrapped in LoggingVideoRepository
+builder.Services.AddScoped<JsonVideoRepository>();
+builder.Services.AddScoped<IVideoRepository>(sp =>
+    new LoggingVideoRepository(
+        sp.GetRequiredService<JsonVideoRepository>(),
+        sp.GetRequiredService<ILogger<LoggingVideoRepository>>()));
+
+// Application service
+builder.Services.AddScoped<IVideoService, VideoService>();
+
+// Credentials
+builder.Services.AddScoped<ICredentialRepository, CredentialService>();
+
+// ── Build & pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

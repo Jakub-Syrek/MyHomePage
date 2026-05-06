@@ -4,6 +4,13 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MyHomePage</AssemblyName>
+    <RootNamespace>MyHomePage</RootNamespace>
+    <Product>My Mountain Adventures</Product>
+    <Description>Personal website for storing and browsing mountain adventure videos. Built with ASP.NET Core 8 + Blazor Server, H.264 auto-compression via FFmpeg, file-based JSON storage, and a SOLID layered architecture (Repository, Strategy, Decorator, Options, Result patterns).</Description>
+    <Authors>Jakub Syrek</Authors>
+    <Copyright>Copyright © 2026 Jakub Syrek</Copyright>
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

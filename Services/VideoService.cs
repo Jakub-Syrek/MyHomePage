@@ -1,224 +1,153 @@
-using System.Text.Json;
-using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.Extensions.Options;
+using MyHomePage.Abstractions;
 using MyHomePage.Models;
-using Xabe.FFmpeg;
+using MyHomePage.Options;
 
 namespace MyHomePage.Services;
 
-public class VideoService(IWebHostEnvironment environment, ILogger<VideoService> logger)
+/// <summary>
+/// Orchestrates video operations by coordinating the repository, file-storage,
+/// and compression strategy.
+/// Single Responsibility Principle (S in SOLID): business logic only — no raw I/O or codec knowledge.
+/// Dependency Inversion Principle (D in SOLID): depends on IVideoRepository, IFileStorageService,
+/// and ICompressionStrategy — not on any concrete class.
+/// </summary>
+public sealed class VideoService : IVideoService
 {
-    private readonly IWebHostEnvironment _environment = environment;
-    private readonly ILogger<VideoService> _logger = logger;
-    private const string VIDEOS_FOLDER = "videos";
-    private const long MAX_FILE_SIZE = 1024L * 1024 * 1024 * 2; // 2 GB
-    private static readonly string[] AllowedExtensions = [".mp4", ".webm", ".mkv", ".avi"];
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private readonly IVideoRepository _repository;
+    private readonly IFileStorageService _storage;
+    private readonly ICompressionStrategy _compression;
+    private readonly VideoStorageOptions _options;
+    private readonly ILogger<VideoService> _logger;
 
-    private string GetVideosPath() => Path.Combine(_environment.WebRootPath, VIDEOS_FOLDER);
-    private string GetVideoPath(int id) => Path.Combine(GetVideosPath(), id.ToString());
-    private string GetMetadataPath(int id) => Path.Combine(GetVideoPath(id), "metadata.json");
-
-    public async Task<List<Video>> GetAllVideosAsync()
+    public VideoService(
+        IVideoRepository repository,
+        IFileStorageService storage,
+        ICompressionStrategy compression,
+        IOptions<VideoStorageOptions> options,
+        ILogger<VideoService> logger)
     {
-        var videosPath = GetVideosPath();
-        if (!Directory.Exists(videosPath)) return [];
-
-        var videos = new List<Video>();
-        var dirs = Directory.GetDirectories(videosPath);
-
-        foreach (var dir in dirs.OrderByDescending(d => new DirectoryInfo(d).CreationTime))
-        {
-            var metadataPath = Path.Combine(dir, "metadata.json");
-            if (File.Exists(metadataPath))
-            {
-                var json = await File.ReadAllTextAsync(metadataPath);
-                var metadata = JsonSerializer.Deserialize<Video>(json);
-                if (metadata != null)
-                    videos.Add(metadata);
-            }
-        }
-
-        return videos;
+        _repository = repository;
+        _storage = storage;
+        _compression = compression;
+        _options = options.Value;
+        _logger = logger;
     }
 
-    public async Task<List<Video>> GetVideosByCategoryAsync(string category)
+    // ── Queries ──────────────────────────────────────────────────────────────
+
+    public Task<IReadOnlyList<Video>> GetAllVideosAsync() =>
+        _repository.GetAllAsync();
+
+    public async Task<IReadOnlyList<Video>> GetVideosByCategoryAsync(string category)
     {
-        var allVideos = await GetAllVideosAsync();
-        return allVideos.Where(v => v.Category == category).ToList();
+        var all = await _repository.GetAllAsync();
+        return all.Where(v => v.Category == category).ToList().AsReadOnly();
     }
 
-    public async Task<Video?> GetVideoByIdAsync(int id)
+    public Task<Video?> GetVideoByIdAsync(int id) =>
+        _repository.GetByIdAsync(id);
+
+    // ── Commands ─────────────────────────────────────────────────────────────
+
+    public async Task<OperationResult<int>> UploadVideoAsync(VideoUploadRequest request)
     {
-        var metadataPath = GetMetadataPath(id);
-        if (!File.Exists(metadataPath)) return null;
-
-        var json = await File.ReadAllTextAsync(metadataPath);
-        return JsonSerializer.Deserialize<Video>(json);
-    }
-
-    public async Task<(bool Success, string Message, int? VideoId)> UploadVideoAsync(
-        IBrowserFile file,
-        string title,
-        string description,
-        string? location,
-        string category = "")
-    {
-        if (file.Size > MAX_FILE_SIZE)
-            return (false, $"File too large. Maximum: {MAX_FILE_SIZE / (1024 * 1024)} MB", null);
-
-        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(ext))
-            return (false, $"Unsupported format. Allowed: {string.Join(", ", AllowedExtensions)}", null);
+        var validation = Validate(request);
+        if (!validation.IsSuccess)
+            return OperationResult<int>.Failure(validation.Message);
 
         try
         {
-            var videosPath = GetVideosPath();
-            Directory.CreateDirectory(videosPath);
+            var videoId = _repository.GenerateNextId();
 
-            var videoId = GenerateVideoId();
-            var videoDir = GetVideoPath(videoId);
-            Directory.CreateDirectory(videoDir);
+            var originalPath = await _storage.SaveUploadedFileAsync(
+                request.File, videoId, _options.MaxFileSizeBytes);
 
-            // Save uploaded file as original
-            var originalFileName = $"original{ext}";
-            var originalPath = Path.Combine(videoDir, originalFileName);
+            _logger.LogInformation("Video {Id}: original saved ({Size} MB)",
+                videoId, request.File.Size / (1024 * 1024));
 
-            await using (var stream = file.OpenReadStream(MAX_FILE_SIZE))
-            await using (var fs = new FileStream(originalPath, FileMode.Create))
-            {
-                await stream.CopyToAsync(fs);
-            }
+            var compressedPath = Path.Combine(
+                _storage.GetVideoDirectoryPath(videoId), "video.mp4");
 
-            _logger.LogInformation("Saved original file: {Path} ({Size} MB)", originalPath, file.Size / (1024 * 1024));
+            var (finalFileName, finalSize) =
+                await CompressAndFinalizeAsync(originalPath, compressedPath, request.File.Size, videoId);
 
-            // Compress to video.mp4 (target: ~20x smaller)
-            var compressedFileName = "video.mp4";
-            var compressedPath = Path.Combine(videoDir, compressedFileName);
+            var video = Video.Create(
+                videoId, request.Title, request.Description,
+                finalFileName, request.Location, request.Category, finalSize);
 
-            string finalFileName = originalFileName;
-            long finalSize = file.Size;
+            await _repository.SaveAsync(video);
 
-            bool compressed = await CompressVideoAsync(originalPath, compressedPath);
-            if (compressed && File.Exists(compressedPath))
-            {
-                finalFileName = compressedFileName;
-                finalSize = new FileInfo(compressedPath).Length;
-                try { File.Delete(originalPath); } catch { /* keep original if delete fails */ }
-                _logger.LogInformation("Compressed: {OldSize} MB -> {NewSize} MB ({Ratio}x)",
-                    file.Size / (1024 * 1024), finalSize / (1024 * 1024),
-                    finalSize > 0 ? file.Size / finalSize : 0);
-            }
-            else
-            {
-                _logger.LogWarning("Compression failed, keeping original file");
-            }
-
-            var video = new Video
-            {
-                Id = videoId,
-                Title = title,
-                Description = description,
-                FileName = finalFileName,
-                Location = location,
-                Category = category,
-                FileSizeBytes = finalSize,
-                UploadedAt = DateTime.UtcNow
-            };
-
-            var metadataJson = JsonSerializer.Serialize(video, JsonOptions);
-            await File.WriteAllTextAsync(GetMetadataPath(videoId), metadataJson);
-
-            return (true, "Video uploaded successfully", videoId);
+            return OperationResult<int>.Success(videoId, "Video uploaded successfully.");
         }
         catch (Exception ex)
         {
-            return (false, $"Upload error: {ex.Message}", null);
+            _logger.LogError(ex, "Upload failed for '{Title}'", request.Title);
+            return OperationResult<int>.Failure($"Upload error: {ex.Message}");
         }
     }
 
-    private async Task<bool> CompressVideoAsync(string inputPath, string outputPath)
+    public async Task<OperationResult> UpdateVideoAsync(int id, string title, string description, string? location)
     {
-        try
-        {
-            // Balanced compression - good quality, ~4x larger than the previous very aggressive preset
-            // - Scale to max 720p (1280x720) - 2.25x more pixels than 480p
-            // - 30 fps cap (matches typical source framerate)
-            // - CRF 30 for moderate compression with good visual quality
-            // - Bitrate cap at 2.5 Mbps video
-            // - AAC 96k stereo audio (good quality)
-            // - +faststart puts metadata at file start so playback can begin immediately
-            // Delete output if it already exists - Xabe.FFmpeg uses -n by default
-            if (File.Exists(outputPath))
-            {
-                try { File.Delete(outputPath); } catch { /* ignore */ }
-            }
-
-            var conversion = FFmpeg.Conversions.New()
-                .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
-                .AddParameter("-vf \"scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30\"")
-                .AddParameter("-c:v libx264")
-                .AddParameter("-crf 30")
-                .AddParameter("-preset medium")
-                .AddParameter("-maxrate 2500k")
-                .AddParameter("-bufsize 5000k")
-                .AddParameter("-profile:v main")
-                .AddParameter("-level 4.0")
-                .AddParameter("-c:a aac")
-                .AddParameter("-b:a 96k")
-                .AddParameter("-ac 2")
-                .AddParameter("-movflags +faststart")
-                .AddParameter("-pix_fmt yuv420p")
-                .SetOutput(outputPath);
-
-            await conversion.Start();
-            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FFmpeg compression failed for {Input}", inputPath);
-            return false;
-        }
-    }
-
-    public async Task<bool> UpdateVideoAsync(int id, string title, string description, string? location)
-    {
-        var video = await GetVideoByIdAsync(id);
-        if (video == null) return false;
+        var video = await _repository.GetByIdAsync(id);
+        if (video is null)
+            return OperationResult.Failure($"Video {id} not found.");
 
         video.Title = title;
         video.Description = description;
         video.Location = location;
 
-        var metadataJson = JsonSerializer.Serialize(video, JsonOptions);
-        await File.WriteAllTextAsync(GetMetadataPath(id), metadataJson);
-        return true;
+        await _repository.SaveAsync(video);
+        return OperationResult.Success("Changes saved successfully.");
     }
 
-    public async Task<bool> DeleteVideoAsync(int id)
+    public async Task<OperationResult> DeleteVideoAsync(int id)
     {
-        var videoDir = GetVideoPath(id);
-        if (!Directory.Exists(videoDir)) return false;
-
-        try
-        {
-            Directory.Delete(videoDir, recursive: true);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        var deleted = await _repository.DeleteAsync(id);
+        return deleted
+            ? OperationResult.Success("Video deleted.")
+            : OperationResult.Failure($"Video {id} not found.");
     }
 
-    private int GenerateVideoId()
-    {
-        var videosPath = GetVideosPath();
-        if (!Directory.Exists(videosPath))
-            return 1;
+    // ── Private helpers ───────────────────────────────────────────────────────
 
-        var dirs = Directory.GetDirectories(videosPath);
-        return dirs.Length > 0
-            ? dirs.Select(d => int.TryParse(Path.GetFileName(d), out var id) ? id : 0).Max() + 1
-            : 1;
+    private OperationResult Validate(VideoUploadRequest request)
+    {
+        if (request.File.Size > _options.MaxFileSizeBytes)
+            return OperationResult.Failure(
+                $"File too large. Maximum: {_options.MaxFileSizeBytes / (1024 * 1024)} MB");
+
+        var ext = Path.GetExtension(request.File.Name).ToLowerInvariant();
+        if (!_options.AllowedExtensions.Contains(ext))
+            return OperationResult.Failure(
+                $"Unsupported format. Allowed: {string.Join(", ", _options.AllowedExtensions)}");
+
+        return OperationResult.Success();
+    }
+
+    private async Task<(string FileName, long Size)> CompressAndFinalizeAsync(
+        string originalPath, string compressedPath, long originalSize, int videoId)
+    {
+        _logger.LogInformation("Video {Id}: starting compression with [{Strategy}]",
+            videoId, _compression.Name);
+
+        var compressed = await _compression.CompressAsync(originalPath, compressedPath);
+
+        if (compressed && File.Exists(compressedPath))
+        {
+            var compressedSize = new FileInfo(compressedPath).Length;
+            try { File.Delete(originalPath); } catch { /* keep original on failure */ }
+
+            _logger.LogInformation("Video {Id}: {Old} MB → {New} MB ({Ratio}x reduction)",
+                videoId,
+                originalSize / (1024 * 1024),
+                compressedSize / (1024 * 1024),
+                compressedSize > 0 ? originalSize / compressedSize : 0);
+
+            return ("video.mp4", compressedSize);
+        }
+
+        _logger.LogWarning("Video {Id}: compression failed, keeping original", videoId);
+        return (Path.GetFileName(originalPath), originalSize);
     }
 }

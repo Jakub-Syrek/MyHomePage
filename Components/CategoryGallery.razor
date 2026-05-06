@@ -1,12 +1,20 @@
 @namespace MyHomePage.Components
-@implements IAsyncDisposable
 @inject IVideoService VideoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
-<div class="gallery-container">
+@*
+    Generic category gallery component.
+    Template Method / DRY principle: the four category pages (Gory, Bouldering, etc.)
+    previously duplicated identical markup and logic. Now each page is a thin wrapper
+    that passes category-specific parameters to this single reusable component.
+*@
+
+<div class="gallery-container" style="background-image: url('@BackgroundImage'); background-size: 100% 100%;">
     <div class="gallery-header">
-        <h1>🏔️ Gallery</h1>
+        <div>
+            <button class="btn-back" @onclick="GoHome">← Back</button>
+        </div>
         <AuthorizeView>
             <Authorized>
                 <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
@@ -18,7 +26,7 @@
 
     @if (showUpload)
     {
-        <VideoUpload OnUploadSuccess="RefreshVideos" />
+        <VideoUploadCategory Category="@Category" OnUploadSuccess="RefreshVideos" />
     }
 
     @if (videos == null)
@@ -31,7 +39,7 @@
     else if (videos.Count == 0)
     {
         <div class="empty-state">
-            <p>No videos yet. Check back soon!</p>
+            <p>@EmptyMessage</p>
         </div>
     }
     else
@@ -41,8 +49,8 @@
             {
                 <div class="video-card" @key="video.Id">
                     <div class="card-image">
-                        <video controls>
-                            <source src="/videos/@video.Id/@video.FileName" />
+                        <video controls preload="metadata" playsinline>
+                            <source src="/videos/@video.Id/@video.FileName" type="video/mp4" />
                         </video>
                     </div>
                     <div class="card-content">
@@ -55,14 +63,14 @@
                             }
                             <span class="date">@video.UploadedAt.ToString("MMM dd, yyyy")</span>
                         </div>
-                        <AuthorizeView>
-                            <Authorized>
-                                <div class="card-actions">
+                        <div class="card-actions">
+                            <AuthorizeView>
+                                <Authorized>
                                     <button class="btn-small edit" @onclick="() => EditVideo(video.Id)">Edit</button>
                                     <button class="btn-small delete" @onclick="() => DeleteVideo(video.Id)">Delete</button>
-                                </div>
-                            </Authorized>
-                        </AuthorizeView>
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
                     </div>
                 </div>
             }
@@ -71,17 +79,21 @@
 </div>
 
 @code {
+    [Parameter, EditorRequired] public string Category { get; set; } = "";
+    [Parameter, EditorRequired] public string BackgroundImage { get; set; } = "";
+    [Parameter] public string EmptyMessage { get; set; } = "No videos yet. Be the first to upload!";
+
     private IReadOnlyList<Video>? videos;
     private bool showUpload = false;
 
     protected override async Task OnInitializedAsync()
     {
-        videos = await VideoService.GetAllVideosAsync();
+        videos = await VideoService.GetVideosByCategoryAsync(Category);
     }
 
     private async Task RefreshVideos()
     {
-        videos = await VideoService.GetAllVideosAsync();
+        videos = await VideoService.GetVideosByCategoryAsync(Category);
         showUpload = false;
     }
 
@@ -92,12 +104,13 @@
 
     private async Task DeleteVideo(int id)
     {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?"))
-        {
-            await VideoService.DeleteVideoAsync(id);
-            await RefreshVideos();
-        }
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm", "Are you sure you want to delete this video? This cannot be undone.");
+        if (!confirmed) return;
+
+        await VideoService.DeleteVideoAsync(id);
+        await RefreshVideos();
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    private void GoHome() => Navigation.NavigateTo("/");
 }

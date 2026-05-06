@@ -1,8 +1,14 @@
 using System.Text.Json;
+using MyHomePage.Abstractions;
 
 namespace MyHomePage.Services;
 
-public class CredentialService
+/// <summary>
+/// Validates user credentials stored in credentials.json.
+/// Implements ICredentialRepository so callers depend on the abstraction,
+/// not the concrete file-based storage (Dependency Inversion Principle).
+/// </summary>
+public sealed class CredentialService : ICredentialRepository
 {
     private readonly string _credentialsPath;
 
@@ -20,23 +26,18 @@ public class CredentialService
 
             var json = File.ReadAllText(_credentialsPath);
             using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
 
-            if (root.TryGetProperty("users", out var usersArray))
+            if (!doc.RootElement.TryGetProperty("users", out var usersArray))
+                return false;
+
+            foreach (var user in usersArray.EnumerateArray())
             {
-                foreach (var user in usersArray.EnumerateArray())
+                if (user.TryGetProperty("email", out var emailEl) &&
+                    user.TryGetProperty("password", out var passwordEl) &&
+                    emailEl.GetString() == email &&
+                    passwordEl.GetString() == password)
                 {
-                    if (user.TryGetProperty("email", out var emailElement) &&
-                        user.TryGetProperty("password", out var passwordElement))
-                    {
-                        var storedEmail = emailElement.GetString();
-                        var storedPassword = passwordElement.GetString();
-
-                        if (storedEmail == email && storedPassword == password)
-                        {
-                            return true;
-                        }
-                    }
+                    return true;
                 }
             }
         }

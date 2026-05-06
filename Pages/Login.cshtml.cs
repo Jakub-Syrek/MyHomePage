@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using MyHomePage.Services;
+using MyHomePage.Abstractions;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
@@ -10,11 +10,11 @@ namespace MyHomePage.Pages;
 
 public class LoginModel : PageModel
 {
-    private readonly CredentialService _credentialService;
+    private readonly ICredentialRepository _credentials;
 
-    public LoginModel(CredentialService credentialService)
+    public LoginModel(ICredentialRepository credentials)
     {
-        _credentialService = credentialService;
+        _credentials = credentials;
     }
 
     [BindProperty]
@@ -29,7 +29,7 @@ public class LoginModel : PageModel
     {
         if (ModelState.IsValid)
         {
-            if (_credentialService.ValidateCredentials(Input.Email, Input.Password))
+            if (_credentials.ValidateCredentials(Input.Email, Input.Password))
             {
                 var claims = new List<Claim>
                 {

@@ -1,5 +1,5 @@
 @namespace MyHomePage.Components
-@inject VideoService VideoService
+@inject IVideoService VideoService
 
 <div class="upload-panel">
     <div class="upload-card">
@@ -39,7 +39,8 @@
             }
         </div>
 
-        <button class="btn-submit" @onclick="UploadVideo" disabled="@(isUploading || selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))">
+        <button class="btn-submit" @onclick="UploadVideo"
+                disabled="@(isUploading || selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))">
             @if (isUploading)
             {
                 <span class="spinner-small"></span> <span>Uploading...</span>
@@ -53,8 +54,7 @@
 </div>
 
 @code {
-    [Parameter]
-    public EventCallback OnUploadSuccess { get; set; }
+    [Parameter] public EventCallback OnUploadSuccess { get; set; }
 
     private IBrowserFile? selectedFile;
     private string videoTitle = "";
@@ -64,10 +64,7 @@
     private bool isSuccess = false;
     private bool isUploading = false;
 
-    private void HandleFileSelected(InputFileChangeEventArgs e)
-    {
-        selectedFile = e.File;
-    }
+    private void HandleFileSelected(InputFileChangeEventArgs e) => selectedFile = e.File;
 
     private async Task UploadVideo()
     {
@@ -79,23 +76,19 @@
 
         try
         {
-            var (success, msg, videoId) = await VideoService.UploadVideoAsync(
-                selectedFile,
-                videoTitle,
-                videoDescription,
-                videoLocation);
+            var request = new VideoUploadRequest(
+                selectedFile, videoTitle, videoDescription,
+                string.IsNullOrWhiteSpace(videoLocation) ? null : videoLocation);
 
-            if (success)
+            var result = await VideoService.UploadVideoAsync(request);
+
+            isSuccess = result.IsSuccess;
+            message = result.IsSuccess ? "Video uploaded successfully! 🎉" : result.Message;
+
+            if (result.IsSuccess)
             {
-                isSuccess = true;
-                message = "Video uploaded successfully! 🎉";
                 ResetForm();
                 await OnUploadSuccess.InvokeAsync();
-            }
-            else
-            {
-                isSuccess = false;
-                message = msg;
             }
         }
         catch (Exception ex)

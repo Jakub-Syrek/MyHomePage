@@ -1,6 +1,6 @@
 @namespace MyHomePage.Components
 @page "/edit-video/{VideoId:int}"
-@inject VideoService VideoService
+@inject IVideoService VideoService
 @inject NavigationManager Navigation
 
 <div class="editor-container">
@@ -76,8 +76,7 @@
 </div>
 
 @code {
-    [Parameter]
-    public int VideoId { get; set; }
+    [Parameter] public int VideoId { get; set; }
 
     private Video? video;
     private string editTitle = "";
@@ -105,18 +104,14 @@
 
         try
         {
-            var success = await VideoService.UpdateVideoAsync(VideoId, editTitle, editDescription, editLocation);
-            if (success)
-            {
-                isSaveSuccess = true;
-                message = "Changes saved successfully! ✓";
+            var result = await VideoService.UpdateVideoAsync(VideoId, editTitle, editDescription,
+                string.IsNullOrWhiteSpace(editLocation) ? null : editLocation);
+
+            isSaveSuccess = result.IsSuccess;
+            message = result.Message;
+
+            if (result.IsSuccess)
                 video = await VideoService.GetVideoByIdAsync(VideoId);
-            }
-            else
-            {
-                isSaveSuccess = false;
-                message = "Error saving changes.";
-            }
         }
         catch (Exception ex)
         {
@@ -131,15 +126,9 @@
 
     private void GoBack()
     {
-        // Return to the category page the video belongs to
-        var categoryUrl = video?.Category switch
-        {
-            VideoCategories.Gory => "/gory",
-            VideoCategories.WspinaczkaSkalowa => "/wspinaczka-skalowa",
-            VideoCategories.Bouldering => "/bouldering",
-            VideoCategories.ProwadzieniHala => "/prowadzeni-hala",
-            _ => "/"
-        };
-        Navigation.NavigateTo(categoryUrl);
+        var url = video is not null
+            ? VideoCategories.GetUrl(video.Category)
+            : "/";
+        Navigation.NavigateTo(url);
     }
 }
