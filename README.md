@@ -98,6 +98,29 @@ wwwroot/videos/
 | Auth | Cookie authentication (`credentials.json`) |
 | Architecture | SOLID + Repository, Strategy, Decorator, Result, Options, Factory patterns |
 
+## Design patterns
+
+| Pattern | Where |
+|---|---|
+| **Repository** | `IVideoRepository` / `JsonVideoRepository` — decouples persistence from business logic |
+| **Decorator** | `LoggingVideoRepository` — wraps any `IVideoRepository` with transparent structured logging |
+| **Strategy** | `ICompressionStrategy` / `H264CompressionStrategy` — swap codec with one line in `Program.cs` |
+| **Result** | `OperationResult<T>` — replaces raw `(bool, string, int?)` tuples with type-safe outcomes |
+| **Options** | `VideoStorageOptions` via `IOptions<T>` — all codec settings configurable from `appsettings.json` |
+| **Factory Method** | `Video.Create(...)` — centralises construction of new `Video` instances |
+| **Value Object / DTO** | `VideoUploadRequest` sealed record — immutable parameter group for uploads |
+| **Template / DRY** | `CategoryGallery.razor` — one component behind all four category pages |
+
+## SOLID
+
+| Principle | How it's applied |
+|---|---|
+| **S** Single Responsibility | `VideoService` orchestrates; `JsonVideoRepository` persists; `FileStorageService` handles files; `H264CompressionStrategy` encodes |
+| **O** Open/Closed | New codec → new class implementing `ICompressionStrategy`. New category → new page + one constant. Zero existing code touched. |
+| **L** Liskov Substitution | `LoggingVideoRepository` is a fully valid drop-in for `JsonVideoRepository` through `IVideoRepository` |
+| **I** Interface Segregation | Five small focused interfaces (`IVideoRepository`, `IVideoService`, `ICompressionStrategy`, `IFileStorageService`, `ICredentialRepository`) |
+| **D** Dependency Inversion | Every component and service injects interfaces — no concrete class crosses layer boundaries |
+
 ## Author
 
 Jakub Syrek — <jakubvonsyrek@gmail.com>  

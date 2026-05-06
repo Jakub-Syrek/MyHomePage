@@ -6,23 +6,51 @@
 <div class="about-container">
     <div class="about-content">
         <h1>About This Site</h1>
-        <p>Welcome to My Mountain Adventures! This is a personal collection of videos from my hiking and mountain exploration journeys.</p>
+        <p>
+            A personal collection of videos from my mountain adventures — hiking, rock climbing,
+            bouldering, and gym sessions. No cloud, no database, just files on disk and a fast
+            Blazor Server interface.
+        </p>
 
         <h2>Features</h2>
         <ul>
-            <li>🎥 High-quality video gallery</li>
-            <li>📍 Location information for each adventure</li>
-            <li>🔐 Secure content management</li>
-            <li>💫 Beautiful, responsive design</li>
+            <li>🏔️ Four video galleries — Mountains, Rock Climbing, Bouldering, Indoor Climbing</li>
+            <li>🎬 Automatic H.264 compression on upload via FFmpeg (~720p, configurable quality)</li>
+            <li>🖱️ Hover card expansion with fullscreen overlay (close with X, background click, or Escape)</li>
+            <li>🔐 Login-protected upload, edit, and delete</li>
+            <li>📁 Zero database — metadata stored as JSON files alongside each video</li>
+            <li>🖼️ Custom SVG icons throughout the UI</li>
         </ul>
 
         <h2>Technology</h2>
-        <p>Built with modern web technologies:</p>
         <ul>
             <li>ASP.NET Core 8.0 with Blazor Server</li>
-            <li>Entity Framework Core for data management</li>
-            <li>SQL Server for reliable storage</li>
-            <li>Responsive design with CSS animations</li>
+            <li>Xabe.FFmpeg — H.264 video compression (auto-downloaded on first run)</li>
+            <li>Cookie authentication with credentials.json</li>
+            <li>File-based JSON storage — no SQL Server, no Entity Framework</li>
+            <li>Responsive CSS with glassmorphism, gradients and smooth transitions</li>
+        </ul>
+
+        <h2>Architecture &amp; Design Patterns</h2>
+        <p>The codebase is built around SOLID principles with the following patterns:</p>
+        <ul>
+            <li><strong>Repository</strong> — <code>IVideoRepository / JsonVideoRepository</code> decouples persistence from business logic</li>
+            <li><strong>Decorator</strong> — <code>LoggingVideoRepository</code> wraps any repository with transparent structured logging</li>
+            <li><strong>Strategy</strong> — <code>ICompressionStrategy / H264CompressionStrategy</code> makes the video codec swappable without touching the service layer</li>
+            <li><strong>Result</strong> — <code>OperationResult&lt;T&gt;</code> replaces raw bool + string tuples with expressive, type-safe outcomes</li>
+            <li><strong>Options</strong> — <code>VideoStorageOptions</code> via <code>IOptions&lt;T&gt;</code> exposes all codec settings in appsettings.json</li>
+            <li><strong>Factory Method</strong> — <code>Video.Create(...)</code> centralises object construction</li>
+            <li><strong>Value Object / DTO</strong> — <code>VideoUploadRequest</code> sealed record groups upload parameters immutably</li>
+            <li><strong>Template / DRY</strong> — <code>CategoryGallery.razor</code> is one reusable component behind all four category pages</li>
+        </ul>
+
+        <h2>SOLID</h2>
+        <ul>
+            <li><strong>S</strong> — each class has one job: VideoService orchestrates, JsonVideoRepository persists, FileStorageService handles files, H264CompressionStrategy encodes</li>
+            <li><strong>O</strong> — new compression codec or new category requires only a new class / constant, zero existing code modified</li>
+            <li><strong>L</strong> — LoggingVideoRepository is a fully valid drop-in for JsonVideoRepository via IVideoRepository</li>
+            <li><strong>I</strong> — five small focused interfaces instead of one large service class</li>
+            <li><strong>D</strong> — every component and service injects interfaces, never concrete classes</li>
         </ul>
     </div>
 </div>
@@ -63,6 +91,7 @@
     padding: 10px 0 10px 30px;
     position: relative;
     color: #7f8c8d;
+    line-height: 1.7;
 }
 
 .about-content li:before {
@@ -71,5 +100,17 @@
     left: 0;
     color: #667eea;
     font-weight: bold;
+}
+
+.about-content strong {
+    color: #2c3e50;
+}
+
+.about-content code {
+    background: #f0f2f5;
+    color: #667eea;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
 }
 </style>
