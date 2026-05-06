@@ -8,6 +8,8 @@ A personal website for storing and browsing mountain adventure videos — hiking
 - **Automatic video compression** — H.264 via FFmpeg (auto-downloaded on first run), ~720p/CRF-30, configurable
 - **Hover card expansion** — hover a video thumbnail to get a fullscreen overlay; close with X, background click, or Escape
 - **Admin panel** — login-protected upload, edit, and delete
+- **Admin logs viewer** — `/admin/logs` page with real-time log filtering, search, and live auto-refresh (10s interval)
+- **Comprehensive logging** — Serilog with CLEF format, all requests/responses/errors logged to disk
 - **SVG category icons** — custom vector illustrations in the header and home page cards
 - **No database** — metadata stored as `metadata.json` files alongside each video
 - **SOLID architecture** — Repository, Strategy, Decorator, Result, Options, Factory, and more (see [ARCHITECTURE.md](ARCHITECTURE.md))
@@ -61,7 +63,45 @@ All tuneable values live under the `"VideoStorage"` section in `appsettings.json
 | `/prowadzeni-hala` | Indoor Climbing gallery |
 | `/edit-video/{id}` | Edit video metadata |
 | `/login` | Admin login |
+| `/admin/logs` | Application logs (admin only) — filter by level, search, auto-refresh |
 | `/about` | About page |
+
+## Authentication & Credentials
+
+Create a `credentials.json` file in the project root with admin login credentials:
+
+```json
+{
+    "users": [
+        {
+            "email": "admin@mountains.com",
+            "password": "Admin123!Mountain"
+        }
+    ]
+}
+```
+
+Login redirects to the home page and sets a persistent 7-day cookie session.
+
+## Logging & Admin Panel
+
+All application events (requests, responses, errors, video operations) are logged to disk:
+
+- **Log format**: CLEF (Compact Log Event Format) — JSON-based, structured logging
+- **Log location**: `logs/app-{date}.clef` (daily rolling, 14 days retained)
+- **Log levels**: Debug, Information, Warning, Error, Fatal
+- **View logs**: Visit `/admin/logs` (requires login) to:
+  - Filter by log level (Debug, Info, Warning, Error, Fatal)
+  - Search by message text or source
+  - Toggle auto-refresh (10-second interval)
+  - See real-time statistics (counts by level)
+  - Expand exceptions to see full stack traces
+
+**What's logged**:
+- All HTTP requests (method, path, IP, response time)
+- Login attempts (success/failure with IP)
+- Video operations (upload, edit, delete)
+- Errors and exceptions with full context
 
 ## Storage layout
 
@@ -96,6 +136,7 @@ wwwroot/videos/
 | Video encoding | Xabe.FFmpeg 5.2.6 (wraps FFmpeg) |
 | Storage | JSON files + local file system |
 | Auth | Cookie authentication (`credentials.json`) |
+| Logging | Serilog with CLEF format (structured, file-based, daily rolling) |
 | Architecture | SOLID + Repository, Strategy, Decorator, Result, Options, Factory patterns |
 
 ## Design patterns
