@@ -68,5 +68,5 @@ ffmpeg/
 # Logs
 logs/
 
-# Claude settings
-.claude/settings.local.json
+# Claude settings and local configuration
+.claude/
