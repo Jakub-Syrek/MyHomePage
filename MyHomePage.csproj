@@ -21,4 +21,8 @@
     <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.6" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="MyHomePage.Tests/**/*.cs" />
+  </ItemGroup>
+
 </Project>

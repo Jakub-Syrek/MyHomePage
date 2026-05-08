@@ -40,7 +40,17 @@
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'grep -v \"Co-Authored-By: Claude\"' 214220410f41509e138d16ed7a1e0ba1c535b853^..HEAD)",
       "Bash(dotnet add *)",
       "mcp__Claude_Preview__preview_start",
-      "mcp__Claude_in_Chrome__tabs_context_mcp"
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(curl -s -I https://github.com/Jakub-Syrek/MyHomePage)",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__find",
+      "mcp__Claude_in_Chrome__navigate",
+      "Bash(dotnet test *)",
+      "Bash(dotnet sln *)",
+      "Bash(dotnet new *)"
     ]
   }
 }

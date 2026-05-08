@@ -1,0 +1,15 @@
+global using System;
+global using System.IO;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Threading.Tasks;
+global using NUnit.Framework;
+global using NSubstitute;
+global using Microsoft.Extensions.Options;
+global using Microsoft.AspNetCore.Hosting;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.Extensions.Logging;
+global using MyHomePage.Abstractions;
+global using MyHomePage.Models;
+global using MyHomePage.Options;
+global using MyHomePage.Services;
