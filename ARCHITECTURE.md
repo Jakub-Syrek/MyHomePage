@@ -202,12 +202,70 @@ wwwroot/videos/
 }
 ```
 
+## Testing
+
+### Unit tests (25 total)
+
+**MyHomePage.Tests** — NUnit framework with NSubstitute for mocking.
+
+- **Models** (8 tests)
+  - `OperationResult` — success/failure with/without messages
+  - `OperationResult<T>` — data carrying with different outcomes
+
+- **Services** (15 tests)
+  - `VideoService` (10 tests) — deletion, updates, filtering, retrieval
+  - `CredentialService` (3 tests) — email/password validation, file handling
+  - `LogReaderService` (2 tests) — directory handling, entry limits
+
+- **Repositories** (3 tests)
+  - `JsonVideoRepository` — ID generation, basic repository contract
+
+### Test organization
+
+Tests follow the **Arrange-Act-Assert (AAA)** pattern:
+```csharp
+[Test]
+public async Task DeleteVideoAsync_VideoExists_ReturnsSuccess()
+{
+    // Arrange — set up mocks and test data
+    _mockRepository.DeleteAsync(1).Returns(true);
+
+    // Act — call the method under test
+    var result = await _service.DeleteVideoAsync(1);
+
+    // Assert — verify outcomes
+    Assert.That(result.IsSuccess, Is.True);
+}
+```
+
+### Running tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run with detailed output
+dotnet test --logger "console;verbosity=detailed"
+
+# Run specific test class
+dotnet test --filter OperationResultTests
+```
+
+### CI/CD integration
+
+GitHub Actions workflow (`.github/workflows/dotnet.yml`) runs:
+1. Build (Release configuration)
+2. Tests (with detailed logging)
+3. Requires all tests pass before merge
+
 ## Dependencies
 
 | Package | Purpose |
 |---|---|
 | `Xabe.FFmpeg 5.2.6` | FFmpeg process wrapper |
 | `Xabe.FFmpeg.Downloader 5.2.6` | Auto-download FFmpeg binaries on first run |
+| `NUnit 4.3.2` | Unit testing framework |
+| `NSubstitute 5.1.0` | Mocking library for tests |
 | ASP.NET Core 8.0 (built-in) | Blazor Server, Cookie Auth, Razor Pages, DI, Options |
 
 ---

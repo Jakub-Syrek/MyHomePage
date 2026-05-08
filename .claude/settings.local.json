@@ -50,7 +50,8 @@
       "mcp__Claude_in_Chrome__navigate",
       "Bash(dotnet test *)",
       "Bash(dotnet sln *)",
-      "Bash(dotnet new *)"
+      "Bash(dotnet new *)",
+      "Bash(xargs grep -l \"//\\\\|/\\\\*\")"
     ]
   }
 }

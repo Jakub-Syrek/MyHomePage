@@ -14,6 +14,41 @@ A personal website for storing and browsing mountain adventure videos — hiking
 - **No database** — metadata stored as `metadata.json` files alongside each video
 - **SOLID architecture** — Repository, Strategy, Decorator, Result, Options, Factory, and more (see [ARCHITECTURE.md](ARCHITECTURE.md))
 
+## Testing
+
+### Running Tests Locally
+
+```bash
+dotnet test
+```
+
+### Test Coverage
+
+- **Unit tests** — 25 total tests covering Services, Repositories, and Models
+- **Service tests** — VideoService (10 tests), CredentialService (3 tests), LogReaderService (2 tests)
+- **Repository tests** — JsonVideoRepository (3 tests)
+- **Model tests** — OperationResult and OperationResult<T> (8 tests)
+- **Testing framework** — NUnit 4.3.2 with NSubstitute 5.1.0 for mocking
+
+Tests are required to pass before merging (enforced by GitHub Actions).
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflow
+
+Every push and pull request triggers automated:
+- **Build** — `dotnet build` with Release configuration
+- **Tests** — `dotnet test` with detailed output logging
+- **Requirements** — All tests must pass before merge
+
+Workflow file: `.github/workflows/dotnet.yml`
+
+To configure branch protection:
+1. Go to repository Settings → Branches
+2. Select the main branch
+3. Enable "Require status checks to pass before merging"
+4. Check ".NET Build & Test" as required status
+
 ## Requirements
 
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
