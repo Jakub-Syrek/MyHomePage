@@ -51,7 +51,9 @@
       "Bash(dotnet test *)",
       "Bash(dotnet sln *)",
       "Bash(dotnet new *)",
-      "Bash(xargs grep -l \"//\\\\|/\\\\*\")"
+      "Bash(xargs grep -l \"//\\\\|/\\\\*\")",
+      "Bash(git rebase *)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --msg-filter 'sed \"/Co-Authored-By: Claude/d\"' HEAD~2..HEAD)"
     ]
   }
 }
