@@ -1,5 +1,10 @@
 # My Mountain Adventures
 
+[![.NET Build & Test](https://github.com/Jakub-Syrek/MyHomePage/workflows/.NET%20Build%20%26%20Test/badge.svg)](https://github.com/Jakub-Syrek/MyHomePage/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue)](https://dotnet.microsoft.com/download)
+[![Tests: 24/24](https://img.shields.io/badge/Tests-24%2F24%20passing-brightgreen)](MyHomePage.Tests)
+
 A personal website for storing and browsing mountain adventure videos — hiking, rock climbing, bouldering, and gym sessions. Built with **ASP.NET Core 8 + Blazor Server**, zero database, all storage on the local file system.
 
 ## Features
