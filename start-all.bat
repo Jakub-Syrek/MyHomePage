@@ -1,6 +1,6 @@
 @echo off
 REM Master startup script - starts both apps, then ngrok tunnels
-REM Kills existing ngrok and app processes first
+REM Kills existing processes and waits for ngrok cloud endpoints to disconnect
 
 setlocal enabledelayedexpansion
 
@@ -9,68 +9,31 @@ echo   STARTUP - MyHomePage + DuneChess + ngrok
 echo ===========================================
 echo.
 
-REM Kill existing processes - aggressive cleanup
-echo [CLEANUP] Killing existing processes...
+REM ===== STAGE 1: KILL EXISTING PROCESSES =====
+echo [CLEANUP 1/3] Killing existing processes...
 
-REM First attempt - standard taskkill
 taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /IM dotnet.exe >nul 2>&1
 taskkill /F /IM MyHomePage.exe >nul 2>&1
 taskkill /F /IM node.exe >nul 2>&1
 
-timeout /t 1 /nobreak
+timeout /t 1 /nobreak >nul
 
-REM Second attempt - using wmic for more reliability
 wmic process where name="dotnet.exe" delete /nointeractive >nul 2>&1
 wmic process where name="MyHomePage.exe" delete /nointeractive >nul 2>&1
 wmic process where name="node.exe" delete /nointeractive >nul 2>&1
 wmic process where name="ngrok.exe" delete /nointeractive >nul 2>&1
 
-timeout /t 2 /nobreak
+timeout /t 2 /nobreak >nul
 
-REM Clean build artifacts
-echo [CLEANUP] Cleaning build artifacts...
+REM ===== STAGE 2: CLEAN BUILD ARTIFACTS =====
+echo [CLEANUP 2/3] Cleaning build artifacts...
 cd /d "C:\Users\jaqbs\source\repos\MyHomePage"
 if exist bin rmdir /s /q bin >nul 2>&1
 if exist obj rmdir /s /q obj >nul 2>&1
-timeout /t 1 /nobreak
 
-echo.
-echo ===========================================
-echo   [1/3] Starting MyHomePage (port 5132)
-echo ===========================================
-echo.
-
-cd /d "C:\Users\jaqbs\source\repos\MyHomePage"
-start "MyHomePage - ASP.NET Core" cmd /k "dotnet run"
-
-timeout /t 5 /nobreak
-
-echo.
-echo ===========================================
-echo   [2/3] Starting 3DimensionalChess (port 8080)
-echo ===========================================
-echo.
-
-cd /d "C:\Users\jaqbs\source\repos\3DimensionalChess"
-start "3DimensionalChess - Node.js" cmd /k "npm run dev"
-
-timeout /t 5 /nobreak
-
-echo.
-echo ===========================================
-echo   [3/3] Starting ngrok tunnels
-echo ===========================================
-echo.
-
-echo [CLEANUP] Killing any existing ngrok processes...
-taskkill /F /IM ngrok.exe >nul 2>&1
-wmic process where name="ngrok.exe" delete /nointeractive >nul 2>&1
-
-echo [CLEANUP] Waiting for tunnels to disconnect (5 seconds)...
-timeout /t 5 /nobreak
-
-REM Set ngrok path (absolute) - check if exists
+REM ===== STAGE 3: VERIFY NGROK =====
+echo [CLEANUP 3/3] Verifying ngrok installation...
 set "NGROK_EXE=C:\Users\jaqbs\source\repos\MyHomePage\ngrok\ngrok.exe"
 
 if not exist "%NGROK_EXE%" (
@@ -81,13 +44,49 @@ if not exist "%NGROK_EXE%" (
     pause
     exit /b 1
 )
+echo [OK] ngrok found
+echo.
 
-echo [1/2] Starting MyHomePage tunnel (port 5132 -> cruxbeta.com.ngrok.dev)...
+REM ===== START APPS =====
+echo ===========================================
+echo   [1/3] Starting MyHomePage (port 5132)
+echo ===========================================
+cd /d "C:\Users\jaqbs\source\repos\MyHomePage"
+start "MyHomePage - ASP.NET Core" cmd /k "dotnet run"
+echo Waiting 8 seconds for ASP.NET Core to start...
+timeout /t 8 /nobreak >nul
+
+echo.
+echo ===========================================
+echo   [2/3] Starting 3DimensionalChess (port 8080)
+echo ===========================================
+cd /d "C:\Users\jaqbs\source\repos\3DimensionalChess"
+start "3DimensionalChess - Node.js" cmd /k "npm run dev"
+echo Waiting 5 seconds for Node.js to start...
+timeout /t 5 /nobreak >nul
+
+echo.
+echo ===========================================
+echo   [3/3] Starting ngrok tunnels
+echo ===========================================
+echo.
+echo [INFO] ngrok cloud endpoints need ~30s to disconnect from previous session.
+echo [INFO] Waiting 30 seconds before starting tunnels...
+echo.
+
+REM Countdown so user knows it's working
+for /L %%i in (30,-5,5) do (
+    echo    %%i seconds remaining...
+    timeout /t 5 /nobreak >nul
+)
+
+echo.
+echo [1/2] Starting MyHomePage tunnel (port 5132 -^> cruxbeta.com.ngrok.dev)...
 start "ngrok - MyHomePage" cmd /k "%NGROK_EXE% http --url=cruxbeta.com.ngrok.dev 5132"
 
-timeout /t 2 /nobreak
+timeout /t 3 /nobreak >nul
 
-echo [2/2] Starting 3DimensionalChess tunnel (port 8080 -> dunechess.com.ngrok.dev)...
+echo [2/2] Starting 3DimensionalChess tunnel (port 8080 -^> dunechess.com.ngrok.dev)...
 start "ngrok - DuneChess" cmd /k "%NGROK_EXE% http --url=dunechess.com.ngrok.dev 8080"
 
 echo.
@@ -98,8 +97,15 @@ echo.
 echo MyHomePage:     http://localhost:5132
 echo                 https://cruxbeta.com.ngrok.dev
 echo.
-echo 3DimensionalChess: http://localhost:8080
-echo                    https://dunechess.com.ngrok.dev
+echo DuneChess:      http://localhost:8080
+echo                 https://dunechess.com.ngrok.dev
+echo.
+echo ngrok dashboard: http://localhost:4040
+echo.
+echo [TIP] If a tunnel shows "endpoint already online" error:
+echo       1. Wait 30 more seconds
+echo       2. Close that window
+echo       3. Re-run: %NGROK_EXE% http --url=^<domain^> ^<port^>
 echo.
 echo All services running. Close individual windows to stop.
 pause
