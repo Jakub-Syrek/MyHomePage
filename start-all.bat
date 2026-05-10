@@ -9,12 +9,23 @@ echo   STARTUP - MyHomePage + DuneChess + ngrok
 echo ===========================================
 echo.
 
-REM Kill existing processes
+REM Kill existing processes - aggressive cleanup
 echo [CLEANUP] Killing existing processes...
+
+REM First attempt - standard taskkill
 taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /IM dotnet.exe >nul 2>&1
 taskkill /F /IM MyHomePage.exe >nul 2>&1
 taskkill /F /IM node.exe >nul 2>&1
+
+timeout /t 1 /nobreak
+
+REM Second attempt - using wmic for more reliability
+wmic process where name="dotnet.exe" delete /nointeractive >nul 2>&1
+wmic process where name="MyHomePage.exe" delete /nointeractive >nul 2>&1
+wmic process where name="node.exe" delete /nointeractive >nul 2>&1
+wmic process where name="ngrok.exe" delete /nointeractive >nul 2>&1
+
 timeout /t 2 /nobreak
 
 REM Clean build artifacts
