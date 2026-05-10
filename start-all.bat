@@ -14,6 +14,7 @@ echo [CLEANUP] Killing existing processes...
 taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /IM dotnet.exe >nul 2>&1
 taskkill /F /IM MyHomePage.exe >nul 2>&1
+taskkill /F /IM node.exe >nul 2>&1
 timeout /t 2 /nobreak
 
 REM Clean build artifacts
