@@ -85,13 +85,13 @@ for /L %%i in (30,-5,5) do (
 )
 
 echo.
-echo [1/2] Starting MyHomePage tunnel (port 5132 -^> cruxbeta.com.ngrok.dev) with pooling...
-start "ngrok - MyHomePage" cmd /k "%NGROK_EXE% http --url=cruxbeta.com.ngrok.dev --pooling-enabled 5132"
+echo [1/2] Starting MyHomePage tunnel (port 5132 -^> cruxbeta.com.ngrok.dev) [region=eu, pooling]...
+start "ngrok - MyHomePage" cmd /k "%NGROK_EXE% http --url=cruxbeta.com.ngrok.dev --region=eu --pooling-enabled 5132"
 
 timeout /t 3 /nobreak >nul
 
-echo [2/2] Starting 3DimensionalChess tunnel (port 8080 -^> dunechess.com.ngrok.dev) with pooling...
-start "ngrok - DuneChess" cmd /k "%NGROK_EXE% http --url=dunechess.com.ngrok.dev --pooling-enabled 8080"
+echo [2/2] Starting 3DimensionalChess tunnel (port 8080 -^> dunechess.com.ngrok.dev) [region=eu, pooling]...
+start "ngrok - DuneChess" cmd /k "%NGROK_EXE% http --url=dunechess.com.ngrok.dev --region=eu --pooling-enabled 8080"
 
 echo.
 echo ===========================================
