@@ -10,19 +10,26 @@ echo ===========================================
 echo.
 
 REM ===== STAGE 1: KILL EXISTING PROCESSES =====
-echo [CLEANUP 1/3] Killing existing processes...
+echo [CLEANUP 1/3] Killing existing processes (using PowerShell)...
 
+REM Use PowerShell Stop-Process -Force - most reliable method
+powershell -NoProfile -Command "Get-Process -Name 'MyHomePage','dotnet','node','ngrok' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
+
+timeout /t 2 /nobreak >nul
+
+REM Backup: taskkill + wmic
 taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /IM dotnet.exe >nul 2>&1
 taskkill /F /IM MyHomePage.exe >nul 2>&1
 taskkill /F /IM node.exe >nul 2>&1
 
-timeout /t 1 /nobreak >nul
-
-wmic process where name="dotnet.exe" delete /nointeractive >nul 2>&1
 wmic process where name="MyHomePage.exe" delete /nointeractive >nul 2>&1
-wmic process where name="node.exe" delete /nointeractive >nul 2>&1
-wmic process where name="ngrok.exe" delete /nointeractive >nul 2>&1
+wmic process where name="dotnet.exe" delete /nointeractive >nul 2>&1
+
+timeout /t 2 /nobreak >nul
+
+REM Verify MyHomePage.exe is killed - retry if not
+powershell -NoProfile -Command "if (Get-Process -Name 'MyHomePage' -ErrorAction SilentlyContinue) { Write-Host '[WARN] MyHomePage still running - retrying with admin...' -ForegroundColor Yellow; Start-Process powershell -Verb RunAs -ArgumentList '-Command \"Get-Process -Name MyHomePage | Stop-Process -Force; Start-Sleep -Seconds 2\"' -Wait } else { Write-Host '[OK] All processes killed' -ForegroundColor Green }"
 
 timeout /t 2 /nobreak >nul
 
