@@ -63,10 +63,12 @@ echo   [3/3] Starting ngrok tunnels
 echo ===========================================
 echo.
 
-echo Killing any existing ngrok processes...
+echo [CLEANUP] Killing any existing ngrok processes...
 taskkill /F /IM ngrok.exe >nul 2>&1
+wmic process where name="ngrok.exe" delete /nointeractive >nul 2>&1
 
-timeout /t 1 /nobreak
+echo [CLEANUP] Waiting for tunnels to disconnect (5 seconds)...
+timeout /t 5 /nobreak
 
 echo [1/2] Starting MyHomePage tunnel (port 5132 -> cruxbeta.com.ngrok.dev)...
 start "ngrok - MyHomePage" cmd /k "ngrok http --url=cruxbeta.com.ngrok.dev 5132"
