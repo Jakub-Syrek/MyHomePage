@@ -10,7 +10,20 @@ echo ===========================================
 echo.
 
 REM ===== STAGE 1: KILL EXISTING PROCESSES =====
-echo [CLEANUP 1/3] Killing existing processes (using PowerShell)...
+echo [CLEANUP 1/3] Killing parent cmd windows hosting ngrok/dotnet/node...
+
+REM Kill cmd.exe windows by title (parents that hosted ngrok/dotnet/node)
+taskkill /F /FI "WINDOWTITLE eq ngrok - MyHomePage*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq ngrok - DuneChess*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MyHomePage - ASP.NET Core*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq 3DimensionalChess - Node.js*" >nul 2>&1
+
+REM Kill any cmd.exe whose command line references ngrok or dotnet run or npm run dev
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" | Where-Object { $_.CommandLine -match 'ngrok|dotnet run|npm run dev' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+
+timeout /t 1 /nobreak >nul
+
+echo [CLEANUP 1/3] Killing actual processes (PowerShell Stop-Process)...
 
 REM Use PowerShell Stop-Process -Force - most reliable method
 powershell -NoProfile -Command "Get-Process -Name 'MyHomePage','dotnet','node','ngrok' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
