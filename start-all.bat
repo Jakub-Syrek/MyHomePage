@@ -71,12 +71,12 @@ echo [CLEANUP] Waiting for tunnels to disconnect (5 seconds)...
 timeout /t 5 /nobreak
 
 echo [1/2] Starting MyHomePage tunnel (port 5132 -> cruxbeta.com.ngrok.dev)...
-start "ngrok - MyHomePage" cmd /k "ngrok http --url=cruxbeta.com.ngrok.dev 5132"
+start "ngrok - MyHomePage" cmd /k ".\ngrok\ngrok.exe http --url=cruxbeta.com.ngrok.dev 5132"
 
 timeout /t 2 /nobreak
 
 echo [2/2] Starting 3DimensionalChess tunnel (port 8080 -> dunechess.com.ngrok.dev)...
-start "ngrok - DuneChess" cmd /k "ngrok http --url=dunechess.com.ngrok.dev 8080"
+start "ngrok - DuneChess" cmd /k ".\ngrok\ngrok.exe http --url=dunechess.com.ngrok.dev 8080"
 
 echo.
 echo ===========================================
