@@ -13,7 +13,15 @@ REM Kill existing processes
 echo [CLEANUP] Killing existing processes...
 taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /IM dotnet.exe >nul 2>&1
+taskkill /F /IM MyHomePage.exe >nul 2>&1
 timeout /t 2 /nobreak
+
+REM Clean build artifacts
+echo [CLEANUP] Cleaning build artifacts...
+cd /d "C:\Users\jaqbs\source\repos\MyHomePage"
+if exist bin rmdir /s /q bin >nul 2>&1
+if exist obj rmdir /s /q obj >nul 2>&1
+timeout /t 1 /nobreak
 
 echo.
 echo ===========================================
