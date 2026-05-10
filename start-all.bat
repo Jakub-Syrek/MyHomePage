@@ -33,7 +33,7 @@ echo ===========================================
 echo.
 
 cd /d "C:\Users\jaqbs\source\repos\3DimensionalChess"
-start "3DimensionalChess - Node.js" cmd /k "npm start"
+start "3DimensionalChess - Node.js" cmd /k "npm run dev"
 
 timeout /t 5 /nobreak
 
