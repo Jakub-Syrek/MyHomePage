@@ -10,7 +10,7 @@ echo ===========================================
 echo.
 
 REM ===== STAGE 1: KILL EXISTING PROCESSES =====
-echo [CLEANUP 1/3] Killing parent cmd windows hosting ngrok/dotnet/node...
+echo [CLEANUP 1/3] Killing target processes only (safe mode)...
 
 REM Kill cmd.exe windows by title (parents that hosted ngrok/dotnet/node)
 taskkill /F /FI "WINDOWTITLE eq ngrok - MyHomePage*" >nul 2>&1
@@ -18,31 +18,15 @@ taskkill /F /FI "WINDOWTITLE eq ngrok - DuneChess*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq MyHomePage - ASP.NET Core*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq 3DimensionalChess - Node.js*" >nul 2>&1
 
-REM Kill any cmd.exe whose command line references ngrok or dotnet run or npm run dev
-powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" | Where-Object { $_.CommandLine -match 'ngrok|dotnet run|npm run dev' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
-
-timeout /t 1 /nobreak >nul
-
-echo [CLEANUP 1/3] Killing actual processes (PowerShell Stop-Process)...
-
-REM Use PowerShell Stop-Process -Force - most reliable method
-powershell -NoProfile -Command "Get-Process -Name 'MyHomePage','dotnet','node','ngrok' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
-
-timeout /t 2 /nobreak >nul
-
-REM Backup: taskkill + wmic
+REM Kill ngrok and MyHomePage.exe (safe - these are unique to our project)
 taskkill /F /IM ngrok.exe >nul 2>&1
-taskkill /F /IM dotnet.exe >nul 2>&1
 taskkill /F /IM MyHomePage.exe >nul 2>&1
-taskkill /F /IM node.exe >nul 2>&1
 
-wmic process where name="MyHomePage.exe" delete /nointeractive >nul 2>&1
-wmic process where name="dotnet.exe" delete /nointeractive >nul 2>&1
+REM Kill ONLY dotnet processes running MyHomePage (NOT all dotnet processes - that would kill PowerShell/VS!)
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='dotnet.exe'\" | Where-Object { $_.CommandLine -match 'MyHomePage' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
-timeout /t 2 /nobreak >nul
-
-REM Verify MyHomePage.exe is killed - retry if not
-powershell -NoProfile -Command "if (Get-Process -Name 'MyHomePage' -ErrorAction SilentlyContinue) { Write-Host '[WARN] MyHomePage still running - retrying with admin...' -ForegroundColor Yellow; Start-Process powershell -Verb RunAs -ArgumentList '-Command \"Get-Process -Name MyHomePage | Stop-Process -Force; Start-Sleep -Seconds 2\"' -Wait } else { Write-Host '[OK] All processes killed' -ForegroundColor Green }"
+REM Kill ONLY node processes running 3DimensionalChess or http-server on port 8080
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match '3DimensionalChess|http-server|esbuild' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 timeout /t 2 /nobreak >nul
 
