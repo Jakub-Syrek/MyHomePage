@@ -1,0 +1,59 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# IDE / Editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Tests (not deployed)
+MyHomePage.Tests/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI / GitHub
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs / Runtime data
+logs/
+**/logs/
+ffmpeg/
+
+# Media — these stay outside the image (Railway volume mounts at /data/videos)
+wwwroot/videos/
+wwwroot/images/*.mp4
+wwwroot/images/*.webm
+wwwroot/images/*.mkv
+
+# Node frontend (if any)
+node_modules/
+dist/
+
+# Local dev scripts
+*.bat
+*.ps1
+ngrok/
+
+# Local config / secrets
+appsettings.Local.json
+credentials.json
+
+# Plans, claude state, OS junk
+.claude/
+*.md
+!README.md
+!ARCHITECTURE.md
+!RAILWAY_DEPLOY.md
+.DS_Store
+Thumbs.db

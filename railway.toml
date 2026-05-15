@@ -1,0 +1,21 @@
+# Railway deploy config — see https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "dotnet MyHomePage.dll"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Notes (configured in Railway UI, not here):
+#   * Volume: mount at /data with at least 50 GB (recommended for ~100 1080p videos)
+#   * Region: europe-west4 (Amsterdam) — lowest latency for PL/EU
+#   * Env vars to set:
+#       ASPNETCORE_ENVIRONMENT=Production
+#       VIDEO_STORAGE_ROOT=/data/videos
+#       FFMPEG_PATH=/usr/bin
+#       (Optional) RAILWAY_ENVIRONMENT — auto-set by Railway, disables HTTPS redirect
