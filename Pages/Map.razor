@@ -1,0 +1,192 @@
+@page "/map"
+@layout MainLayout
+@using System.Text.Json
+@inject IVideoService VideoService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Map - My Mountain Adventures</PageTitle>
+
+<div class="map-page">
+    <div class="map-header">
+        <h1>🗺️ Adventures Map</h1>
+        <p>Click a pin to see the trip. Coordinates are extracted from photos/videos automatically.</p>
+        @if (_videos is not null)
+        {
+            <p class="map-stats">
+                <strong>@(_videos.Count(v => v.HasCoordinates))</strong> located /
+                <strong>@_videos.Count</strong> total items
+            </p>
+        }
+    </div>
+
+    <div id="adventures-map" class="map-canvas"></div>
+
+    @if (_videos is not null && _videos.Count(v => v.HasCoordinates) == 0)
+    {
+        <div class="empty-state">
+            <p>📍 No items with GPS coordinates yet.</p>
+            <p style="font-size:0.9rem; color:#7f8c8d">
+                Upload photos/videos with location metadata, or add coordinates manually in the edit form.
+            </p>
+        </div>
+    }
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+<style>
+    .map-page {
+        max-width: 1400px;
+        margin: 30px auto;
+        padding: 0 20px;
+    }
+    .map-header h1 {
+        color: #2c3e50;
+        margin-bottom: 8px;
+    }
+    .map-header p {
+        color: #7f8c8d;
+        margin: 4px 0;
+    }
+    .map-stats {
+        background: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        display: inline-block;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .map-canvas {
+        height: 70vh;
+        min-height: 500px;
+        border-radius: 12px;
+        margin-top: 20px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        background: #cfe2ea;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #2c3e50;
+    }
+</style>
+
+@code {
+    private IReadOnlyList<Video>? _videos;
+    private bool _scriptLoaded;
+    private bool _mapInitialized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _videos = await VideoService.GetAllVideosAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_videos is null) return;
+        if (!_scriptLoaded)
+        {
+            await JS.InvokeVoidAsync("eval", $@"
+                if (!window.__leafletLoading && typeof L === 'undefined') {{
+                    window.__leafletLoading = true;
+                    var s = document.createElement('script');
+                    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                    s.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+                    s.crossOrigin = '';
+                    document.head.appendChild(s);
+                }}
+            ");
+            _scriptLoaded = true;
+        }
+
+        if (!_mapInitialized)
+        {
+            var markers = _videos
+                .Where(v => v.HasCoordinates)
+                .Select(v => new
+                {
+                    id = v.Id,
+                    title = v.Title,
+                    description = v.Description,
+                    location = v.Location,
+                    category = v.Category,
+                    lat = v.Latitude!.Value,
+                    lon = v.Longitude!.Value,
+                    thumb = $"/videos/{v.Id}/{v.GetAllMedia().First().FileName}",
+                    isImage = v.GetAllMedia().First().Type == MediaType.Image,
+                    url = !string.IsNullOrEmpty(v.Category)
+                        ? VideoCategories.GetUrl(v.Category)
+                        : "/"
+                })
+                .ToArray();
+
+            var markersJson = JsonSerializer.Serialize(markers);
+
+            // Wait for Leaflet to load then init map
+            await JS.InvokeVoidAsync("eval", $@"
+                (function() {{
+                    function init() {{
+                        if (typeof L === 'undefined') {{ setTimeout(init, 100); return; }}
+                        const el = document.getElementById('adventures-map');
+                        if (!el || el.__init) return;
+                        el.__init = true;
+
+                        const markers = {markersJson};
+                        const map = L.map('adventures-map').setView([50, 19], 6);
+                        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                            maxZoom: 19,
+                            attribution: '© OpenStreetMap contributors'
+                        }}).addTo(map);
+
+                        if (markers.length === 0) return;
+
+                        const bounds = [];
+                        markers.forEach(m => {{
+                            const popup = `
+                                <div style='min-width:200px'>
+                                    ${{m.isImage
+                                        ? `<img src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' />`
+                                        : `<video src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' preload='metadata' controls></video>`}}
+                                    <h4 style='margin:4px 0;color:#2c3e50'>${{m.title}}</h4>
+                                    ${{m.location ? `<p style='margin:2px 0;color:#7f8c8d;font-size:0.85rem'>📍 ${{m.location}}</p>` : ''}}
+                                    ${{m.category ? `<p style='margin:2px 0;color:#7f8c8d;font-size:0.8rem'>🏷️ ${{m.category}}</p>` : ''}}
+                                    <p style='margin:6px 0 2px;color:#555;font-size:0.85rem'>${{(m.description||'').substring(0,140)}}</p>
+                                    <a href='${{m.url}}' style='display:inline-block;margin-top:6px;color:#667eea;text-decoration:none;font-weight:600'>View gallery →</a>
+                                </div>
+                            `;
+                            const marker = L.marker([m.lat, m.lon]).addTo(map);
+                            marker.bindPopup(popup, {{ maxWidth: 320 }});
+                            bounds.push([m.lat, m.lon]);
+                        }});
+
+                        if (bounds.length > 1) {{
+                            map.fitBounds(bounds, {{ padding: [40, 40] }});
+                        }} else {{
+                            map.setView(bounds[0], 12);
+                        }}
+                    }}
+                    init();
+                }})();
+            ");
+            _mapInitialized = true;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                (function() {
+                    const el = document.getElementById('adventures-map');
+                    if (el && el.__init) {
+                        try { el._leaflet_map && el._leaflet_map.remove(); } catch(e){}
+                        el.__init = false;
+                    }
+                })();
+            ");
+        }
+        catch { /* ignore */ }
+    }
+}

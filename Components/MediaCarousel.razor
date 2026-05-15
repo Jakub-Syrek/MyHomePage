@@ -1,0 +1,110 @@
+@namespace MyHomePage.Components
+@using MyHomePage.Models
+
+@*
+    Renders one or more media files (videos + images) attached to a gallery item.
+    For a single item: renders the file directly. For multiple: shows the active
+    one large with a thumbnail strip below.
+*@
+
+@if (_items.Count == 0)
+{
+    <p style="color:#999">No media available.</p>
+}
+else if (_items.Count == 1)
+{
+    @RenderItem(_items[0], large: true)
+}
+else
+{
+    <div class="media-carousel">
+        <div class="media-main">
+            @RenderItem(_items[_index], large: true)
+        </div>
+        <div class="media-thumbs">
+            @for (int i = 0; i < _items.Count; i++)
+            {
+                var idx = i;
+                var item = _items[i];
+                var isActive = idx == _index;
+                <button type="button" class="media-thumb @(isActive ? "active" : "")"
+                        @onclick="() => SetIndex(idx)" title="@item.FileName">
+                    @if (item.Type == MediaType.Image)
+                    {
+                        <img src="@MediaUrl(item)" alt="" />
+                    }
+                    else
+                    {
+                        <div class="thumb-video-overlay">▶</div>
+                        <video preload="metadata" muted>
+                            <source src="@MediaUrl(item)#t=1" type="video/mp4" />
+                        </video>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .media-carousel { display: flex; flex-direction: column; gap: 8px; }
+    .media-main { width: 100%; }
+    .media-thumbs {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 6px 8px;
+        background: rgba(0,0,0,0.03);
+        border-radius: 8px;
+    }
+    .media-thumb {
+        position: relative;
+        width: 72px; height: 56px; padding: 0; border: 2px solid transparent;
+        border-radius: 6px; overflow: hidden; cursor: pointer; background: #000;
+        flex-shrink: 0;
+    }
+    .media-thumb.active { border-color: #667eea; }
+    .media-thumb img, .media-thumb video {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .thumb-video-overlay {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.4rem; color: white;
+        background: rgba(0,0,0,0.25);
+        pointer-events: none;
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public Video Item { get; set; } = default!;
+
+    private IReadOnlyList<MediaItem> _items = Array.Empty<MediaItem>();
+    private int _index = 0;
+
+    protected override void OnParametersSet()
+    {
+        _items = Item.GetAllMedia();
+        if (_index >= _items.Count) _index = 0;
+    }
+
+    private void SetIndex(int i)
+    {
+        _index = i;
+        StateHasChanged();
+    }
+
+    private string MediaUrl(MediaItem m) => $"/videos/{Item.Id}/{m.FileName}";
+
+    private RenderFragment RenderItem(MediaItem item, bool large) => __builder =>
+    {
+        if (item.Type == MediaType.Image)
+        {
+            <img src="@MediaUrl(item)" alt="@Item.Title" style="width:100%; height:auto; display:block; border-radius:8px;" />
+        }
+        else
+        {
+            <video controls preload="metadata" playsinline style="width:100%; display:block; border-radius:8px;">
+                <source src="@MediaUrl(item)" type="video/mp4" />
+            </video>
+        }
+    };
+}

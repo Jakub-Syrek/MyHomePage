@@ -2,18 +2,20 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Options;
 using MyHomePage.Abstractions;
 using MyHomePage.Options;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 
 namespace MyHomePage.Services;
 
 /// <summary>
-/// Handles all file-system operations for video storage.
-/// Single Responsibility Principle (S in SOLID): this class owns only the "where/how files live" concern.
+/// Handles all file-system operations for media storage.
+/// Single Responsibility Principle (S in SOLID): owns the "where/how files live" concern.
 ///
 /// Storage root resolution order:
-///   1. VideoStorageOptions.StorageRoot (from appsettings or env var VIDEO_STORAGE_ROOT)
-///   2. {webroot}/videos (default for local dev)
-///
-/// On Railway: set VIDEO_STORAGE_ROOT=/data/videos and mount a volume at /data.
+///   1. Env var VIDEO_STORAGE_ROOT (Railway production)
+///   2. VideoStorageOptions.StorageRoot (appsettings)
+///   3. {webroot}/videos (default for local dev)
 /// </summary>
 public sealed class FileStorageService : IFileStorageService
 {
@@ -38,39 +40,28 @@ public sealed class FileStorageService : IFileStorageService
 
     private string ResolveStorageRoot()
     {
-        // 1. Env var (Railway production)
         var envRoot = Environment.GetEnvironmentVariable("VIDEO_STORAGE_ROOT");
-        if (!string.IsNullOrWhiteSpace(envRoot))
-            return Path.GetFullPath(envRoot);
-
-        // 2. Options-configured absolute path
-        if (!string.IsNullOrWhiteSpace(_options.StorageRoot))
-            return Path.GetFullPath(_options.StorageRoot);
-
-        // 3. Default: wwwroot/videos
+        if (!string.IsNullOrWhiteSpace(envRoot)) return Path.GetFullPath(envRoot);
+        if (!string.IsNullOrWhiteSpace(_options.StorageRoot)) return Path.GetFullPath(_options.StorageRoot);
         return Path.Combine(_environment.WebRootPath, _options.VideosFolder);
     }
 
     public string GetVideosRootPath() => _videosRoot;
+    public string GetVideoDirectoryPath(int id) => Path.Combine(_videosRoot, id.ToString());
+    public string GetMetadataFilePath(int id) => Path.Combine(GetVideoDirectoryPath(id), "metadata.json");
+    public void EnsureVideoDirectoryExists(int id) => Directory.CreateDirectory(GetVideoDirectoryPath(id));
+    public bool VideoDirectoryExists(int id) => Directory.Exists(GetVideoDirectoryPath(id));
 
-    public string GetVideoDirectoryPath(int id) =>
-        Path.Combine(GetVideosRootPath(), id.ToString());
-
-    public string GetMetadataFilePath(int id) =>
-        Path.Combine(GetVideoDirectoryPath(id), "metadata.json");
-
-    public void EnsureVideoDirectoryExists(int id) =>
-        Directory.CreateDirectory(GetVideoDirectoryPath(id));
-
-    public bool VideoDirectoryExists(int id) =>
-        Directory.Exists(GetVideoDirectoryPath(id));
-
-    public async Task<string> SaveUploadedFileAsync(IBrowserFile file, int videoId, long maxFileSizeBytes)
+    public async Task<string> SaveUploadedFileAsync(
+        IBrowserFile file,
+        int videoId,
+        long maxFileSizeBytes,
+        string? targetFileName = null)
     {
         EnsureVideoDirectoryExists(videoId);
 
         var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        var fileName = $"original{ext}";
+        var fileName = targetFileName ?? $"original{ext}";
         var filePath = Path.Combine(GetVideoDirectoryPath(videoId), fileName);
 
         await using var readStream = file.OpenReadStream(maxFileSizeBytes);
@@ -78,6 +69,52 @@ public sealed class FileStorageService : IFileStorageService
         await readStream.CopyToAsync(writeStream);
 
         return filePath;
+    }
+
+    public async Task<string> SaveImageWithResizeAsync(
+        IBrowserFile file,
+        int videoId,
+        long maxFileSizeBytes,
+        string targetFileName,
+        int maxDimension = 2560,
+        int jpegQuality = 85)
+    {
+        EnsureVideoDirectoryExists(videoId);
+        var filePath = Path.Combine(GetVideoDirectoryPath(videoId), targetFileName);
+
+        try
+        {
+            await using var readStream = file.OpenReadStream(maxFileSizeBytes);
+            using var image = await Image.LoadAsync(readStream);
+
+            // Resize while preserving aspect ratio, only if larger than maxDimension
+            if (image.Width > maxDimension || image.Height > maxDimension)
+            {
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(maxDimension, maxDimension),
+                    Mode = ResizeMode.Max
+                }));
+                _logger.LogInformation(
+                    "Image {File} resized to fit within {Max}px (was {W}x{H})",
+                    file.Name, maxDimension, image.Width, image.Height);
+            }
+
+            var encoder = new JpegEncoder { Quality = jpegQuality };
+            await image.SaveAsJpegAsync(filePath, encoder);
+            return filePath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Image processing failed for {File}, falling back to raw save", file.Name);
+
+            // Fallback: save raw bytes if ImageSharp can't decode (e.g. HEIC)
+            await using var readStream = file.OpenReadStream(maxFileSizeBytes);
+            await using var writeStream = new FileStream(filePath, FileMode.Create);
+            await readStream.CopyToAsync(writeStream);
+            return filePath;
+        }
     }
 
     public async Task DeleteVideoDirectoryAsync(int id)

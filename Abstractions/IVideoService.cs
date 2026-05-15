@@ -15,5 +15,6 @@ public interface IVideoService
 
     Task<OperationResult<int>> UploadVideoAsync(VideoUploadRequest request);
     Task<OperationResult> UpdateVideoAsync(int id, string title, string description, string? location);
+    Task<OperationResult> UpdateVideoAsync(int id, string title, string description, string? location, double? latitude, double? longitude);
     Task<OperationResult> DeleteVideoAsync(int id);
 }

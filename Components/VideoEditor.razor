@@ -22,9 +22,7 @@
             <div class="preview-panel">
                 <h3>Preview</h3>
                 <div class="video-preview">
-                    <video controls preload="metadata" playsinline>
-                        <source src="/videos/@video.Id/@video.FileName" type="video/mp4" />
-                    </video>
+                    <MediaCarousel Item="video" />
                 </div>
             </div>
 
@@ -41,8 +39,19 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Location</label>
+                        <label>Location (free-text)</label>
                         <input type="text" @bind="editLocation" />
+                    </div>
+
+                    <div class="form-group" style="display:flex; gap:12px;">
+                        <div style="flex:1;">
+                            <label>Latitude</label>
+                            <input type="number" step="0.000001" @bind="editLatitude" placeholder="e.g. 49.2992" />
+                        </div>
+                        <div style="flex:1;">
+                            <label>Longitude</label>
+                            <input type="number" step="0.000001" @bind="editLongitude" placeholder="e.g. 19.9496" />
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -82,6 +91,8 @@
     private string editTitle = "";
     private string editDescription = "";
     private string editLocation = "";
+    private double? editLatitude;
+    private double? editLongitude;
     private string message = "";
     private bool isSaveSuccess = false;
     private bool isSaving = false;
@@ -94,6 +105,8 @@
             editTitle = video.Title;
             editDescription = video.Description;
             editLocation = video.Location ?? "";
+            editLatitude = video.Latitude;
+            editLongitude = video.Longitude;
         }
     }
 
@@ -104,8 +117,10 @@
 
         try
         {
-            var result = await VideoService.UpdateVideoAsync(VideoId, editTitle, editDescription,
-                string.IsNullOrWhiteSpace(editLocation) ? null : editLocation);
+            var result = await VideoService.UpdateVideoAsync(
+                VideoId, editTitle, editDescription,
+                string.IsNullOrWhiteSpace(editLocation) ? null : editLocation,
+                editLatitude, editLongitude);
 
             isSaveSuccess = result.IsSuccess;
             message = result.Message;

@@ -3,7 +3,7 @@
 
 <div class="upload-panel">
     <div class="upload-card">
-        <h2>Upload New Video</h2>
+        <h2>Upload to @Category</h2>
 
         @if (!string.IsNullOrEmpty(message))
         {
@@ -14,43 +14,64 @@
         }
 
         <div class="form-group">
-            <label>Video Title *</label>
-            <input type="text" @bind="videoTitle" placeholder="e.g., Amazing climb..." />
+            <label>Title *</label>
+            <input type="text" @bind="title" placeholder="e.g., Amazing climb..." />
         </div>
 
         <div class="form-group">
             <label>Description</label>
-            <textarea @bind="videoDescription" placeholder="Share your experience..." rows="4"></textarea>
+            <textarea @bind="description" placeholder="Share your experience..." rows="4"></textarea>
         </div>
 
         <div class="form-group">
-            <label>Location</label>
-            <input type="text" @bind="videoLocation" placeholder="e.g., Tatra Mountains" />
+            <label>Location (free-text)</label>
+            <input type="text" @bind="location" placeholder="e.g., Tatra Mountains" />
         </div>
 
-        <div class="form-group">
-            <label>Video File * (MP4, WebM, MKV, AVI - max 2GB)</label>
-            <div class="file-input-wrapper">
-                <InputFile OnChange="HandleFileSelected" accept=".mp4,.webm,.mkv,.avi" />
+        <div class="form-group" style="display:flex; gap:12px;">
+            <div style="flex:1;">
+                <label>Latitude (optional)</label>
+                <input type="number" step="0.000001" @bind="latitude" placeholder="auto from EXIF" />
             </div>
-            @if (selectedFile != null)
-            {
-                <p class="file-info">✓ Selected: @selectedFile.Name (@(selectedFile.Size / (1024 * 1024))MB)</p>
-            }
-            <p style="color: #7f8c8d; font-size: 0.85rem; margin-top: 8px;">
-                ℹ️ Videos are automatically compressed (~20x smaller). Large files may take a few minutes.
-            </p>
+            <div style="flex:1;">
+                <label>Longitude (optional)</label>
+                <input type="number" step="0.000001" @bind="longitude" placeholder="auto from EXIF" />
+            </div>
         </div>
 
-        <button class="btn-submit" @onclick="UploadVideo"
-                disabled="@(isUploading || selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))">
+        <div class="form-group">
+            <label>Media files * (videos + photos, up to 5 GB each)</label>
+            <div class="file-input-wrapper">
+                <InputFile OnChange="HandleFilesSelected" multiple
+                           accept=".mp4,.webm,.mkv,.avi,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+            </div>
+            @if (selectedFiles.Count > 0)
+            {
+                <ul class="file-list" style="margin-top:10px; padding-left:18px;">
+                    @foreach (var f in selectedFiles)
+                    {
+                        <li>
+                            @(IsImage(f.Name) ? "🖼️" : "🎬")
+                            @f.Name <span style="color:#7f8c8d">(@(f.Size / (1024 * 1024)) MB)</span>
+                        </li>
+                    }
+                </ul>
+                <p style="color:#7f8c8d; font-size:0.85rem; margin-top:8px;">
+                    ℹ️ Videos are auto-compressed (~20x smaller); photos resized to max 2560px.
+                    GPS coordinates read from EXIF / video metadata.
+                </p>
+            }
+        </div>
+
+        <button class="btn-submit" @onclick="Upload"
+                disabled="@(isUploading || selectedFiles.Count == 0 || string.IsNullOrWhiteSpace(title))">
             @if (isUploading)
             {
                 <span class="spinner-small"></span> <span>Uploading & compressing...</span>
             }
             else
             {
-                <span>Upload Video</span>
+                <span>Upload (@selectedFiles.Count file(s))</span>
             }
         </button>
     </div>
@@ -60,20 +81,24 @@
     [Parameter, EditorRequired] public string Category { get; set; } = "";
     [Parameter] public EventCallback OnUploadSuccess { get; set; }
 
-    private IBrowserFile? selectedFile;
-    private string videoTitle = "";
-    private string videoDescription = "";
-    private string videoLocation = "";
+    private List<IBrowserFile> selectedFiles = new();
+    private string title = "";
+    private string description = "";
+    private string location = "";
+    private double? latitude;
+    private double? longitude;
     private string message = "";
     private bool isSuccess = false;
     private bool isUploading = false;
 
-    private void HandleFileSelected(InputFileChangeEventArgs e) => selectedFile = e.File;
-
-    private async Task UploadVideo()
+    private void HandleFilesSelected(InputFileChangeEventArgs e)
     {
-        if (selectedFile == null || string.IsNullOrWhiteSpace(videoTitle))
-            return;
+        selectedFiles = e.GetMultipleFiles(maximumFileCount: 50).ToList();
+    }
+
+    private async Task Upload()
+    {
+        if (selectedFiles.Count == 0 || string.IsNullOrWhiteSpace(title)) return;
 
         isUploading = true;
         message = "";
@@ -81,14 +106,17 @@
         try
         {
             var request = new VideoUploadRequest(
-                selectedFile, videoTitle, videoDescription,
-                string.IsNullOrWhiteSpace(videoLocation) ? null : videoLocation,
-                Category);
+                Files: selectedFiles,
+                Title: title,
+                Description: description,
+                Location: string.IsNullOrWhiteSpace(location) ? null : location,
+                Category: Category,
+                Latitude: latitude,
+                Longitude: longitude);
 
             var result = await VideoService.UploadVideoAsync(request);
-
             isSuccess = result.IsSuccess;
-            message = result.IsSuccess ? "Video uploaded successfully! 🎉" : result.Message;
+            message = result.IsSuccess ? $"✓ {result.Message}" : result.Message;
 
             if (result.IsSuccess)
             {
@@ -107,11 +135,16 @@
         }
     }
 
+    private bool IsImage(string n) =>
+        Models.MediaItem.DetectType(n) == Models.MediaType.Image;
+
     private void ResetForm()
     {
-        selectedFile = null;
-        videoTitle = "";
-        videoDescription = "";
-        videoLocation = "";
+        selectedFiles = new List<IBrowserFile>();
+        title = "";
+        description = "";
+        location = "";
+        latitude = null;
+        longitude = null;
     }
 }

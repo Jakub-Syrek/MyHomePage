@@ -109,6 +109,7 @@ try
     // ── Dependency injection ──────────────────────────────────────────────────
     builder.Services.AddScoped<IFileStorageService, FileStorageService>();
     builder.Services.AddScoped<ICompressionStrategy, H264CompressionStrategy>();
+    builder.Services.AddScoped<ILocationExtractor, GpsLocationExtractor>();
 
     // Repository + Decorator
     builder.Services.AddScoped<JsonVideoRepository>();

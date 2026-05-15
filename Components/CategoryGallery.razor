@@ -49,9 +49,7 @@
             {
                 <div class="video-card" @key="video.Id">
                     <div class="card-image">
-                        <video controls preload="metadata" playsinline>
-                            <source src="/videos/@video.Id/@video.FileName" type="video/mp4" />
-                        </video>
+                        <MediaCarousel Item="video" />
                     </div>
                     <div class="card-content">
                         <h3>@video.Title</h3>
@@ -60,6 +58,10 @@
                             @if (!string.IsNullOrEmpty(video.Location))
                             {
                                 <span class="location">📍 @video.Location</span>
+                            }
+                            @if (video.HasCoordinates)
+                            {
+                                <span class="gps" title="@video.Latitude, @video.Longitude">🗺️ on map</span>
                             }
                             <span class="date">@video.UploadedAt.ToString("MMM dd, yyyy")</span>
                         </div>

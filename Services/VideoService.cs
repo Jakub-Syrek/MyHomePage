@@ -6,17 +6,17 @@ using MyHomePage.Options;
 namespace MyHomePage.Services;
 
 /// <summary>
-/// Orchestrates video operations by coordinating the repository, file-storage,
-/// and compression strategy.
-/// Single Responsibility Principle (S in SOLID): business logic only — no raw I/O or codec knowledge.
-/// Dependency Inversion Principle (D in SOLID): depends on IVideoRepository, IFileStorageService,
-/// and ICompressionStrategy — not on any concrete class.
+/// Orchestrates gallery-item operations by coordinating repository, file-storage,
+/// compression, and location-extraction services.
+/// SRP: business logic only — no raw I/O or codec knowledge.
+/// DIP: depends on abstractions, not concrete implementations.
 /// </summary>
 public sealed class VideoService : IVideoService
 {
     private readonly IVideoRepository _repository;
     private readonly IFileStorageService _storage;
     private readonly ICompressionStrategy _compression;
+    private readonly ILocationExtractor _locationExtractor;
     private readonly VideoStorageOptions _options;
     private readonly ILogger<VideoService> _logger;
 
@@ -24,12 +24,14 @@ public sealed class VideoService : IVideoService
         IVideoRepository repository,
         IFileStorageService storage,
         ICompressionStrategy compression,
+        ILocationExtractor locationExtractor,
         IOptions<VideoStorageOptions> options,
         ILogger<VideoService> logger)
     {
         _repository = repository;
         _storage = storage;
         _compression = compression;
+        _locationExtractor = locationExtractor;
         _options = options.Value;
         _logger = logger;
     }
@@ -59,26 +61,114 @@ public sealed class VideoService : IVideoService
         try
         {
             var videoId = _repository.GenerateNextId();
+            _storage.EnsureVideoDirectoryExists(videoId);
 
-            var originalPath = await _storage.SaveUploadedFileAsync(
-                request.File, videoId, _options.MaxFileSizeBytes);
+            var mediaItems = new List<MediaItem>();
+            string? primaryFileName = null;
+            long totalSize = 0;
+            double? latitude = request.Latitude;
+            double? longitude = request.Longitude;
 
-            _logger.LogInformation("Video {Id}: original saved ({Size} MB)",
-                videoId, request.File.Size / (1024 * 1024));
+            // Process all files in order: first video → primary (compressed),
+            // subsequent videos → media-XX.mp4, images → media-XX.jpg
+            var orderedFiles = request.Files
+                .OrderBy(f => IsImage(f.Name) ? 1 : 0) // videos first, then images
+                .ToList();
 
-            var compressedPath = Path.Combine(
-                _storage.GetVideoDirectoryPath(videoId), "video.mp4");
+            int videoCounter = 0;
+            int imageCounter = 0;
 
-            var (finalFileName, finalSize) =
-                await CompressAndFinalizeAsync(originalPath, compressedPath, request.File.Size, videoId);
+            foreach (var file in orderedFiles)
+            {
+                var order = mediaItems.Count;
+
+                if (IsImage(file.Name))
+                {
+                    imageCounter++;
+                    var targetName = $"photo-{imageCounter:D2}.jpg";
+                    var savedPath = await _storage.SaveImageWithResizeAsync(
+                        file, videoId, _options.MaxFileSizeBytes, targetName);
+
+                    var size = new FileInfo(savedPath).Length;
+                    totalSize += size;
+                    mediaItems.Add(MediaItem.Create(targetName, MediaType.Image, size, order));
+
+                    if (latitude is null) // try GPS from this photo
+                    {
+                        var coords = _locationExtractor.TryExtract(savedPath);
+                        if (coords is not null)
+                        {
+                            latitude = coords.Value.Latitude;
+                            longitude = coords.Value.Longitude;
+                        }
+                    }
+                    _logger.LogInformation(
+                        "Item {Id}: saved image {Name} ({KB} KB)",
+                        videoId, targetName, size / 1024);
+                }
+                else
+                {
+                    // Video file
+                    videoCounter++;
+                    bool isPrimary = primaryFileName is null;
+                    var compressedName = isPrimary ? "video.mp4" : $"video-{videoCounter:D2}.mp4";
+
+                    // Upload + compress
+                    var originalPath = await _storage.SaveUploadedFileAsync(
+                        file, videoId, _options.MaxFileSizeBytes,
+                        targetFileName: $"orig-{videoCounter:D2}{Path.GetExtension(file.Name)}");
+
+                    if (latitude is null) // try GPS from raw video
+                    {
+                        var coords = _locationExtractor.TryExtract(originalPath);
+                        if (coords is not null)
+                        {
+                            latitude = coords.Value.Latitude;
+                            longitude = coords.Value.Longitude;
+                        }
+                    }
+
+                    var compressedPath = Path.Combine(
+                        _storage.GetVideoDirectoryPath(videoId), compressedName);
+
+                    var (finalName, finalSize) = await CompressAndFinalizeAsync(
+                        originalPath, compressedPath, file.Size, videoId);
+
+                    totalSize += finalSize;
+                    mediaItems.Add(MediaItem.Create(finalName, MediaType.Video, finalSize, order));
+
+                    if (isPrimary) primaryFileName = finalName;
+
+                    _logger.LogInformation(
+                        "Item {Id}: saved video {Name} ({MB} MB)",
+                        videoId, finalName, finalSize / (1024 * 1024));
+                }
+            }
+
+            if (primaryFileName is null && mediaItems.Count > 0)
+                primaryFileName = mediaItems[0].FileName;
+
+            if (primaryFileName is null)
+                return OperationResult<int>.Failure("No usable files were uploaded.");
 
             var video = Video.Create(
-                videoId, request.Title, request.Description,
-                finalFileName, request.Location, request.Category, finalSize);
+                videoId,
+                request.Title,
+                request.Description,
+                primaryFileName,
+                request.Location,
+                request.Category,
+                totalSize,
+                mediaItems,
+                latitude,
+                longitude);
 
             await _repository.SaveAsync(video);
 
-            return OperationResult<int>.Success(videoId, "Video uploaded successfully.");
+            return OperationResult<int>.Success(
+                videoId,
+                $"Uploaded {mediaItems.Count} file(s) successfully" +
+                (latitude.HasValue ? $" 📍 {latitude:F4}, {longitude:F4}" : ""));
         }
         catch (Exception ex)
         {
@@ -89,68 +179,87 @@ public sealed class VideoService : IVideoService
 
     public async Task<OperationResult> UpdateVideoAsync(int id, string title, string description, string? location)
     {
-        _logger.LogInformation("Updating video {Id}: title='{Title}', location='{Location}'",
-            id, title, location);
+        return await UpdateVideoAsync(id, title, description, location, null, null);
+    }
+
+    public async Task<OperationResult> UpdateVideoAsync(
+        int id, string title, string description, string? location,
+        double? latitude, double? longitude)
+    {
+        _logger.LogInformation(
+            "Updating item {Id}: title='{Title}', location='{Location}', GPS={Lat},{Lon}",
+            id, title, location, latitude, longitude);
 
         var video = await _repository.GetByIdAsync(id);
         if (video is null)
         {
-            _logger.LogWarning("Update failed: Video {Id} not found", id);
-            return OperationResult.Failure($"Video {id} not found.");
+            _logger.LogWarning("Update failed: Item {Id} not found", id);
+            return OperationResult.Failure($"Item {id} not found.");
         }
 
         video.Title = title;
         video.Description = description;
         video.Location = location;
+        // Only overwrite coords if caller explicitly provided new ones
+        if (latitude.HasValue && longitude.HasValue)
+        {
+            video.Latitude = latitude;
+            video.Longitude = longitude;
+        }
 
         try
         {
             await _repository.SaveAsync(video);
-            _logger.LogInformation("Video {Id} updated successfully", id);
             return OperationResult.Success("Changes saved successfully.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating video {Id}", id);
+            _logger.LogError(ex, "Error updating item {Id}", id);
             return OperationResult.Failure($"Save error: {ex.Message}");
         }
     }
 
     public async Task<OperationResult> DeleteVideoAsync(int id)
     {
-        _logger.LogInformation("Deleting video {Id}", id);
+        _logger.LogInformation("Deleting item {Id}", id);
 
         try
         {
             var deleted = await _repository.DeleteAsync(id);
             if (deleted)
-            {
-                _logger.LogInformation("Video {Id} deleted successfully", id);
-                return OperationResult.Success("Video deleted.");
-            }
+                return OperationResult.Success("Item deleted.");
 
-            _logger.LogWarning("Delete failed: Video {Id} not found", id);
-            return OperationResult.Failure($"Video {id} not found.");
+            _logger.LogWarning("Delete failed: Item {Id} not found", id);
+            return OperationResult.Failure($"Item {id} not found.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting video {Id}", id);
+            _logger.LogError(ex, "Error deleting item {Id}", id);
             return OperationResult.Failure($"Delete error: {ex.Message}");
         }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    private bool IsImage(string fileName) =>
+        MediaItem.DetectType(fileName) == MediaType.Image;
+
     private OperationResult Validate(VideoUploadRequest request)
     {
-        if (request.File.Size > _options.MaxFileSizeBytes)
-            return OperationResult.Failure(
-                $"File too large. Maximum: {_options.MaxFileSizeBytes / (1024 * 1024)} MB");
+        if (request.Files.Count == 0)
+            return OperationResult.Failure("No files were selected.");
 
-        var ext = Path.GetExtension(request.File.Name).ToLowerInvariant();
-        if (!_options.AllowedExtensions.Contains(ext))
-            return OperationResult.Failure(
-                $"Unsupported format. Allowed: {string.Join(", ", _options.AllowedExtensions)}");
+        foreach (var file in request.Files)
+        {
+            if (file.Size > _options.MaxFileSizeBytes)
+                return OperationResult.Failure(
+                    $"File '{file.Name}' too large. Maximum: {_options.MaxFileSizeBytes / (1024 * 1024)} MB");
+
+            var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!_options.AllowedExtensions.Contains(ext))
+                return OperationResult.Failure(
+                    $"Unsupported format for '{file.Name}'. Allowed: {string.Join(", ", _options.AllowedExtensions)}");
+        }
 
         return OperationResult.Success();
     }
@@ -158,7 +267,7 @@ public sealed class VideoService : IVideoService
     private async Task<(string FileName, long Size)> CompressAndFinalizeAsync(
         string originalPath, string compressedPath, long originalSize, int videoId)
     {
-        _logger.LogInformation("Video {Id}: starting compression with [{Strategy}]",
+        _logger.LogInformation("Item {Id}: starting compression with [{Strategy}]",
             videoId, _compression.Name);
 
         var compressed = await _compression.CompressAsync(originalPath, compressedPath);
@@ -168,16 +277,15 @@ public sealed class VideoService : IVideoService
             var compressedSize = new FileInfo(compressedPath).Length;
             try { File.Delete(originalPath); } catch { /* keep original on failure */ }
 
-            _logger.LogInformation("Video {Id}: {Old} MB → {New} MB ({Ratio}x reduction)",
+            _logger.LogInformation("Item {Id}: {Old} MB → {New} MB",
                 videoId,
                 originalSize / (1024 * 1024),
-                compressedSize / (1024 * 1024),
-                compressedSize > 0 ? originalSize / compressedSize : 0);
+                compressedSize / (1024 * 1024));
 
-            return ("video.mp4", compressedSize);
+            return (Path.GetFileName(compressedPath), compressedSize);
         }
 
-        _logger.LogWarning("Video {Id}: compression failed, keeping original", videoId);
+        _logger.LogWarning("Item {Id}: compression failed, keeping original", videoId);
         return (Path.GetFileName(originalPath), originalSize);
     }
 }
