@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
@@ -122,8 +123,20 @@ try
     builder.Services.AddScoped<ICredentialRepository, CredentialService>();
     builder.Services.AddScoped<ILogReaderService, LogReaderService>();
 
+    // Forwarded headers — trust X-Forwarded-Proto/For so URLs use https:// when
+    // the request came through Railway's TLS-terminating edge.
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+
     // ── Build & pipeline ──────────────────────────────────────────────────────
     var app = builder.Build();
+
+    // Must come BEFORE any middleware that reads the scheme (auth, static files, etc.)
+    app.UseForwardedHeaders();
 
     if (!app.Environment.IsDevelopment())
     {
