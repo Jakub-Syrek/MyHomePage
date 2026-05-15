@@ -1,4 +1,0 @@
-﻿{"level":"info","message":"Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/04e2bb6c-0ec5-4165-9ef4-35f74f223504/vol_ltuza3lq4i71uhcl","timestamp":"2026-05-15T21:32:53.233048097Z"}
-{"message":"Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/04e2bb6c-0ec5-4165-9ef4-35f74f223504/vol_ltuza3lq4i71uhcl","timestamp":"2026-05-15T21:33:24.149328889Z","level":"info"}
-{"message":"Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/04e2bb6c-0ec5-4165-9ef4-35f74f223504/vol_ltuza3lq4i71uhcl","timestamp":"2026-05-15T21:33:57.451113068Z","level":"info"}
-{"timestamp":"2026-05-15T21:34:32.459369770Z","level":"info","message":"Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/04e2bb6c-0ec5-4165-9ef4-35f74f223504/vol_ltuza3lq4i71uhcl"}

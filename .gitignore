@@ -71,3 +71,7 @@ logs/
 
 # Claude settings and local configuration
 .claude/
+
+# Diagnostic temp files
+deploy-logs.txt
+runtime-logs.txt
