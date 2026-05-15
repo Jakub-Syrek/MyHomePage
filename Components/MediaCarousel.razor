@@ -1,66 +1,124 @@
 @namespace MyHomePage.Components
 @using MyHomePage.Models
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
 @*
-    Renders one or more media files (videos + images) attached to a gallery item.
-    For a single item: renders the file directly. For multiple: shows the active
-    one large with a thumbnail strip below.
+    Renders all media files (videos + images) belonging to a gallery item.
+    Single file → renders directly.
+    Multiple files → main view + thumbnail strip below.
+    Each media has a "copy link" button to share its direct URL.
 *@
 
 @if (_items.Count == 0)
 {
     <p style="color:#999">No media available.</p>
 }
-else if (_items.Count == 1)
-{
-    @RenderItem(_items[0], large: true)
-}
 else
 {
     <div class="media-carousel">
         <div class="media-main">
-            @RenderItem(_items[_index], large: true)
-        </div>
-        <div class="media-thumbs">
-            @for (int i = 0; i < _items.Count; i++)
-            {
-                var idx = i;
-                var item = _items[i];
-                var isActive = idx == _index;
-                <button type="button" class="media-thumb @(isActive ? "active" : "")"
-                        @onclick="() => SetIndex(idx)" title="@item.FileName">
-                    @if (item.Type == MediaType.Image)
-                    {
-                        <img src="@MediaUrl(item)" alt="" />
-                    }
-                    else
-                    {
-                        <div class="thumb-video-overlay">▶</div>
-                        <video preload="metadata" muted>
-                            <source src="@MediaUrl(item)#t=1" type="video/mp4" />
-                        </video>
-                    }
+            @RenderItem(_items[_index])
+            <div class="media-overlay-actions">
+                <a class="mc-btn" href="/item/@Item.Id#m-@_index" title="Open detail page">
+                    ↗
+                </a>
+                <button type="button" class="mc-btn @(_copiedIndex == _index ? "copied" : "")"
+                        @onclick="() => CopyLink(_index)"
+                        title="Copy direct link">
+                    @if (_copiedIndex == _index) { <span>✓</span> } else { <span>🔗</span> }
                 </button>
-            }
+            </div>
         </div>
+
+        @if (_items.Count > 1)
+        {
+            <div class="media-thumbs">
+                @for (int i = 0; i < _items.Count; i++)
+                {
+                    var idx = i;
+                    var item = _items[i];
+                    var isActive = idx == _index;
+                    <button type="button" class="media-thumb @(isActive ? "active" : "")"
+                            @onclick="() => SetIndex(idx)" title="@item.FileName">
+                        @if (item.Type == MediaType.Image)
+                        {
+                            <img src="@MediaUrl(item)" alt="" />
+                        }
+                        else
+                        {
+                            <div class="thumb-video-overlay">▶</div>
+                            <video preload="metadata" muted>
+                                <source src="@MediaUrl(item)#t=1" type="video/mp4" />
+                            </video>
+                        }
+                    </button>
+                }
+            </div>
+        }
     </div>
 }
 
 <style>
     .media-carousel { display: flex; flex-direction: column; gap: 8px; }
-    .media-main { width: 100%; }
+    .media-main {
+        position: relative;
+        width: 100%;
+    }
+    .media-main video, .media-main img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 8px;
+        background: #000;
+    }
+
+    .media-overlay-actions {
+        position: absolute;
+        top: 10px; right: 10px;
+        display: flex; gap: 6px;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    .media-main:hover .media-overlay-actions { opacity: 1; }
+
+    .mc-btn {
+        display: inline-flex;
+        align-items: center; justify-content: center;
+        width: 32px; height: 32px;
+        background: rgba(0, 0, 0, 0.55);
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        text-decoration: none;
+        transition: background 0.18s, transform 0.18s;
+        backdrop-filter: blur(4px);
+    }
+    .mc-btn:hover {
+        background: rgba(0, 0, 0, 0.75);
+        transform: translateY(-1px);
+    }
+    .mc-btn.copied { background: #28a745; }
+
     .media-thumbs {
         display: flex; flex-wrap: wrap; gap: 6px;
-        padding: 6px 8px;
-        background: rgba(0,0,0,0.03);
+        padding: 8px;
+        background: rgba(0,0,0,0.04);
         border-radius: 8px;
     }
     .media-thumb {
         position: relative;
-        width: 72px; height: 56px; padding: 0; border: 2px solid transparent;
-        border-radius: 6px; overflow: hidden; cursor: pointer; background: #000;
+        width: 72px; height: 56px; padding: 0;
+        border: 2px solid transparent;
+        border-radius: 6px; overflow: hidden;
+        cursor: pointer; background: #000;
         flex-shrink: 0;
+        transition: border-color 0.18s, transform 0.18s;
     }
+    .media-thumb:hover { transform: translateY(-1px); border-color: #cbd5e0; }
     .media-thumb.active { border-color: #667eea; }
     .media-thumb img, .media-thumb video {
         width: 100%; height: 100%; object-fit: cover; display: block;
@@ -68,7 +126,7 @@ else
     .thumb-video-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        font-size: 1.4rem; color: white;
+        font-size: 1.2rem; color: white;
         background: rgba(0,0,0,0.25);
         pointer-events: none;
     }
@@ -79,6 +137,7 @@ else
 
     private IReadOnlyList<MediaItem> _items = Array.Empty<MediaItem>();
     private int _index = 0;
+    private int? _copiedIndex;
 
     protected override void OnParametersSet()
     {
@@ -89,20 +148,32 @@ else
     private void SetIndex(int i)
     {
         _index = i;
+        _copiedIndex = null;
         StateHasChanged();
     }
 
     private string MediaUrl(MediaItem m) => $"/videos/{Item.Id}/{m.FileName}";
 
-    private RenderFragment RenderItem(MediaItem item, bool large) => __builder =>
+    private async Task CopyLink(int idx)
+    {
+        var url = Nav.ToAbsoluteUri(MediaUrl(_items[idx])).ToString();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        _copiedIndex = idx;
+        StateHasChanged();
+        await Task.Delay(1500);
+        _copiedIndex = null;
+        StateHasChanged();
+    }
+
+    private RenderFragment RenderItem(MediaItem item) => __builder =>
     {
         if (item.Type == MediaType.Image)
         {
-            <img src="@MediaUrl(item)" alt="@Item.Title" style="width:100%; height:auto; display:block; border-radius:8px;" />
+            <img src="@MediaUrl(item)" alt="@Item.Title" />
         }
         else
         {
-            <video controls preload="metadata" playsinline style="width:100%; display:block; border-radius:8px;">
+            <video controls preload="metadata" playsinline>
                 <source src="@MediaUrl(item)" type="video/mp4" />
             </video>
         }

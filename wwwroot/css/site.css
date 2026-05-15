@@ -494,3 +494,118 @@ select {
         grid-template-columns: 1fr;
     }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PROFESSIONAL POLISH (May 2026)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Make MediaCarousel fill gallery card image area */
+.video-card .card-image .media-carousel,
+.video-card .card-image .media-main {
+    width: 100%;
+    height: 100%;
+}
+.video-card .card-image .media-main video,
+.video-card .card-image .media-main img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0;
+}
+.video-card .card-image .media-thumbs {
+    display: none; /* keep cards clean; full thumbs visible on detail page */
+}
+
+/* Multi-item badge on cards */
+.card-badge {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: rgba(0, 0, 0, 0.72);
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    z-index: 3;
+    backdrop-filter: blur(4px);
+    letter-spacing: 0.02em;
+    pointer-events: none;
+}
+
+/* Clickable card title */
+.card-title-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+.card-title-link:hover h3 {
+    color: #667eea;
+}
+.card-title-link h3 {
+    transition: color 0.2s ease;
+}
+
+/* Card "View detail" button */
+.btn-small.view {
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    padding: 8px;
+}
+.btn-small.view:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+/* Meta chips */
+.meta {
+    flex-wrap: wrap;
+}
+.meta .location,
+.meta .gps,
+.meta .date {
+    background: rgba(248, 249, 251, 0.85);
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: #4a5568;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.18s;
+}
+.meta .gps {
+    color: #667eea;
+}
+.meta .gps:hover {
+    background: rgba(102, 126, 234, 0.12);
+}
+
+/* Nav active state polish */
+.nav-menu a {
+    position: relative;
+    padding: 6px 2px;
+}
+.nav-menu a::after {
+    content: '';
+    position: absolute;
+    left: 50%; right: 50%; bottom: -2px;
+    height: 2px;
+    background: white;
+    transition: left 0.2s, right 0.2s;
+}
+.nav-menu a:hover::after {
+    left: 0; right: 0;
+}
+
+/* Form group hint text */
+.form-group .hint {
+    font-size: 0.85rem;
+    color: #95a5a6;
+    margin-top: 4px;
+}
+

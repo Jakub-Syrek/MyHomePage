@@ -42,9 +42,16 @@
                 <div class="video-card" @key="video.Id">
                     <div class="card-image">
                         <MediaCarousel Item="video" />
+                        @{ var mediaCount = video.GetAllMedia().Count; }
+                        @if (mediaCount > 1)
+                        {
+                            <span class="card-badge">@mediaCount items</span>
+                        }
                     </div>
                     <div class="card-content">
-                        <h3>@video.Title</h3>
+                        <a href="/item/@video.Id" class="card-title-link">
+                            <h3>@video.Title</h3>
+                        </a>
                         <p class="description">@video.Description</p>
                         <div class="meta">
                             @if (!string.IsNullOrEmpty(video.Location))
@@ -53,18 +60,19 @@
                             }
                             @if (video.HasCoordinates)
                             {
-                                <span class="gps" title="@video.Latitude, @video.Longitude">🗺️ on map</span>
+                                <a class="gps" href="/map" title="@video.Latitude, @video.Longitude">🗺️ on map</a>
                             }
                             <span class="date">@video.UploadedAt.ToString("MMM dd, yyyy")</span>
                         </div>
-                        <AuthorizeView>
-                            <Authorized>
-                                <div class="card-actions">
+                        <div class="card-actions">
+                            <a class="btn-small view" href="/item/@video.Id">View detail →</a>
+                            <AuthorizeView>
+                                <Authorized>
                                     <button class="btn-small edit" @onclick="() => EditVideo(video.Id)">Edit</button>
                                     <button class="btn-small delete" @onclick="() => DeleteVideo(video.Id)">Delete</button>
-                                </div>
-                            </Authorized>
-                        </AuthorizeView>
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
                     </div>
                 </div>
             }
