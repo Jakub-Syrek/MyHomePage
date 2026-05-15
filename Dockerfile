@@ -38,13 +38,8 @@ RUN apt-get update \
 # Copy published output
 COPY --from=build /app/publish ./
 
-# Create non-root user and storage dir
-RUN groupadd -r appuser \
-    && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
-    && mkdir -p /data/videos /app/logs \
-    && chown -R appuser:appuser /app /data
-
-USER appuser
+# Create storage dirs (running as root because Railway volumes are mounted as root)
+RUN mkdir -p /data/videos /app/logs
 
 # ─── Environment ────────────────────────────────────────────────────────────
 ENV ASPNETCORE_ENVIRONMENT=Production \
