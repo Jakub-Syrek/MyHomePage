@@ -6,6 +6,62 @@
 
 <PageTitle>@(_item?.Title ?? "Item") — My Mountain Adventures</PageTitle>
 
+@if (_item is not null)
+{
+    var pageUrl = Nav.ToAbsoluteUri($"/item/{Id}").ToString();
+    var firstImage = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Image);
+    var firstVideo = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Video);
+    var ogImageUrl = firstImage is not null
+        ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstImage.FileName}").ToString()
+        : Nav.ToAbsoluteUri("/images/mountains-bg.jpg").ToString();
+    var ogVideoUrl = firstVideo is not null
+        ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstVideo.FileName}").ToString()
+        : null;
+    var descShort = (_item.Description ?? "")
+        .Replace("\n", " ").Replace("\r", " ").Trim();
+    if (descShort.Length > 200) descShort = descShort.Substring(0, 200) + "…";
+    if (string.IsNullOrWhiteSpace(descShort))
+        descShort = $"{_item.Category} — {_item.Location}".Trim(' ', '—');
+
+    <HeadContent>
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content="@_item.Title" />
+        <meta property="og:description" content="@descShort" />
+        <meta property="og:url" content="@pageUrl" />
+        <meta property="og:image" content="@ogImageUrl" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        @if (ogVideoUrl is not null)
+        {
+            <meta property="og:video" content="@ogVideoUrl" />
+            <meta property="og:video:secure_url" content="@ogVideoUrl" />
+            <meta property="og:video:type" content="video/mp4" />
+            <meta property="og:video:width" content="1280" />
+            <meta property="og:video:height" content="720" />
+        }
+        <meta property="article:published_time" content="@_item.UploadedAt.ToString("o")" />
+        @if (_item.HasCoordinates)
+        {
+            <meta property="og:latitude" content="@_item.Latitude" />
+            <meta property="og:longitude" content="@_item.Longitude" />
+            <meta property="place:location:latitude" content="@_item.Latitude" />
+            <meta property="place:location:longitude" content="@_item.Longitude" />
+        }
+
+        <meta name="twitter:card" content="@(firstImage is not null ? "summary_large_image" : "player")" />
+        <meta name="twitter:title" content="@_item.Title" />
+        <meta name="twitter:description" content="@descShort" />
+        <meta name="twitter:image" content="@ogImageUrl" />
+        @if (ogVideoUrl is not null && firstImage is null)
+        {
+            <meta name="twitter:player:stream" content="@ogVideoUrl" />
+            <meta name="twitter:player:stream:content_type" content="video/mp4" />
+        }
+        <meta name="description" content="@descShort" />
+        <link rel="canonical" href="@pageUrl" />
+    </HeadContent>
+}
+
 @if (_item is null)
 {
     <div class="loading-page">
