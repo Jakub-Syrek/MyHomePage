@@ -10,7 +10,7 @@
         <AuthorizeView>
             <Authorized>
                 <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
-                    + Upload New Video
+                    + Upload Media
                 </button>
             </Authorized>
         </AuthorizeView>
@@ -25,13 +25,13 @@
     {
         <div class="loading">
             <div class="spinner"></div>
-            <p>Loading videos...</p>
+            <p>Loading media...</p>
         </div>
     }
     else if (videos.Count == 0)
     {
         <div class="empty-state">
-            <p>No videos yet. Check back soon!</p>
+            <p>No media yet. Check back soon!</p>
         </div>
     }
     else
