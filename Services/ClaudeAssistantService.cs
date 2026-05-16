@@ -193,6 +193,137 @@ public sealed class ClaudeAssistantService : IAiAssistantService
             return null;
         }
     }
+
+    /// <inheritdoc />
+    public async Task<string?> ExtractLocationAsync(
+        string activityName,
+        string description,
+        string activityType,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled) return null;
+
+        var trimmedName = (activityName ?? string.Empty).Trim();
+        var trimmedDescription = (description ?? string.Empty).Trim();
+        if (trimmedName.Length == 0 && trimmedDescription.Length == 0) return null;
+
+        var userMessage =
+            $"Activity type: {activityType}\n" +
+            $"Activity name: {trimmedName}\n" +
+            $"Description: {(trimmedDescription.Length == 0 ? "<empty>" : trimmedDescription)}";
+
+        var payload = BuildExtractLocationPayload(userMessage);
+        using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
+        request.Headers.Add("x-api-key", _apiKey);
+        request.Headers.Add("anthropic-version", AnthropicVersion);
+        request.Content = JsonContent.Create(payload, options: JsonOpts);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, cancellationToken);
+        }
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Anthropic location-extract request failed");
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Anthropic location-extract returned {Status}: {Body}",
+                response.StatusCode, errorBody);
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(cancellationToken));
+            if (!doc.RootElement.TryGetProperty("content", out var content)) return null;
+
+            foreach (var block in content.EnumerateArray())
+            {
+                if (block.TryGetProperty("type", out var t)
+                    && t.GetString() == "tool_use"
+                    && block.TryGetProperty("input", out var input))
+                {
+                    var venue = input.GetNullableString("location");
+                    return string.IsNullOrWhiteSpace(venue) ? null : venue.Trim();
+                }
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse Anthropic location-extract response");
+            return null;
+        }
+    }
+
+    private object BuildExtractLocationPayload(string userMessage) => new
+    {
+        model = _model,
+        max_tokens = 120,
+        system = new object[]
+        {
+            new
+            {
+                type = "text",
+                text = LocationExtractionPrompt,
+                cache_control = new { type = "ephemeral" }
+            }
+        },
+        tools = new object[]
+        {
+            new
+            {
+                name = "extract_location",
+                description = "Return the most likely physical venue / city from an activity title + description.",
+                input_schema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        location = new
+                        {
+                            type = new[] { "string", "null" },
+                            description = "Real place name or null when not confidently identifiable."
+                        }
+                    },
+                    required = Array.Empty<string>()
+                }
+            }
+        },
+        tool_choice = new { type = "tool", name = "extract_location" },
+        messages = new object[]
+        {
+            new { role = "user", content = userMessage }
+        }
+    };
+
+    private const string LocationExtractionPrompt = """
+        You read free-text fields from a fitness-tracker activity (typically the
+        activity title and its description, plus the sport type) and return the
+        most likely physical venue or location the activity took place at.
+
+        Output rules:
+          - Prefer a specific venue if one is named (e.g. "Avatar Kraków",
+            "Hala 100-lecia", "Forum Climbing Gym Berlin").
+          - Otherwise return the most specific town / region you can infer
+            (e.g. "Tatra Mountains, Poland").
+          - Return null if no confident location can be extracted from the
+            wording. Never invent a venue. Never guess.
+          - Output is a short string (typically 2-5 words).
+
+        Reply ONLY by calling the extract_location tool.
+        """;
 }
 
 internal static class JsonElementExtensions

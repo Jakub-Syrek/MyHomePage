@@ -147,4 +147,39 @@ public sealed class StravaActivityMapperTests
 
         Assert.That(label, Is.Null);
     }
+
+    [TestCase("Avatar Kraków - Push Day", "Avatar Kraków")]
+    [TestCase("Hala 100-lecia | climbing session", "Hala 100-lecia")]
+    [TestCase("Forum Climbing Gym Berlin / lower body", "Forum Climbing Gym Berlin")]
+    [TestCase("Avatar Kraków: legs", "Avatar Kraków")]
+    public void ExtractVenueFromTitle_DelimiterPrefix_ReturnsTrimmedVenue(
+        string title, string expected)
+    {
+        var venue = StravaActivityMapper.ExtractVenueFromTitle(title);
+
+        Assert.That(venue, Is.EqualTo(expected));
+    }
+
+    [TestCase("Morning Run")]
+    [TestCase("Afternoon Ride")]
+    [TestCase("Evening Weight Training")]
+    [TestCase("Lunch Workout")]
+    [TestCase("Night Yoga")]
+    public void ExtractVenueFromTitle_GenericStravaTitle_ReturnsNull(string title)
+    {
+        var venue = StravaActivityMapper.ExtractVenueFromTitle(title);
+
+        Assert.That(venue, Is.Null);
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("ab")]
+    [TestCase("lowercase venue - body")]
+    public void ExtractVenueFromTitle_TooShortOrNotProperName_ReturnsNull(string? title)
+    {
+        var venue = StravaActivityMapper.ExtractVenueFromTitle(title);
+
+        Assert.That(venue, Is.Null);
+    }
 }

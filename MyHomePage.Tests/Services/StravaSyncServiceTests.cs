@@ -11,6 +11,7 @@ public sealed class StravaSyncServiceTests
     private IStravaApiClient _api = null!;
     private IStravaTokenStore _store = null!;
     private IVideoRepository _videos = null!;
+    private IAiAssistantService _ai = null!;
     private StravaTokenService _tokens = null!;
     private StravaSyncService _sync = null!;
     private StravaOptions _options = null!;
@@ -21,6 +22,8 @@ public sealed class StravaSyncServiceTests
         _api = Substitute.For<IStravaApiClient>();
         _store = Substitute.For<IStravaTokenStore>();
         _videos = Substitute.For<IVideoRepository>();
+        _ai = Substitute.For<IAiAssistantService>();
+        _ai.IsEnabled.Returns(false);
         _options = new StravaOptions
         {
             ClientId = "1",
@@ -33,7 +36,7 @@ public sealed class StravaSyncServiceTests
 
         var syncLogger = Substitute.For<ILogger<StravaSyncService>>();
         _sync = new StravaSyncService(
-            _api, _tokens, _videos,
+            _api, _tokens, _videos, _ai,
             Options.Create(_options),
             syncLogger);
     }

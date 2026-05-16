@@ -113,4 +113,43 @@ public static class StravaActivityMapper
         if (!string.IsNullOrWhiteSpace(activity.LocationCountry)) parts.Add(activity.LocationCountry!);
         return parts.Count == 0 ? null : string.Join(", ", parts);
     }
+
+    private static readonly char[] VenueDelimiters = ['-', '–', '—', '|', '/', ':'];
+
+    /// <summary>
+    /// Attempts to pull a venue name out of the activity title using common
+    /// delimiter conventions ("Avatar Kraków - Push Day", "Hala 100-lecia |
+    /// climbing session"…). Returns the trimmed prefix when it looks like a
+    /// proper name (starts with a capital, at least four characters) and is
+    /// not a generic placeholder Strava auto-generates.
+    /// </summary>
+    /// <param name="activityName">Activity title as entered by the athlete.</param>
+    public static string? ExtractVenueFromTitle(string? activityName)
+    {
+        if (string.IsNullOrWhiteSpace(activityName)) return null;
+        var name = activityName.Trim();
+
+        var idx = name.IndexOfAny(VenueDelimiters);
+        var candidate = idx > 0 ? name[..idx].Trim() : name;
+
+        if (candidate.Length < 4) return null;
+        if (!char.IsLetter(candidate[0]) || !char.IsUpper(candidate[0])) return null;
+        if (IsGenericStravaTitle(candidate)) return null;
+
+        return candidate;
+    }
+
+    private static bool IsGenericStravaTitle(string candidate)
+    {
+        var lower = candidate.ToLowerInvariant();
+        return lower is
+            "morning run" or "afternoon run" or "evening run" or "lunch run" or "night run" or
+            "morning ride" or "afternoon ride" or "evening ride" or "lunch ride" or "night ride" or
+            "morning walk" or "evening walk" or "lunch walk" or
+            "morning hike" or "afternoon hike" or "evening hike" or
+            "morning swim" or "evening swim" or
+            "morning workout" or "afternoon workout" or "evening workout" or "lunch workout" or
+            "morning weight training" or "afternoon weight training" or "evening weight training" or
+            "morning yoga" or "evening yoga";
+    }
 }

@@ -17,6 +17,7 @@ public sealed class StravaSyncService : IStravaSyncService
     private readonly IStravaApiClient _api;
     private readonly StravaTokenService _tokens;
     private readonly IVideoRepository _videos;
+    private readonly IAiAssistantService _ai;
     private readonly StravaOptions _options;
     private readonly ILogger<StravaSyncService> _logger;
 
@@ -26,18 +27,21 @@ public sealed class StravaSyncService : IStravaSyncService
     /// <param name="api">Strava REST transport.</param>
     /// <param name="tokens">OAuth lifecycle helper.</param>
     /// <param name="videos">Gallery repository for creating / updating items.</param>
+    /// <param name="ai">AI assistant used as a last-resort location extractor.</param>
     /// <param name="options">Bound Strava options (privacy filter etc.).</param>
     /// <param name="logger">Structured logger for diagnostic events.</param>
     public StravaSyncService(
         IStravaApiClient api,
         StravaTokenService tokens,
         IVideoRepository videos,
+        IAiAssistantService ai,
         IOptions<StravaOptions> options,
         ILogger<StravaSyncService> logger)
     {
         _api = api;
         _tokens = tokens;
         _videos = videos;
+        _ai = ai;
         _options = options.Value;
         _logger = logger;
     }
@@ -135,6 +139,7 @@ public sealed class StravaSyncService : IStravaSyncService
         var training = StravaActivityMapper.ToTrainingData(activity);
         var category = StravaActivityMapper.ResolveCategory(activity);
         var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
+        var location = await ResolveLocationAsync(activity, cancellationToken);
         var video = Video.Create(
             id: _videos.GenerateNextId(),
             title: string.IsNullOrWhiteSpace(activity.Name)
@@ -142,7 +147,7 @@ public sealed class StravaSyncService : IStravaSyncService
                 : activity.Name,
             description: activity.Description ?? string.Empty,
             fileName: string.Empty,
-            location: StravaActivityMapper.ExtractLocationLabel(activity),
+            location: location,
             category: category,
             fileSizeBytes: 0,
             latitude: lat,
@@ -153,9 +158,52 @@ public sealed class StravaSyncService : IStravaSyncService
         await _videos.SaveAsync(video);
         _logger.LogInformation(
             "Created gallery item {VideoId} from Strava activity {ActivityId} " +
-            "(category {Category}, GPS {Lat:F4},{Lng:F4})",
-            video.Id, activity.Id, category, lat ?? 0, lng ?? 0);
+            "(category {Category}, location '{Location}', GPS {Lat:F4},{Lng:F4})",
+            video.Id, activity.Id, category, location ?? "<unknown>", lat ?? 0, lng ?? 0);
         return video;
+    }
+
+    /// <summary>
+    /// Builds the location label using a four-tier fallback so even indoor
+    /// activities (no GPS, no Strava city) still surface a useful venue
+    /// when the athlete typed one into the title or description.
+    /// </summary>
+    private async Task<string?> ResolveLocationAsync(
+        StravaActivity activity,
+        CancellationToken cancellationToken)
+    {
+        // 1. Strava's structured city/state/country fields (auto-filled from GPS).
+        var strava = StravaActivityMapper.ExtractLocationLabel(activity);
+        if (!string.IsNullOrWhiteSpace(strava)) return strava;
+
+        // 2. Deterministic venue parsing of the activity title (covers
+        //    "Avatar Kraków - Push Day" style names).
+        var fromTitle = StravaActivityMapper.ExtractVenueFromTitle(activity.Name);
+        if (!string.IsNullOrWhiteSpace(fromTitle)) return fromTitle;
+
+        // 3. AI fallback — Claude reads the title + description and returns
+        //    the most likely venue when one is mentioned in prose.
+        if (_ai.IsEnabled)
+        {
+            try
+            {
+                var fromAi = await _ai.ExtractLocationAsync(
+                    activity.Name ?? string.Empty,
+                    activity.Description ?? string.Empty,
+                    activity.SportType ?? activity.Type ?? string.Empty,
+                    cancellationToken);
+                if (!string.IsNullOrWhiteSpace(fromAi)) return fromAi;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "AI location extraction failed for activity {ActivityId}",
+                    activity.Id);
+            }
+        }
+
+        // 4. Give up — the editor lets the user fill it in manually.
+        return null;
     }
 
     private static bool IsPublic(StravaActivity activity) =>
