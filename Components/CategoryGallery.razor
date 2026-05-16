@@ -158,14 +158,16 @@
                     @foreach (var v in FilteredVideos)
                     {
                         var first = v.GetAllMedia().FirstOrDefault();
-                        var thumbUrl = first is null ? "" : $"/videos/{v.Id}/{first.FileName}";
-                        var isVideo = first?.Type == MediaType.Video;
+                        var hasMedia = first is not null && !string.IsNullOrEmpty(first.FileName);
+                        var thumbUrl = hasMedia
+                            ? $"/videos/{v.Id}/{first!.FileName}"
+                            : VideoCategories.GetPlaceholderImage(v.Category);
                         <a class="thumb-rail-item" href="#col-@v.Id" title="@v.Title — @v.UploadedAt.ToString("MMM d, yyyy")">
-                            @if (first is null)
+                            @if (!hasMedia)
                             {
-                                <div class="thumb-empty"></div>
+                                <img src="@thumbUrl" alt="" loading="lazy" class="thumb-placeholder" />
                             }
-                            else if (first.Type == MediaType.Image)
+                            else if (first!.Type == MediaType.Image)
                             {
                                 <img src="@thumbUrl" alt="" loading="lazy" />
                             }
@@ -582,6 +584,9 @@
         width: 100%; height: 100%; object-fit: cover; display: block;
     }
     .thumb-empty { width: 100%; height: 100%; background: #2d3748; }
+    .thumb-rail-item .thumb-placeholder {
+        filter: brightness(0.7) saturate(115%);
+    }
     .thumb-play {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;

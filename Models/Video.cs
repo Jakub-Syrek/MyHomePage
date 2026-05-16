@@ -114,4 +114,21 @@ public static class VideoCategories
         Running => "/running",
         _ => "/"
     };
+
+    /// <summary>
+    /// Returns the URL of the static placeholder image shipped with the
+    /// category — used as a fallback thumbnail when a gallery item has no
+    /// media attached yet (typical right after a Strava import).
+    /// </summary>
+    /// <param name="category">Category constant value.</param>
+    public static string GetPlaceholderImage(string category) => category switch
+    {
+        Gory => "/images/mountains-hiking-bg.jpg",
+        WspinaczkaSkalowa => "/images/rock-climbing-bg.jpg",
+        Bouldering => "/images/bouldering-bg.jpg",
+        ProwadzieniHala => "/images/indoor-climbing-bg.jpg",
+        Calisthenics => "/images/calisthenics-bg.jpg",
+        Running => "/images/running-bg.jpg",
+        _ => "/images/mountains-bg.jpg"
+    };
 }

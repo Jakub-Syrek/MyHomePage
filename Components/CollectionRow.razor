@@ -37,27 +37,41 @@
 
     <div class="ig-media-wrap">
         <div class="ig-media-stage">
-            @for (int i = 0; i < _media.Count; i++)
+            @if (_media.Count == 0)
             {
-                var idx = i;
-                var m = _media[i];
-                var url = $"/videos/{Item.Id}/{m.FileName}";
-                <div class="ig-slide @(idx == _index ? "active" : "")"
-                     data-idx="@idx"
-                     @onclick="@(() => OnTileOpen.InvokeAsync(idx))">
-                    @if (m.Type == MediaType.Image)
-                    {
-                        <img src="@url" alt="" loading="lazy" />
-                    }
-                    else
-                    {
-                        <video preload="metadata" muted playsinline>
-                            <source src="@(url + "#t=0.5")" type="video/mp4" />
-                        </video>
-                        <div class="ig-play">▶</div>
-                    }
+                <div class="ig-slide active ig-placeholder"
+                     @onclick="@(() => OnTileOpen.InvokeAsync(0))">
+                    <img src="@VideoCategories.GetPlaceholderImage(Item.Category)"
+                         alt="@Item.Category placeholder"
+                         loading="lazy" />
+                    <div class="ig-placeholder-badge">No media yet · add some</div>
                     <div class="ig-shine"></div>
                 </div>
+            }
+            else
+            {
+                @for (int i = 0; i < _media.Count; i++)
+                {
+                    var idx = i;
+                    var m = _media[i];
+                    var url = $"/videos/{Item.Id}/{m.FileName}";
+                    <div class="ig-slide @(idx == _index ? "active" : "")"
+                         data-idx="@idx"
+                         @onclick="@(() => OnTileOpen.InvokeAsync(idx))">
+                        @if (m.Type == MediaType.Image)
+                        {
+                            <img src="@url" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <video preload="metadata" muted playsinline>
+                                <source src="@(url + "#t=0.5")" type="video/mp4" />
+                            </video>
+                            <div class="ig-play">▶</div>
+                        }
+                        <div class="ig-shine"></div>
+                    </div>
+                }
             }
         </div>
 
@@ -226,6 +240,28 @@
             rgba(255,255,255,0) 55%);
         pointer-events: none;
         mix-blend-mode: overlay;
+    }
+
+    /* Placeholder slide rendered when an item has no media yet
+       (typical for fresh Strava imports). Uses the category bg image
+       and overlays a hint badge encouraging the operator to add files. */
+    .ig-slide.ig-placeholder img {
+        filter: brightness(0.65) saturate(115%);
+    }
+    .ig-placeholder-badge {
+        position: absolute;
+        left: 50%; bottom: 14%;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        background: rgba(0, 0, 0, 0.55);
+        color: white;
+        border-radius: 999px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        backdrop-filter: blur(8px);
+        pointer-events: none;
+        white-space: nowrap;
     }
 
     .ig-arrow {

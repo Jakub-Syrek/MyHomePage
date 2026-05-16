@@ -96,27 +96,40 @@ else
 
         <div class="item-body">
             <section class="item-grid">
-                @for (int i = 0; i < _media.Count; i++)
+                @if (_media.Count == 0)
                 {
-                    var idx = i;
-                    var m = _media[i];
-                    var url = $"/videos/{Id}/{m.FileName}";
-                    <div class="grid-tile @(m.Type == MediaType.Image ? "is-image" : "is-video")"
-                         @onclick="() => OpenLightbox(idx)"
-                         id="m-@idx">
-                        @if (m.Type == MediaType.Image)
-                        {
-                            <img src="@url" alt="@_item.Title" loading="lazy" />
-                        }
-                        else
-                        {
-                            <video preload="metadata" muted playsinline>
-                                <source src="@(url + "#t=0.5")" type="video/mp4" />
-                            </video>
-                            <div class="grid-play">▶</div>
-                        }
-                        <div class="grid-tag">@(m.Type == MediaType.Image ? "PHOTO" : "VIDEO") @(idx + 1)</div>
+                    <div class="grid-tile is-image item-placeholder">
+                        <img src="@VideoCategories.GetPlaceholderImage(_item.Category)"
+                             alt="@_item.Category placeholder"
+                             loading="lazy" />
+                        <div class="grid-tag">NO MEDIA YET</div>
+                        <div class="item-placeholder-hint">Open the editor to attach photos / videos →</div>
                     </div>
+                }
+                else
+                {
+                    @for (int i = 0; i < _media.Count; i++)
+                    {
+                        var idx = i;
+                        var m = _media[i];
+                        var url = $"/videos/{Id}/{m.FileName}";
+                        <div class="grid-tile @(m.Type == MediaType.Image ? "is-image" : "is-video")"
+                             @onclick="() => OpenLightbox(idx)"
+                             id="m-@idx">
+                            @if (m.Type == MediaType.Image)
+                            {
+                                <img src="@url" alt="@_item.Title" loading="lazy" />
+                            }
+                            else
+                            {
+                                <video preload="metadata" muted playsinline>
+                                    <source src="@(url + "#t=0.5")" type="video/mp4" />
+                                </video>
+                                <div class="grid-play">▶</div>
+                            }
+                            <div class="grid-tag">@(m.Type == MediaType.Image ? "PHOTO" : "VIDEO") @(idx + 1)</div>
+                        </div>
+                    }
                 }
             </section>
 
@@ -309,6 +322,21 @@ else
         padding: 4px 10px; border-radius: 999px;
         backdrop-filter: blur(4px);
         pointer-events: none;
+    }
+    .item-placeholder img { filter: brightness(0.65) saturate(115%); }
+    .item-placeholder-hint {
+        position: absolute;
+        left: 50%; bottom: 14%;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        background: rgba(0, 0, 0, 0.55);
+        color: white;
+        border-radius: 999px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        backdrop-filter: blur(6px);
+        pointer-events: none;
+        white-space: nowrap;
     }
 
     .item-description {

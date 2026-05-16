@@ -191,8 +191,11 @@
                         category = v.Category,
                         lat = v.Latitude!.Value,
                         lon = v.Longitude!.Value,
-                        thumb = hasMedia ? $"/videos/{v.Id}/{primary!.FileName}" : null,
-                        isImage = hasMedia && primary!.Type == MediaType.Image,
+                        thumb = hasMedia
+                            ? $"/videos/{v.Id}/{primary!.FileName}"
+                            : VideoCategories.GetPlaceholderImage(v.Category),
+                        isImage = !hasMedia || primary!.Type == MediaType.Image,
+                        isPlaceholder = !hasMedia,
                         url = $"/item/{v.Id}",
                         hasTraining = v.HasTraining,
                         trainingSource = v.Training?.Source.ToString(),
@@ -232,9 +235,16 @@
                         markers.forEach(m => {{
                             let mediaBlock = '';
                             if (m.thumb) {{
-                                mediaBlock = m.isImage
-                                    ? `<img src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' />`
-                                    : `<video src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' preload='metadata' controls></video>`;
+                                if (m.isPlaceholder) {{
+                                    mediaBlock = `<div style='position:relative;margin-bottom:8px'>
+                                        <img src='${{m.thumb}}' style='width:100%;border-radius:6px;filter:brightness(0.7) saturate(115%)' />
+                                        <div style='position:absolute;left:50%;bottom:10%;transform:translateX(-50%);padding:4px 12px;background:rgba(0,0,0,0.55);color:#fff;border-radius:999px;font-size:0.78rem;font-weight:600'>No media yet</div>
+                                    </div>`;
+                                }} else if (m.isImage) {{
+                                    mediaBlock = `<img src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' />`;
+                                }} else {{
+                                    mediaBlock = `<video src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' preload='metadata' controls></video>`;
+                                }}
                             }}
                             let trainingBlock = '';
                             if (m.hasTraining) {{
