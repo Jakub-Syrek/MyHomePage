@@ -179,9 +179,22 @@
         gap: 20px;
         min-width: 0;
         flex: 1;
-        justify-content: flex-end;
         flex-wrap: nowrap;
+        /* When the link list does not fit on one line, scroll horizontally
+           rather than wrapping or pushing into the logo. Visible at any
+           viewport width — the mobile branch below tweaks padding only. */
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
+                mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
     }
+    /* Right-align nav when content fits; collapses to 0 when items overflow
+       so scrolling reveals the LEFT (primary) links first instead of the
+       admin links at the end. */
+    .nav-menu > :first-child { margin-left: auto; }
+    .nav-menu::-webkit-scrollbar { display: none; }
 
     @@media (max-width: 1280px) {
         .nav-menu { gap: 14px; font-size: 0.95rem; }
