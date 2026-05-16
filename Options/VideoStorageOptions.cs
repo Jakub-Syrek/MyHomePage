@@ -20,6 +20,28 @@ public sealed class VideoStorageOptions
     /// <summary>Maximum accepted upload size in bytes (default: 5 GB).</summary>
     public long MaxFileSizeBytes { get; set; } = 1024L * 1024 * 1024 * 5;
 
+    /// <summary>
+    /// Maximum desired output size per file in bytes (default: 50 MB).
+    /// When the post-compression result exceeds this threshold, the
+    /// pipeline retries with a higher CRF (and lower JPEG quality for
+    /// images) until the file fits or the safety cap is reached.
+    /// </summary>
+    public long TargetMaxOutputBytes { get; set; } = 50L * 1024 * 1024;
+
+    /// <summary>
+    /// Hard ceiling for adaptive CRF retries (default 36). Above this
+    /// quality drops below what looks acceptable for outdoor footage,
+    /// so the pipeline accepts a larger file rather than push further.
+    /// </summary>
+    public int MaxAdaptiveCrf { get; set; } = 36;
+
+    /// <summary>
+    /// CRF increment used per retry when the previous attempt exceeded
+    /// <see cref="TargetMaxOutputBytes"/> (default 6 → roughly halves
+    /// the bitrate per step).
+    /// </summary>
+    public int AdaptiveCrfStep { get; set; } = 6;
+
     public string[] AllowedExtensions { get; set; } = [".mp4", ".webm", ".mkv", ".avi", ".mov", ".m4v"];
 
     // --- H.264 compression settings ---

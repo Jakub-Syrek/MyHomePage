@@ -31,6 +31,7 @@ public sealed class H264CompressionStrategy : ICompressionStrategy
     public async Task<bool> CompressAsync(
         string inputPath,
         string outputPath,
+        int? crfOverride = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -50,12 +51,14 @@ public sealed class H264CompressionStrategy : ICompressionStrategy
             // GOP (keyframe interval) = fps * keyframe_seconds — enables fast seeking in browser
             var gop = _options.MaxFrameRate * _options.KeyframeIntervalSeconds;
 
+            var crf = crfOverride ?? _options.CompressionCrf;
+
             var conversion = FFmpeg.Conversions.New()
                 .AddParameter($"-i \"{inputPath}\"", ParameterPosition.PreInput)
                 .AddParameter($"-vf \"{scaleFilter}\"")
                 // Video codec + quality
                 .AddParameter("-c:v libx264")
-                .AddParameter($"-crf {_options.CompressionCrf}")
+                .AddParameter($"-crf {crf}")
                 .AddParameter($"-preset {_options.Preset}")
                 .AddParameter($"-tune {_options.Tune}")
                 // Bitrate cap (prevents quality spikes from exploding file size)
@@ -81,7 +84,7 @@ public sealed class H264CompressionStrategy : ICompressionStrategy
 
             _logger.LogInformation(
                 "[{Strategy}] Encoding: CRF={Crf} preset={Preset} tune={Tune} maxres={W}x{H} gop={Gop}f",
-                Name, _options.CompressionCrf, _options.Preset, _options.Tune,
+                Name, crf, _options.Preset, _options.Tune,
                 _options.MaxWidthPixels, _options.MaxHeightPixels, gop);
 
             await conversion.Start(cancellationToken);

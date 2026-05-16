@@ -466,17 +466,49 @@ public sealed class VideoService : IVideoService
         _logger.LogInformation("Item {Id}: starting compression with [{Strategy}]",
             videoId, _compression.Name);
 
-        var compressed = await _compression.CompressAsync(originalPath, compressedPath);
+        var crf = _options.CompressionCrf;
+        var produced = false;
+        long compressedSize = 0;
 
-        if (compressed && File.Exists(compressedPath))
+        // Adaptive retry: encode at the configured CRF first; if the
+        // result is still over the target size budget, recompress with a
+        // higher CRF (more aggressive) until it fits or we hit the cap.
+        while (true)
         {
-            var compressedSize = new FileInfo(compressedPath).Length;
+            produced = await _compression.CompressAsync(
+                originalPath, compressedPath, crfOverride: crf);
+            if (!produced || !File.Exists(compressedPath)) break;
+
+            compressedSize = new FileInfo(compressedPath).Length;
+            if (compressedSize <= _options.TargetMaxOutputBytes) break;
+
+            if (crf >= _options.MaxAdaptiveCrf)
+            {
+                _logger.LogInformation(
+                    "Item {Id}: hit CRF cap {Cap} - keeping {MB} MB output",
+                    videoId, _options.MaxAdaptiveCrf, compressedSize / (1024 * 1024));
+                break;
+            }
+
+            crf = Math.Min(_options.MaxAdaptiveCrf, crf + _options.AdaptiveCrfStep);
+            _logger.LogInformation(
+                "Item {Id}: {MB} MB exceeds {TargetMB} MB budget - retrying at CRF {Crf}",
+                videoId,
+                compressedSize / (1024 * 1024),
+                _options.TargetMaxOutputBytes / (1024 * 1024),
+                crf);
+        }
+
+        if (produced && File.Exists(compressedPath))
+        {
             try { File.Delete(originalPath); } catch { /* keep original on failure */ }
 
-            _logger.LogInformation("Item {Id}: {Old} MB → {New} MB",
+            _logger.LogInformation(
+                "Item {Id}: {Old} MB → {New} MB at CRF {Crf}",
                 videoId,
                 originalSize / (1024 * 1024),
-                compressedSize / (1024 * 1024));
+                compressedSize / (1024 * 1024),
+                crf);
 
             return (Path.GetFileName(compressedPath), compressedSize);
         }
