@@ -30,4 +30,16 @@ public interface IVideoService
     Task<OperationResult> AppendMediaAsync(
         int videoId,
         IReadOnlyList<Microsoft.AspNetCore.Components.Forms.IBrowserFile> files);
+
+    /// <summary>
+    /// Removes a single media file (one photo or video) from an existing
+    /// gallery item. The on-disk file is deleted, the media list is
+    /// re-ordered to stay contiguous, and the aggregate <c>FileSizeBytes</c>
+    /// is decremented. When the removed entry was the primary file,
+    /// the next remaining media item is promoted to primary.
+    /// </summary>
+    /// <param name="videoId">Identifier of the gallery item to update.</param>
+    /// <param name="fileName">Exact file name of the media item to remove
+    /// (must match an entry in <c>Video.Media</c>).</param>
+    Task<OperationResult> RemoveMediaAsync(int videoId, string fileName);
 }

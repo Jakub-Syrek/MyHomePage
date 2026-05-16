@@ -279,6 +279,67 @@ public sealed class VideoService : IVideoService
         }
     }
 
+    public async Task<OperationResult> RemoveMediaAsync(int videoId, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return OperationResult.Failure("File name was not provided.");
+
+        var video = await _repository.GetByIdAsync(videoId);
+        if (video is null)
+            return OperationResult.Failure($"Gallery item {videoId} not found.");
+
+        var media = video.Media.ToList();
+        var entry = media.FirstOrDefault(m =>
+            string.Equals(m.FileName, fileName, StringComparison.Ordinal));
+        if (entry is null)
+            return OperationResult.Failure(
+                $"Media file '{fileName}' is not attached to item {videoId}.");
+
+        try
+        {
+            var absolutePath = Path.Combine(
+                _storage.GetVideoDirectoryPath(videoId), entry.FileName);
+            if (File.Exists(absolutePath))
+            {
+                File.Delete(absolutePath);
+                _logger.LogInformation(
+                    "Item {VideoId}: removed media {FileName} ({KB} KB)",
+                    videoId, entry.FileName, entry.SizeBytes / 1024);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Item {VideoId}: media {FileName} not on disk - removed from metadata only",
+                    videoId, entry.FileName);
+            }
+
+            media.Remove(entry);
+            for (var i = 0; i < media.Count; i++)
+                media[i].Order = i;
+
+            video.Media = media;
+            video.FileSizeBytes = Math.Max(0, video.FileSizeBytes - entry.SizeBytes);
+
+            if (string.Equals(video.FileName, entry.FileName, StringComparison.Ordinal))
+            {
+                video.FileName = media.Count > 0
+                    ? media[0].FileName
+                    : string.Empty;
+            }
+
+            await _repository.SaveAsync(video);
+            return OperationResult.Success(
+                $"Removed '{entry.FileName}' from item {videoId}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Error removing media {FileName} from item {VideoId}",
+                entry.FileName, videoId);
+            return OperationResult.Failure($"Remove error: {ex.Message}");
+        }
+    }
+
     public async Task<OperationResult> DeleteVideoAsync(int id)
     {
         _logger.LogInformation("Deleting item {Id}", id);

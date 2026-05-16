@@ -4,6 +4,7 @@
 @inject IVideoService VideoService
 @inject IAiAssistantService Ai
 @inject NavigationManager Navigation
+@inject IJSRuntime Js
 
 <div class="editor-container">
     <div class="editor-header">
@@ -26,6 +27,35 @@
                 <div class="video-preview">
                     <MediaCarousel Item="video" />
                 </div>
+
+                @if (video.Media.Count > 0)
+                {
+                    <div class="media-list">
+                        <h4>Attached media (@video.Media.Count)</h4>
+                        <ul class="media-rows">
+                            @foreach (var entry in video.Media)
+                            {
+                                var fileName = entry.FileName;
+                                var isPrimary = string.Equals(video.FileName, fileName, StringComparison.Ordinal);
+                                <li class="media-row">
+                                    <span class="media-row-icon">@(entry.Type == Models.MediaType.Image ? "🖼️" : "🎬")</span>
+                                    <span class="media-row-name" title="@fileName">@fileName</span>
+                                    <span class="media-row-size">@FormatSize(entry.SizeBytes)</span>
+                                    @if (isPrimary)
+                                    {
+                                        <span class="media-row-primary">primary</span>
+                                    }
+                                    <button type="button" class="media-row-remove"
+                                            @onclick="@(() => RemoveMediaItem(fileName))"
+                                            disabled="@isRemovingMedia"
+                                            title="Remove this file from the gallery item">
+                                        🗑
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
             </div>
 
             <div class="edit-panel">
@@ -164,6 +194,27 @@
                         </div>
                     }
                 </section>
+
+                <section class="danger-section">
+                    <h3>⚠️ Danger zone</h3>
+                    <p class="upload-hint">
+                        Permanently delete this gallery item — every photo, video and the
+                        attached training data goes with it. There is no undo.
+                    </p>
+                    @if (!string.IsNullOrEmpty(deleteMessage))
+                    {
+                        <div class="alert" style="margin-bottom: 12px;
+                             background:#f8d7da; color:#721c24;">
+                            @deleteMessage
+                        </div>
+                    }
+                    <button type="button" class="btn-delete"
+                            @onclick="DeleteEntireItem"
+                            disabled="@isDeleting">
+                        @if (isDeleting) { <span>Deleting…</span> }
+                        else { <span>🗑 Delete gallery item #@video.Id</span> }
+                    </button>
+                </section>
             </div>
         </div>
     }
@@ -236,6 +287,79 @@
     .file-pill-icon { font-size: 1.1rem; }
     .file-pill-name { flex: 1; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-pill-size { color: #6b7280; font-variant-numeric: tabular-nums; }
+
+    .media-list { margin-top: 22px; }
+    .media-list h4 {
+        margin: 0 0 10px;
+        font-size: 0.95rem;
+        color: #2c3e50;
+        font-weight: 700;
+    }
+    .media-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .media-row {
+        display: flex; align-items: center; gap: 10px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    .media-row-icon { font-size: 1.05rem; }
+    .media-row-name {
+        flex: 1; min-width: 0;
+        color: #1f2937;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .media-row-size { color: #6b7280; font-variant-numeric: tabular-nums; }
+    .media-row-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .media-row-remove {
+        background: transparent;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 4px 10px;
+        cursor: pointer;
+        color: #b91c1c;
+        font-size: 0.95rem;
+        line-height: 1;
+        transition: background 0.18s, border-color 0.18s;
+    }
+    .media-row-remove:hover { background: #fef2f2; border-color: #fecaca; }
+    .media-row-remove:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .danger-section {
+        margin-top: 32px;
+        padding: 18px 20px;
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        border-radius: 12px;
+    }
+    .danger-section h3 {
+        margin: 0 0 6px;
+        color: #991b1b;
+        font-size: 1.05rem;
+    }
+    .btn-delete {
+        background: #dc2626;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: background 0.18s;
+    }
+    .btn-delete:hover { background: #b91c1c; }
+    .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 
 @code {
@@ -300,6 +424,76 @@
         finally
         {
             isAppending = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool isRemovingMedia;
+    private bool isDeleting;
+    private string deleteMessage = "";
+
+    private async Task RemoveMediaItem(string fileName)
+    {
+        if (video is null || string.IsNullOrWhiteSpace(fileName)) return;
+
+        var confirmed = await Js.InvokeAsync<bool>("confirm",
+            $"Remove '{fileName}' from this gallery item? The file will be deleted from disk.");
+        if (!confirmed) return;
+
+        isRemovingMedia = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await VideoService.RemoveMediaAsync(VideoId, fileName);
+            uploadMessage = result.Message;
+            isUploadSuccess = result.IsSuccess;
+            if (result.IsSuccess)
+                video = await VideoService.GetVideoByIdAsync(VideoId);
+        }
+        catch (Exception ex)
+        {
+            isUploadSuccess = false;
+            uploadMessage = $"Remove error: {ex.Message}";
+        }
+        finally
+        {
+            isRemovingMedia = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteEntireItem()
+    {
+        if (video is null) return;
+
+        var confirmed = await Js.InvokeAsync<bool>("confirm",
+            $"Permanently delete gallery item #{video.Id} ('{video.Title}')? " +
+            "Every photo and video attached to it will be removed. This cannot be undone.");
+        if (!confirmed) return;
+
+        isDeleting = true;
+        deleteMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var category = video.Category;
+            var result = await VideoService.DeleteVideoAsync(video.Id);
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo(VideoCategories.GetUrl(category), forceLoad: false);
+                return;
+            }
+            deleteMessage = result.Message;
+        }
+        catch (Exception ex)
+        {
+            deleteMessage = $"Delete error: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
             StateHasChanged();
         }
     }
