@@ -28,34 +28,64 @@
         </div>
     </div>
 
+    @* ── Sliding filter tab (sits just below the header, sticky) ───── *@
+    <div class="filter-tab-wrap">
+        <button type="button" class="filter-tab @(_showFilter ? "open" : "")"
+                @onclick="ToggleFilter">
+            <span class="ft-icon">@(_showFilter ? "▲" : "▼")</span>
+            <span>Sort &amp; Filter</span>
+            @if (HasFilter || !_sortDescending)
+            {
+                <span class="ft-dot" title="Custom filter/sort active"></span>
+            }
+            <span class="ft-count">@FilteredVideos.Count / @(videos?.Count ?? 0)</span>
+        </button>
+
+        <div class="filter-panel @(_showFilter ? "open" : "")">
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>From</label>
+                    <input type="date" @bind="_dateFrom" @bind:event="oninput" />
+                </div>
+                <div class="filter-group">
+                    <label>To</label>
+                    <input type="date" @bind="_dateTo" @bind:event="oninput" />
+                </div>
+                <button type="button" class="filter-btn"
+                        @onclick="ToggleSort"
+                        title="Toggle sort order">
+                    @if (_sortDescending) { <span>↓ Newest first</span> } else { <span>↑ Oldest first</span> }
+                </button>
+                <button type="button" class="filter-btn ghost"
+                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-1); _dateTo = DateTime.Today; })"
+                        title="Reset to yesterday → today">
+                    📅 Last 24h
+                </button>
+                <button type="button" class="filter-btn ghost"
+                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-7); _dateTo = DateTime.Today; })"
+                        title="Last 7 days">
+                    📆 Week
+                </button>
+                <button type="button" class="filter-btn ghost"
+                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-30); _dateTo = DateTime.Today; })"
+                        title="Last 30 days">
+                    🗓️ Month
+                </button>
+                <button type="button" class="filter-btn ghost"
+                        @onclick="ClearFilter"
+                        disabled="@(!HasFilter)">
+                    ✕ All time
+                </button>
+                <span class="filter-stats">@FilteredVideos.Count / @(videos?.Count ?? 0) shown</span>
+            </div>
+        </div>
+    </div>
+
     <div class="category-content">
         @if (showUpload)
         {
             <VideoUploadCategory Category="@Category" OnUploadSuccess="RefreshVideos" />
         }
-
-        @* ── Filter + Sort bar ────────────────────────────────────────── *@
-        <div class="filter-bar">
-            <div class="filter-group">
-                <label>From</label>
-                <input type="date" @bind="_dateFrom" @bind:event="oninput" />
-            </div>
-            <div class="filter-group">
-                <label>To</label>
-                <input type="date" @bind="_dateTo" @bind:event="oninput" />
-            </div>
-            <button type="button" class="filter-btn @(_sortDescending ? "active" : "")"
-                    @onclick="ToggleSort"
-                    title="Toggle sort order">
-                @if (_sortDescending) { <span>↓ Newest first</span> } else { <span>↑ Oldest first</span> }
-            </button>
-            <button type="button" class="filter-btn ghost"
-                    @onclick="ClearFilter"
-                    disabled="@(!HasFilter)">
-                ✕ Clear
-            </button>
-            <span class="filter-stats">@FilteredVideos.Count / @(videos?.Count ?? 0) shown</span>
-        </div>
 
         @if (videos == null)
         {
@@ -153,26 +183,113 @@
         box-shadow: 0 8px 24px rgba(0,0,0,0.18);
     }
 
-    .category-content { padding: 30px 20px 60px; }
+    .category-content { padding: 14px 20px 60px; }
+
+    /* ── Slide-down filter tab (tucked under header) ───────────────── */
+    .filter-tab-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 20px;
+        pointer-events: none;
+    }
+    .filter-tab {
+        pointer-events: auto;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 18px 11px;
+        margin-left: 24px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.7) 100%);
+        backdrop-filter: blur(18px) saturate(170%);
+        -webkit-backdrop-filter: blur(18px) saturate(170%);
+        border: 1px solid rgba(255,255,255,0.7);
+        border-top: 0;
+        border-radius: 0 0 14px 14px;
+        color: #2d3748;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow:
+            0 8px 24px rgba(20, 30, 60, 0.18),
+            inset 0 -1px 0 rgba(255,255,255,0.5);
+        transition: transform 0.22s, box-shadow 0.22s, background 0.22s;
+        font-family: inherit;
+    }
+    .filter-tab:hover {
+        transform: translateY(2px);
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.82) 100%);
+        box-shadow: 0 12px 30px rgba(20, 30, 60, 0.22);
+    }
+    .filter-tab.open {
+        background: linear-gradient(180deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%);
+        color: white;
+        border-color: rgba(255,255,255,0.5);
+    }
+    .ft-icon {
+        display: inline-block;
+        transition: transform 0.22s;
+        font-size: 0.7rem;
+    }
+    .filter-tab.open .ft-icon { transform: rotate(0deg); }
+    .ft-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #f59e0b;
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+        animation: ftPulse 1.4s ease-in-out infinite;
+    }
+    @@keyframes ftPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(0.85); }
+    }
+    .ft-count {
+        background: rgba(0,0,0,0.08);
+        color: inherit;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .filter-tab.open .ft-count { background: rgba(255,255,255,0.22); }
+
+    /* Sliding panel (clipped on collapse) */
+    .filter-panel {
+        pointer-events: auto;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.32s cubic-bezier(.2,.7,.2,1),
+                    opacity 0.22s ease,
+                    margin 0.22s ease;
+        opacity: 0;
+        margin-top: 0;
+    }
+    .filter-panel.open {
+        max-height: 240px;
+        opacity: 1;
+        margin-top: 6px;
+    }
 
     /* ── Filter bar (glossy) ────────────────────────────────────────── */
     .filter-bar {
-        max-width: 1400px;
-        margin: 0 auto 26px;
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
+        gap: 10px 12px;
+        align-items: flex-end;
         padding: 14px 18px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.32) 100%);
+            linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.38) 100%);
         backdrop-filter: blur(20px) saturate(160%);
         -webkit-backdrop-filter: blur(20px) saturate(160%);
-        border: 1px solid rgba(255,255,255,0.55);
+        border: 1px solid rgba(255,255,255,0.6);
         border-radius: 14px;
         box-shadow:
-            0 8px 28px rgba(20, 30, 60, 0.12),
-            inset 0 1px 0 rgba(255,255,255,0.7);
+            0 10px 32px rgba(20, 30, 60, 0.16),
+            inset 0 1px 0 rgba(255,255,255,0.75);
     }
     .filter-group {
         display: flex;
@@ -268,6 +385,9 @@
     private DateTime? _dateFrom = DateTime.Today.AddDays(-1);
     private DateTime? _dateTo = DateTime.Today;
     private bool _sortDescending = true; // newest first by default
+    private bool _showFilter = false; // slide-down filter panel hidden by default
+
+    private void ToggleFilter() => _showFilter = !_showFilter;
 
     private Lightbox? _lightbox;
     private int _currentItemId;
