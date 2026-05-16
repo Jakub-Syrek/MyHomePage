@@ -6,6 +6,7 @@
 @inject IStravaTokenStore TokenStore
 @inject IStravaSyncService Sync
 @inject IJSRuntime Js
+@inject NavigationManager Nav
 
 <PageTitle>Strava - Admin</PageTitle>
 
@@ -165,9 +166,15 @@
         try
         {
             var result = await Sync.ImportActivityAsync(activityId, enforcePrivacyFilter: false);
-            _status = result.IsSuccess
-                ? $"Imported activity {activityId} as gallery item #{result.Value!.Id}."
-                : $"Import failed: {result.Message}";
+            if (result.IsSuccess && result.Value is not null)
+            {
+                _status = $"Imported activity {activityId} as gallery item #{result.Value.Id}. Opening editor…";
+                StateHasChanged();
+                Nav.NavigateTo($"/edit-video/{result.Value.Id}", forceLoad: false);
+                return;
+            }
+
+            _status = $"Import failed: {result.Message}";
         }
         catch (Exception ex)
         {
