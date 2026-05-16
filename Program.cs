@@ -112,6 +112,9 @@ try
     builder.Services.AddScoped<ICompressionStrategy, H264CompressionStrategy>();
     builder.Services.AddScoped<ILocationExtractor, GpsLocationExtractor>();
 
+    // AI assistant — calls Anthropic API (requires ANTHROPIC_API_KEY env var)
+    builder.Services.AddHttpClient<IAiAssistantService, ClaudeAssistantService>();
+
     // Repository + Decorator
     builder.Services.AddScoped<JsonVideoRepository>();
     builder.Services.AddScoped<IVideoRepository>(sp =>

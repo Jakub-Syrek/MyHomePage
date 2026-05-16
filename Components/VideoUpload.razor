@@ -1,5 +1,6 @@
 @namespace MyHomePage.Components
 @inject IVideoService VideoService
+@inject IAiAssistantService Ai
 
 <div class="upload-panel">
     <div class="upload-card">
@@ -10,6 +11,33 @@
             <div class="alert" style="background: @(isSuccess ? "#d4edda" : "#f8d7da");
                  color: @(isSuccess ? "#155724" : "#721c24"); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
                 @message
+            </div>
+        }
+
+        @if (Ai.IsEnabled)
+        {
+            <div class="ai-block">
+                <label class="ai-label">✨ Keywords (let AI fill the form)</label>
+                <div class="ai-input-row">
+                    <input type="text" class="ai-input" @bind="keywords"
+                           placeholder="e.g., snowy ridge, sunrise, scrambling" />
+                    <button type="button" class="ai-btn"
+                            @onclick="GenerateWithAi"
+                            disabled="@(isGenerating || string.IsNullOrWhiteSpace(keywords))">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-small"></span> <span>Generating…</span>
+                        }
+                        else
+                        {
+                            <span>✨ AI Generate</span>
+                        }
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(aiMessage))
+                {
+                    <p class="ai-msg">@aiMessage</p>
+                }
             </div>
         }
 
@@ -90,9 +118,46 @@
     private bool isSuccess = false;
     private bool isUploading = false;
 
+    // AI assistant
+    private string keywords = "";
+    private string aiMessage = "";
+    private bool isGenerating = false;
+
     private void HandleFilesSelected(InputFileChangeEventArgs e)
     {
         selectedFiles = e.GetMultipleFiles(maximumFileCount: 50).ToList();
+    }
+
+    private async Task GenerateWithAi()
+    {
+        if (string.IsNullOrWhiteSpace(keywords)) return;
+        isGenerating = true;
+        aiMessage = "";
+        try
+        {
+            var suggestion = await Ai.SuggestForUploadAsync("", keywords);
+            if (suggestion is null)
+            {
+                aiMessage = "Could not generate suggestions. Check API key or try again.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(title)) title = suggestion.Title;
+            if (string.IsNullOrWhiteSpace(description)) description = suggestion.Description;
+            if (string.IsNullOrWhiteSpace(location) && !string.IsNullOrWhiteSpace(suggestion.Location))
+                location = suggestion.Location;
+            if (latitude is null && suggestion.Latitude.HasValue) latitude = suggestion.Latitude;
+            if (longitude is null && suggestion.Longitude.HasValue) longitude = suggestion.Longitude;
+
+            aiMessage = "✓ Suggestions filled — review and edit as needed.";
+        }
+        catch (Exception ex)
+        {
+            aiMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isGenerating = false;
+        }
     }
 
     private async Task Upload()
@@ -146,5 +211,45 @@
         location = "";
         latitude = null;
         longitude = null;
+        keywords = "";
+        aiMessage = "";
     }
 }
+
+<style>
+    .ai-block {
+        background: linear-gradient(135deg, rgba(102,126,234,0.10) 0%, rgba(118,75,162,0.10) 100%);
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+    }
+    .ai-label {
+        display: block; font-weight: 700; font-size: 0.9rem;
+        color: #5a4fb8; margin-bottom: 8px;
+    }
+    .ai-input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ai-input {
+        flex: 1; min-width: 220px;
+        padding: 10px 12px;
+        border: 2px solid rgba(102, 126, 234, 0.3); border-radius: 8px;
+        font-size: 0.95rem; font-family: inherit;
+        background: rgba(255,255,255,0.85);
+    }
+    .ai-input:focus {
+        outline: none; border-color: #667eea; background: white;
+        box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+    }
+    .ai-btn {
+        padding: 10px 18px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; border: 0; border-radius: 8px;
+        font-weight: 600; font-size: 0.92rem; cursor: pointer;
+        font-family: inherit;
+        display: inline-flex; align-items: center; gap: 6px;
+        white-space: nowrap;
+    }
+    .ai-btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .ai-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ai-msg { margin: 8px 0 0; font-size: 0.85rem; color: #4a5568; }
+</style>
