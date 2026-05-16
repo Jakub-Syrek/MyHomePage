@@ -2,36 +2,60 @@
 @inject IVideoService VideoService
 @inject IAiAssistantService Ai
 
-<div class="upload-panel">
-    <div class="upload-card">
-        <h2>Upload to @Category</h2>
+@*
+    Pro upload form — three glossy sections:
+        ✨ AI ASSISTANT   (keywords → suggested title/desc/location)
+        📦 MEDIA FILES   (drop-zone styled InputFile, multi-file)
+        ✏️ DETAILS       (title / description / location / GPS)
+
+    Used inside a Category page. The whole thing is centered and rounded,
+    sits on top of the page background with backdrop blur.
+*@
+
+<div class="upload-shell">
+    <div class="upload-shell-card">
+
+        <header class="upload-hero">
+            <div>
+                <p class="upload-eyebrow">Upload</p>
+                <h2 class="upload-title">New @Category collection</h2>
+                <p class="upload-sub">Drop your photos and videos, write a few words — or let AI fill it for you.</p>
+            </div>
+            <span class="upload-badge">@(selectedFiles.Count) selected</span>
+        </header>
 
         @if (!string.IsNullOrEmpty(message))
         {
-            <div class="alert" style="background: @(isSuccess ? "#d4edda" : "#f8d7da");
-                 color: @(isSuccess ? "#155724" : "#721c24"); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+            <div class="upload-alert @(isSuccess ? "ok" : "err")">
                 @message
             </div>
         }
 
-        @* ── AI assistant block (only shown when service has API key) ── *@
+        @* ─── 1. AI ASSISTANT ─────────────────────────────────────────── *@
         @if (Ai.IsEnabled)
         {
-            <div class="ai-block">
-                <label class="ai-label">✨ Keywords (let AI fill the form)</label>
+            <section class="us-section ai">
+                <div class="us-section-head">
+                    <span class="us-section-icon">✨</span>
+                    <div>
+                        <h3 class="us-section-title">AI Assistant</h3>
+                        <p class="us-section-sub">Give Claude a few keywords. It will suggest a title, description and location.</p>
+                    </div>
+                </div>
                 <div class="ai-input-row">
-                    <input type="text" class="ai-input" @bind="keywords"
-                           placeholder="e.g., morten thaw, foggy descent, granite slab" />
-                    <button type="button" class="ai-btn"
+                    <input type="text" class="us-input ai-input"
+                           @bind="keywords"
+                           placeholder="e.g., Tatra, dawn light, ridge scrambling" />
+                    <button type="button" class="us-btn primary glow"
                             @onclick="GenerateWithAi"
                             disabled="@(isGenerating || string.IsNullOrWhiteSpace(keywords))">
                         @if (isGenerating)
                         {
-                            <span class="spinner-small"></span> <span>Generating…</span>
+                            <span class="us-spinner"></span> <span>Generating…</span>
                         }
                         else
                         {
-                            <span>✨ AI Generate</span>
+                            <span>✨ Generate</span>
                         }
                     </button>
                 </div>
@@ -39,70 +63,127 @@
                 {
                     <p class="ai-msg">@aiMessage</p>
                 }
-            </div>
+                <div class="ai-chip-row">
+                    <span class="ai-hint-label">Try:</span>
+                    @foreach (var sample in _samples)
+                    {
+                        var s = sample;
+                        <button type="button" class="ai-chip" @onclick="@(() => keywords = s)">@s</button>
+                    }
+                </div>
+            </section>
         }
 
-        <div class="form-group">
-            <label>Title *</label>
-            <input type="text" @bind="title" placeholder="e.g., Amazing climb..." />
-        </div>
-
-        <div class="form-group">
-            <label>Description</label>
-            <textarea @bind="description" placeholder="Share your experience..." rows="4"></textarea>
-        </div>
-
-        <div class="form-group">
-            <label>Location (free-text)</label>
-            <input type="text" @bind="location" placeholder="e.g., Tatra Mountains" />
-        </div>
-
-        <div class="form-group" style="display:flex; gap:12px;">
-            <div style="flex:1;">
-                <label>Latitude (optional)</label>
-                <input type="number" step="0.000001" @bind="latitude" placeholder="auto from EXIF" />
+        @* ─── 2. MEDIA FILES (drop zone) ──────────────────────────────── *@
+        <section class="us-section files">
+            <div class="us-section-head">
+                <span class="us-section-icon">📦</span>
+                <div>
+                    <h3 class="us-section-title">Media files</h3>
+                    <p class="us-section-sub">Drop one or many — videos + photos under a single description.</p>
+                </div>
             </div>
-            <div style="flex:1;">
-                <label>Longitude (optional)</label>
-                <input type="number" step="0.000001" @bind="longitude" placeholder="auto from EXIF" />
-            </div>
-        </div>
 
-        <div class="form-group">
-            <label>Media files * (videos + photos, up to 5 GB each)</label>
-            <div class="file-input-wrapper">
+            <label class="dropzone @(selectedFiles.Count > 0 ? "has-files" : "")">
                 <InputFile OnChange="HandleFilesSelected" multiple
+                           class="dropzone-input"
                            accept=".mp4,.webm,.mkv,.avi,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
-            </div>
+                <div class="dropzone-inner">
+                    @if (selectedFiles.Count == 0)
+                    {
+                        <div class="dropzone-icon">⤓</div>
+                        <p class="dropzone-title">Drop files here</p>
+                        <p class="dropzone-sub">or click to browse · max 5 GB per file</p>
+                    }
+                    else
+                    {
+                        <div class="dropzone-icon small">📂</div>
+                        <p class="dropzone-title">@selectedFiles.Count file@(selectedFiles.Count == 1 ? "" : "s") ready</p>
+                        <p class="dropzone-sub">Click to add more</p>
+                    }
+                </div>
+            </label>
+
             @if (selectedFiles.Count > 0)
             {
-                <ul class="file-list" style="margin-top:10px; padding-left:18px;">
+                <ul class="file-pill-list">
                     @foreach (var f in selectedFiles)
                     {
-                        <li>
-                            @(IsImage(f.Name) ? "🖼️" : "🎬")
-                            @f.Name <span style="color:#7f8c8d">(@(f.Size / (1024 * 1024)) MB)</span>
+                        <li class="file-pill">
+                            <span class="file-pill-icon">@(IsImage(f.Name) ? "🖼️" : "🎬")</span>
+                            <span class="file-pill-name" title="@f.Name">@f.Name</span>
+                            <span class="file-pill-size">@FormatSize(f.Size)</span>
                         </li>
                     }
                 </ul>
-                <p style="color:#7f8c8d; font-size:0.85rem; margin-top:8px;">
-                    ℹ️ Videos are auto-compressed (~20x smaller); photos resized to max 2560px.
-                    GPS coordinates read from EXIF / video metadata.
-                </p>
             }
-        </div>
+        </section>
 
-        <button class="btn-submit" @onclick="Upload"
-                disabled="@(isUploading || selectedFiles.Count == 0 || string.IsNullOrWhiteSpace(title))">
-            @if (isUploading)
-            {
-                <span class="spinner-small"></span> <span>Uploading & compressing...</span>
-            }
-            else
-            {
-                <span>Upload (@selectedFiles.Count file(s))</span>
-            }
-        </button>
+        @* ─── 3. DETAILS ──────────────────────────────────────────────── *@
+        <section class="us-section details">
+            <div class="us-section-head">
+                <span class="us-section-icon">✏️</span>
+                <div>
+                    <h3 class="us-section-title">Details</h3>
+                    <p class="us-section-sub">Title is required. The rest is optional (AI can fill it).</p>
+                </div>
+            </div>
+
+            <div class="us-field">
+                <label>Title <span class="req">*</span></label>
+                <input type="text" class="us-input" @bind="title"
+                       placeholder="e.g., Sunrise Ridge Scramble" />
+            </div>
+
+            <div class="us-field">
+                <label>Description</label>
+                <textarea class="us-input" @bind="description" rows="3"
+                          placeholder="Share the story behind the trip…"></textarea>
+            </div>
+
+            <div class="us-field">
+                <label>Location</label>
+                <input type="text" class="us-input" @bind="location"
+                       placeholder="e.g., Tatra Mountains, Poland" />
+            </div>
+
+            <div class="us-row">
+                <div class="us-field">
+                    <label>Latitude</label>
+                    <input type="number" step="0.000001" class="us-input"
+                           @bind="latitude" placeholder="auto from EXIF" />
+                </div>
+                <div class="us-field">
+                    <label>Longitude</label>
+                    <input type="number" step="0.000001" class="us-input"
+                           @bind="longitude" placeholder="auto from EXIF" />
+                </div>
+            </div>
+        </section>
+
+        @* ─── Submit ──────────────────────────────────────────────────── *@
+        <footer class="upload-foot">
+            <p class="upload-foot-hint">
+                ℹ️ Videos auto-compressed (~20× smaller). Photos resized to 2560 px.
+                GPS extracted from EXIF / video metadata.
+            </p>
+            <button class="us-btn submit"
+                    @onclick="Upload"
+                    disabled="@(isUploading || selectedFiles.Count == 0 || string.IsNullOrWhiteSpace(title))">
+                @if (isUploading)
+                {
+                    <span class="us-spinner"></span> <span>Uploading & compressing…</span>
+                }
+                else if (selectedFiles.Count == 0)
+                {
+                    <span>Select files first</span>
+                }
+                else
+                {
+                    <span>🚀 Upload @selectedFiles.Count file@(selectedFiles.Count == 1 ? "" : "s")</span>
+                }
+            </button>
+        </footer>
     </div>
 </div>
 
@@ -125,6 +206,21 @@
     private string aiMessage = "";
     private bool isGenerating = false;
 
+    private string[] _samples = Array.Empty<string>();
+
+    protected override void OnParametersSet()
+    {
+        // Category-specific keyword inspiration chips
+        _samples = Category switch
+        {
+            "Mountains" => new[] { "Tatra, sunrise, ridge", "alpine meadow, summit", "winter scramble" },
+            "Rock Climbing" => new[] { "granite slab, 6c+", "multi-pitch, Dolomites", "sport route Frankenjura" },
+            "Bouldering" => new[] { "Font 7b, sloper", "highball, mantle", "gym session, dyno" },
+            "Indoor Climbing" => new[] { "lead 7a, gym", "training day, fingerboard", "comp route, dyno" },
+            _ => new[] { "trip highlight", "outdoor weekend", "scenic route" }
+        };
+    }
+
     private void HandleFilesSelected(InputFileChangeEventArgs e)
     {
         selectedFiles = e.GetMultipleFiles(maximumFileCount: 50).ToList();
@@ -140,10 +236,9 @@
             var suggestion = await Ai.SuggestForUploadAsync(Category, keywords);
             if (suggestion is null)
             {
-                aiMessage = "Could not generate suggestions. Check API key or try again.";
+                aiMessage = "Could not generate. Check API key or try again.";
                 return;
             }
-            // Only overwrite empty fields so user edits aren't lost
             if (string.IsNullOrWhiteSpace(title)) title = suggestion.Title;
             if (string.IsNullOrWhiteSpace(description)) description = suggestion.Description;
             if (string.IsNullOrWhiteSpace(location) && !string.IsNullOrWhiteSpace(suggestion.Location))
@@ -151,7 +246,7 @@
             if (latitude is null && suggestion.Latitude.HasValue) latitude = suggestion.Latitude;
             if (longitude is null && suggestion.Longitude.HasValue) longitude = suggestion.Longitude;
 
-            aiMessage = "✓ Suggestions filled — review and edit as needed.";
+            aiMessage = "✓ Suggestions filled — review and tweak below.";
         }
         catch (Exception ex)
         {
@@ -205,6 +300,14 @@
     private bool IsImage(string n) =>
         Models.MediaItem.DetectType(n) == Models.MediaType.Image;
 
+    private static string FormatSize(long b)
+    {
+        if (b < 1024) return $"{b} B";
+        if (b < 1024 * 1024) return $"{b / 1024} KB";
+        if (b < 1024L * 1024 * 1024) return $"{b / (1024 * 1024)} MB";
+        return $"{Math.Round((double)b / (1024 * 1024 * 1024), 2)} GB";
+    }
+
     private void ResetForm()
     {
         selectedFiles = new List<IBrowserFile>();
@@ -219,68 +322,380 @@
 }
 
 <style>
-    .ai-block {
-        background: linear-gradient(135deg, rgba(102,126,234,0.10) 0%, rgba(118,75,162,0.10) 100%);
-        border: 1px solid rgba(102, 126, 234, 0.3);
-        border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 20px;
+    /* ── Shell ─────────────────────────────────────────────────────── */
+    .upload-shell {
+        max-width: 760px;
+        margin: 0 auto 30px;
+        padding: 0 16px;
+        animation: usFadeIn 0.32s ease-out;
     }
-    .ai-label {
-        display: block;
+    @@keyframes usFadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .upload-shell-card {
+        position: relative;
+        background: linear-gradient(180deg,
+            rgba(255,255,255,0.85) 0%,
+            rgba(255,255,255,0.65) 100%);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.6);
+        border-radius: 22px;
+        box-shadow:
+            0 24px 60px rgba(20, 30, 60, 0.18),
+            0 4px 12px rgba(20, 30, 60, 0.06),
+            inset 0 1px 0 rgba(255,255,255,0.85);
+        overflow: hidden;
+    }
+    .upload-shell-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 32%;
+        background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%);
+        pointer-events: none;
+    }
+    .upload-shell-card > * { position: relative; z-index: 1; }
+
+    /* ── Hero header ───────────────────────────────────────────────── */
+    .upload-hero {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 16px;
+        padding: 26px 30px 14px;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .upload-eyebrow {
+        margin: 0 0 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.72rem;
         font-weight: 700;
-        font-size: 0.9rem;
-        color: #5a4fb8;
-        margin-bottom: 8px;
+        color: #667eea;
     }
-    .ai-input-row {
-        display: flex;
-        gap: 10px;
-        align-items: stretch;
-        flex-wrap: wrap;
+    .upload-title {
+        margin: 0 0 6px;
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #1a202c;
+        line-height: 1.15;
     }
-    .ai-input {
-        flex: 1;
-        min-width: 220px;
-        padding: 10px 12px;
-        border: 2px solid rgba(102, 126, 234, 0.3);
-        border-radius: 8px;
+    .upload-sub {
+        margin: 0;
+        color: #4a5568;
+        font-size: 0.93rem;
+    }
+    .upload-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 5px 12px;
+        border-radius: 999px;
+        box-shadow: 0 4px 12px rgba(102,126,234,0.35);
+        white-space: nowrap;
+    }
+
+    /* ── Alert ─────────────────────────────────────────────────────── */
+    .upload-alert {
+        margin: 14px 22px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 0.92rem;
+        font-weight: 500;
+    }
+    .upload-alert.ok  { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+    .upload-alert.err { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+
+    /* ── Sections ──────────────────────────────────────────────────── */
+    .us-section {
+        padding: 18px 30px 22px;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .us-section:last-of-type { border-bottom: 0; }
+    .us-section.ai {
+        background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
+    }
+    .us-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 14px;
+    }
+    .us-section-icon {
+        flex-shrink: 0;
+        width: 36px; height: 36px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: white;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .us-section-title {
+        margin: 0 0 2px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #2d3748;
+    }
+    .us-section-sub {
+        margin: 0;
+        color: #718096;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+
+    /* ── Fields ────────────────────────────────────────────────────── */
+    .us-field { margin-bottom: 14px; }
+    .us-field:last-child { margin-bottom: 0; }
+    .us-field label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 6px;
+        letter-spacing: 0.02em;
+    }
+    .req { color: #e53e3e; }
+    .us-input {
+        width: 100%;
+        padding: 11px 14px;
+        background: rgba(255,255,255,0.85);
+        border: 2px solid rgba(102,126,234,0.18);
+        border-radius: 10px;
         font-size: 0.95rem;
         font-family: inherit;
-        background: rgba(255,255,255,0.85);
-        transition: border-color 0.18s, background 0.18s;
+        color: #2d3748;
+        box-sizing: border-box;
+        transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
     }
-    .ai-input:focus {
+    .us-input:focus {
         outline: none;
         border-color: #667eea;
         background: white;
-        box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+        box-shadow: 0 0 0 4px rgba(102,126,234,0.15);
     }
-    .ai-btn {
-        padding: 10px 18px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: 0;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 0.92rem;
-        cursor: pointer;
-        font-family: inherit;
-        transition: transform 0.18s, box-shadow 0.18s, filter 0.18s;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        white-space: nowrap;
+    textarea.us-input { resize: vertical; min-height: 70px; line-height: 1.5; }
+    .us-row { display: flex; gap: 12px; }
+    .us-row > .us-field { flex: 1; }
+
+    /* ── AI block ──────────────────────────────────────────────────── */
+    .ai-input-row {
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch;
     }
-    .ai-btn:hover:not(:disabled) {
-        transform: translateY(-1px);
-        filter: brightness(1.08);
-        box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35);
-    }
-    .ai-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ai-input { flex: 1; min-width: 220px; }
     .ai-msg {
-        margin: 8px 0 0;
+        margin: 10px 0 0;
         font-size: 0.85rem;
         color: #4a5568;
+    }
+    .ai-chip-row {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        margin-top: 12px;
+        align-items: center;
+    }
+    .ai-hint-label {
+        font-size: 0.78rem;
+        color: #718096;
+        font-weight: 600;
+    }
+    .ai-chip {
+        background: rgba(255,255,255,0.75);
+        border: 1px solid rgba(102,126,234,0.25);
+        color: #4a5568;
+        font-size: 0.78rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.18s, border-color 0.18s, color 0.18s;
+        font-family: inherit;
+    }
+    .ai-chip:hover {
+        background: white;
+        border-color: #667eea;
+        color: #5a4fb8;
+    }
+
+    /* ── Dropzone ──────────────────────────────────────────────────── */
+    .dropzone {
+        position: relative;
+        display: block;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.45));
+        border: 2px dashed rgba(102, 126, 234, 0.4);
+        border-radius: 14px;
+        padding: 28px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .dropzone:hover {
+        border-color: #667eea;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.7));
+        transform: translateY(-1px);
+    }
+    .dropzone.has-files {
+        border-style: solid;
+        border-color: rgba(102, 126, 234, 0.55);
+        background:
+            linear-gradient(180deg, rgba(102,126,234,0.08), rgba(118,75,162,0.06));
+    }
+    .dropzone-input {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        opacity: 0; cursor: pointer;
+    }
+    .dropzone-inner { pointer-events: none; }
+    .dropzone-icon {
+        font-size: 2.6rem;
+        line-height: 1;
+        color: #667eea;
+        margin-bottom: 10px;
+        animation: dzBob 2.6s ease-in-out infinite;
+    }
+    .dropzone-icon.small { font-size: 2rem; animation: none; }
+    @@keyframes dzBob {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-4px); }
+    }
+    .dropzone-title {
+        margin: 0 0 4px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #2d3748;
+    }
+    .dropzone-sub {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #718096;
+    }
+
+    /* ── File pills ────────────────────────────────────────────────── */
+    .file-pill-list {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .file-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: white;
+        border: 1px solid rgba(102,126,234,0.18);
+        border-radius: 999px;
+        padding: 5px 12px;
+        font-size: 0.82rem;
+        max-width: 100%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .file-pill-name {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #2d3748;
+    }
+    .file-pill-size {
+        color: #a0aec0;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Footer / submit ───────────────────────────────────────────── */
+    .upload-foot {
+        padding: 20px 30px 24px;
+        background:
+            linear-gradient(180deg, rgba(102,126,234,0.04), rgba(118,75,162,0.06));
+        border-top: 1px solid rgba(0,0,0,0.05);
+    }
+    .upload-foot-hint {
+        margin: 0 0 14px;
+        color: #718096;
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────── */
+    .us-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 8px;
+        padding: 12px 22px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border: 0; border-radius: 11px;
+        cursor: pointer;
+        background: white;
+        color: #2d3748;
+        transition: transform 0.18s, filter 0.18s, box-shadow 0.18s;
+    }
+    .us-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+    .us-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .us-btn.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+    }
+    .us-btn.glow {
+        position: relative; overflow: hidden;
+    }
+    .us-btn.glow::before {
+        content: '';
+        position: absolute;
+        top: -50%; left: -75%;
+        width: 50%; height: 200%;
+        background: linear-gradient(120deg,
+            rgba(255,255,255,0) 0%,
+            rgba(255,255,255,0.45) 50%,
+            rgba(255,255,255,0) 100%);
+        transform: rotate(20deg);
+        animation: glowSweep 3.4s ease-in-out infinite;
+        pointer-events: none;
+    }
+    @@keyframes glowSweep {
+        0%   { left: -75%; }
+        50%  { left: 130%; }
+        100% { left: 130%; }
+    }
+    .us-btn.submit {
+        width: 100%;
+        padding: 14px 22px;
+        font-size: 1rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow:
+            0 8px 24px rgba(102, 126, 234, 0.4),
+            inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .us-btn.submit:hover:not(:disabled) {
+        transform: translateY(-2px);
+        filter: brightness(1.08);
+        box-shadow:
+            0 12px 32px rgba(102, 126, 234, 0.5),
+            inset 0 1px 0 rgba(255,255,255,0.4);
+    }
+
+    .us-spinner {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: usSpin 0.7s linear infinite;
+    }
+    @@keyframes usSpin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile ────────────────────────────────────────────────────── */
+    @@media (max-width: 700px) {
+        .upload-hero { padding: 20px 18px 12px; flex-direction: column; }
+        .us-section { padding: 14px 18px 18px; }
+        .upload-foot { padding: 16px 18px 20px; }
+        .upload-title { font-size: 1.25rem; }
+        .us-row { flex-direction: column; gap: 0; }
+        .dropzone { padding: 22px 16px; }
+        .dropzone-icon { font-size: 2.2rem; }
+        .file-pill-name { max-width: 110px; }
     }
 </style>
