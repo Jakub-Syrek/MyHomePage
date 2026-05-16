@@ -28,36 +28,65 @@
         position: relative;
         flex: 0 0 280px;
         height: 200px;
-        border-radius: 12px;
+        border-radius: 14px;
         overflow: hidden;
         cursor: pointer;
-        padding: 0; border: 0;
-        background: #1a1a1a;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-        transition: transform 0.25s cubic-bezier(.2,.7,.2,1), box-shadow 0.25s;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        background: rgba(20, 20, 30, 0.6);
+        box-shadow:
+            0 6px 20px rgba(20, 30, 60, 0.18),
+            0 1px 3px rgba(20, 30, 60, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        transition: transform 0.28s cubic-bezier(.2,.7,.2,1),
+                    box-shadow 0.28s,
+                    border-color 0.28s;
     }
     .tile:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+        transform: translateY(-4px);
+        border-color: rgba(255, 255, 255, 0.65);
+        box-shadow:
+            0 14px 36px rgba(20, 30, 60, 0.28),
+            0 4px 10px rgba(20, 30, 60, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55);
     }
     .tile img, .tile video {
         width: 100%; height: 100%;
         object-fit: cover; display: block;
     }
+    /* Glass reflection — diagonal sheen across the top */
+    .tile::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            135deg,
+            rgba(255,255,255,0.30) 0%,
+            rgba(255,255,255,0.08) 28%,
+            rgba(255,255,255,0) 55%
+        );
+        pointer-events: none;
+        z-index: 2;
+        mix-blend-mode: overlay;
+        opacity: 0.85;
+    }
+    /* Subtle dark vignette toward bottom (helps caption legibility & depth) */
     .tile-overlay {
         position: absolute; inset: 0;
-        background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.25) 100%);
-        opacity: 0; transition: opacity 0.25s;
+        background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.35) 100%);
+        opacity: 0.55; transition: opacity 0.25s;
         pointer-events: none;
+        z-index: 3;
     }
-    .tile:hover .tile-overlay { opacity: 1; }
+    .tile:hover .tile-overlay { opacity: 0.85; }
     .tile-play {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        color: rgba(255,255,255,0.95);
+        color: rgba(255,255,255,0.96);
         font-size: 2.4rem;
-        text-shadow: 0 3px 12px rgba(0,0,0,0.5);
+        text-shadow: 0 3px 14px rgba(0,0,0,0.55), 0 0 2px rgba(0,0,0,0.4);
         pointer-events: none;
+        z-index: 4;
     }
 
     @@media (max-width: 600px) {
