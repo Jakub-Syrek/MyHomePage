@@ -149,6 +149,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        flex-shrink: 0;
         text-shadow:
             0 1px 0 rgba(255,255,255,0.18),
             0 2px 10px rgba(0,0,0,0.25);
@@ -175,10 +176,15 @@
 
     .nav-menu {
         display: flex;
-        gap: 30px;
+        gap: 20px;
         min-width: 0;
         flex: 1;
         justify-content: flex-end;
+        flex-wrap: nowrap;
+    }
+
+    @@media (max-width: 1280px) {
+        .nav-menu { gap: 14px; font-size: 0.95rem; }
     }
 
     .nav-menu a {
@@ -193,8 +199,8 @@
         opacity: 0.8;
     }
 
-    /* Mobile: horizontally scrollable nav */
-    @@media (max-width: 900px) {
+    /* Tablet / narrower desktop: horizontally scrollable nav */
+    @@media (max-width: 1100px) {
         .header-content {
             padding: 14px 16px;
             gap: 14px;
