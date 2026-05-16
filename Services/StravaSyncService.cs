@@ -45,6 +45,7 @@ public sealed class StravaSyncService : IStravaSyncService
     /// <inheritdoc />
     public async Task<OperationResult<Video>> ImportActivityAsync(
         long activityId,
+        bool enforcePrivacyFilter = true,
         CancellationToken cancellationToken = default)
     {
         var fetched = await FetchActivityAsync(activityId, cancellationToken);
@@ -52,7 +53,7 @@ public sealed class StravaSyncService : IStravaSyncService
             return OperationResult<Video>.Failure(fetched.Message);
 
         var activity = fetched.Value;
-        if (_options.ImportPublicOnly && !IsPublic(activity))
+        if (enforcePrivacyFilter && _options.ImportPublicOnly && !IsPublic(activity))
             return OperationResult<Video>.Failure(
                 $"Activity {activity.Id} is not public — skipping per ImportPublicOnly.");
 

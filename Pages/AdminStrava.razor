@@ -164,7 +164,7 @@
 
         try
         {
-            var result = await Sync.ImportActivityAsync(activityId);
+            var result = await Sync.ImportActivityAsync(activityId, enforcePrivacyFilter: false);
             _status = result.IsSuccess
                 ? $"Imported activity {activityId} as gallery item #{result.Value!.Id}."
                 : $"Import failed: {result.Message}";

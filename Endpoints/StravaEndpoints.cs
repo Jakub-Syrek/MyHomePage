@@ -125,7 +125,10 @@ public static class StravaEndpoints
                    || (payload.AspectType != "create" && payload.AspectType != "update");
         if (skip) return Results.Ok();
 
-        var result = await sync.ImportActivityAsync(payload.ObjectId, cancellationToken);
+        var result = await sync.ImportActivityAsync(
+            payload.ObjectId,
+            enforcePrivacyFilter: true,
+            cancellationToken);
         if (!result.IsSuccess)
             logger.LogWarning("Strava webhook import failed: {Message}", result.Message);
         return Results.Ok();
@@ -136,7 +139,12 @@ public static class StravaEndpoints
         [FromServices] IStravaSyncService sync,
         CancellationToken cancellationToken)
     {
-        var result = await sync.ImportActivityAsync(activityId, cancellationToken);
+        // Manual admin import: bypass the public-only privacy filter so the
+        // operator can pull private / followers-only activities too.
+        var result = await sync.ImportActivityAsync(
+            activityId,
+            enforcePrivacyFilter: false,
+            cancellationToken);
         return result.IsSuccess
             ? Results.Ok(new { ok = true, videoId = result.Value!.Id })
             : Results.BadRequest(new { ok = false, error = result.Message });

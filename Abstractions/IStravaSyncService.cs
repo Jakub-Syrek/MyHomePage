@@ -19,15 +19,16 @@ public interface IStravaSyncService
     /// placeholder item when no existing one matches.
     /// </summary>
     /// <param name="activityId">Strava activity identifier.</param>
+    /// <param name="enforcePrivacyFilter">
+    /// When true (the default for webhook callers), activities that fail the
+    /// <see cref="MyHomePage.Options.StravaOptions.ImportPublicOnly"/> check
+    /// are rejected. Manual admin imports pass false so the operator can
+    /// pull any activity they have read access to on Strava.
+    /// </param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>
-    /// Result wrapping the affected video (newly created or updated). Failure
-    /// when consent is missing, the activity cannot be fetched or it does
-    /// not satisfy the privacy filter configured in
-    /// <see cref="MyHomePage.Options.StravaOptions.ImportPublicOnly"/>.
-    /// </returns>
     Task<OperationResult<Video>> ImportActivityAsync(
         long activityId,
+        bool enforcePrivacyFilter = true,
         CancellationToken cancellationToken = default);
 
     /// <summary>
