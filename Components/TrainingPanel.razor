@@ -1,0 +1,148 @@
+@using MyHomePage.Models
+
+@if (Training is not null)
+{
+    <aside class="training-panel">
+        <header class="training-panel-header">
+            <h2>
+                <span class="training-panel-icon">@GetActivityIcon(Training.ActivityType)</span>
+                @Training.ActivityType
+            </h2>
+            @if (!string.IsNullOrEmpty(Training.ExternalUrl))
+            {
+                <a class="training-panel-source"
+                   href="@Training.ExternalUrl"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   title="Open in @SourceLabel">
+                    Open in @SourceLabel ↗
+                </a>
+            }
+        </header>
+
+        <dl class="training-panel-grid">
+            @if (Training.DistanceMeters is double dist)
+            {
+                <div><dt>Distance</dt><dd>@FormatDistance(dist)</dd></div>
+            }
+            <div><dt>Duration</dt><dd>@FormatDuration(Training.Duration)</dd></div>
+            @if (Training.AveragePaceSecondsPerKm is double pace)
+            {
+                <div><dt>Pace</dt><dd>@FormatPace(pace)</dd></div>
+            }
+            @if (Training.AverageHeartRate is int hr)
+            {
+                <div><dt>Avg HR</dt><dd>@hr bpm</dd></div>
+            }
+            @if (Training.MaxHeartRate is int hrMax)
+            {
+                <div><dt>Max HR</dt><dd>@hrMax bpm</dd></div>
+            }
+            @if (Training.ElevationGainMeters is double elev && elev > 0)
+            {
+                <div><dt>Elevation</dt><dd>↑ @($"{elev:F0} m")</dd></div>
+            }
+            @if (Training.Calories is int kcal)
+            {
+                <div><dt>Calories</dt><dd>@kcal kcal</dd></div>
+            }
+        </dl>
+    </aside>
+}
+
+<style>
+    .training-panel {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 100%);
+        backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 20px;
+        padding: 28px 32px;
+        margin-bottom: 24px;
+        box-shadow:
+            0 14px 40px rgba(20, 30, 60, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+    .training-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+    .training-panel-header h2 {
+        margin: 0;
+        color: #2c3e50;
+        font-size: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .training-panel-icon { font-size: 1.35rem; }
+    .training-panel-source {
+        color: #FC4C02;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.92rem;
+    }
+    .training-panel-source:hover { text-decoration: underline; }
+    .training-panel-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 14px 22px;
+        margin: 0;
+    }
+    .training-panel-grid > div { margin: 0; }
+    .training-panel-grid dt {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+    .training-panel-grid dd {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+</style>
+
+@code {
+    /// <summary>The training payload to render. Component renders nothing when null.</summary>
+    [Parameter] public TrainingData? Training { get; set; }
+
+    private string SourceLabel => Training?.Source switch
+    {
+        TrainingSource.Strava => "Strava",
+        TrainingSource.Garmin => "Garmin Connect",
+        _ => "source"
+    };
+
+    private static string GetActivityIcon(string activityType) => activityType.ToLowerInvariant() switch
+    {
+        var t when t.Contains("run") => "🏃",
+        var t when t.Contains("hike") => "🥾",
+        var t when t.Contains("climb") || t.Contains("bouldering") => "🧗",
+        var t when t.Contains("ride") || t.Contains("cycle") => "🚴",
+        var t when t.Contains("swim") => "🏊",
+        var t when t.Contains("weight") || t.Contains("crossfit") || t.Contains("workout") => "💪",
+        _ => "📊"
+    };
+
+    private static string FormatDistance(double meters) =>
+        meters >= 1000 ? $"{meters / 1000:F2} km" : $"{meters:F0} m";
+
+    private static string FormatDuration(TimeSpan duration) =>
+        duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
+            : $"{duration.Minutes}m {duration.Seconds:00}s";
+
+    private static string FormatPace(double secondsPerKm)
+    {
+        var minutes = (int)(secondsPerKm / 60);
+        var seconds = (int)Math.Round(secondsPerKm - (minutes * 60));
+        return $"{minutes}:{seconds:00} /km";
+    }
+}

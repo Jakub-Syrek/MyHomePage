@@ -135,6 +135,8 @@ else
                 </aside>
             }
 
+            <TrainingPanel Training="@_item.Training" />
+
             <div class="share-bar">
                 <button type="button" class="link-btn primary" @onclick="CopyPageLink">
                     @if (_pageCopied) { <span>✓ Page link copied</span> } else { <span>🔗 Copy page link</span> }

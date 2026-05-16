@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using MyHomePage.Abstractions;
+using MyHomePage.Endpoints;
 using MyHomePage.Options;
 using MyHomePage.Services;
 using Serilog;
@@ -106,6 +107,8 @@ try
     // ── Options pattern ───────────────────────────────────────────────────────
     builder.Services.Configure<VideoStorageOptions>(
         builder.Configuration.GetSection(VideoStorageOptions.SectionName));
+    builder.Services.Configure<StravaOptions>(
+        builder.Configuration.GetSection(StravaOptions.SectionName));
 
     // ── Dependency injection ──────────────────────────────────────────────────
     builder.Services.AddScoped<IFileStorageService, FileStorageService>();
@@ -125,6 +128,12 @@ try
     builder.Services.AddScoped<IVideoService, VideoService>();
     builder.Services.AddScoped<ICredentialRepository, CredentialService>();
     builder.Services.AddScoped<ILogReaderService, LogReaderService>();
+
+    // Strava integration — typed HttpClient + scoped collaborators
+    builder.Services.AddHttpClient<IStravaApiClient, StravaApiClient>();
+    builder.Services.AddScoped<IStravaTokenStore, JsonStravaTokenStore>();
+    builder.Services.AddScoped<StravaTokenService>();
+    builder.Services.AddScoped<IStravaSyncService, StravaSyncService>();
 
     // Forwarded headers — trust X-Forwarded-Proto/For so URLs use https:// when
     // the request came through Railway's TLS-terminating edge.
@@ -285,6 +294,7 @@ try
         version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown"
     }));
 
+    app.MapStravaEndpoints();
     app.MapRazorPages();
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");

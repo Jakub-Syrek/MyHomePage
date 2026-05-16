@@ -1,0 +1,174 @@
+@page "/admin/strava"
+@layout MainLayout
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MyHomePage.Abstractions
+@using MyHomePage.Models
+@inject IStravaTokenStore TokenStore
+@inject IStravaSyncService Sync
+@inject IJSRuntime Js
+
+<PageTitle>Strava - Admin</PageTitle>
+
+<div class="strava-admin">
+    <h1>Strava integration</h1>
+
+    @if (_loading)
+    {
+        <p>Loading…</p>
+    }
+    else if (_tokens is null)
+    {
+        <section class="card">
+            <h2>Not connected</h2>
+            <p>Connect a Strava account so new activities can be imported into the gallery.</p>
+            <a class="btn primary" href="/auth/strava/login">Connect Strava</a>
+        </section>
+    }
+    else
+    {
+        <section class="card">
+            <h2>Connected</h2>
+            <p>
+                <strong>Athlete id:</strong> @_tokens.AthleteId<br />
+                <strong>Token expires:</strong> @_tokens.ExpiresAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")<br />
+                <strong>Scope:</strong> <code>@_tokens.Scope</code>
+            </p>
+            <button class="btn secondary" @onclick="DisconnectAsync">Disconnect</button>
+        </section>
+
+        <section class="card">
+            <h2>Recent Strava activities</h2>
+            @if (_activitiesError is not null)
+            {
+                <p class="error">@_activitiesError</p>
+            }
+            else if (_activities.Count == 0)
+            {
+                <p>No activities loaded yet.</p>
+            }
+            else
+            {
+                <ul class="activity-list">
+                    @foreach (var activity in _activities)
+                    {
+                        <li>
+                            <div>
+                                <strong>@activity.Name</strong>
+                                <span class="muted"> · @activity.Type · @activity.StartDate.ToLocalTime():yyyy-MM-dd HH:mm</span>
+                            </div>
+                            <div class="actions">
+                                <button class="btn small primary"
+                                        @onclick="@(() => ImportAsync(activity.Id))"
+                                        disabled="@_busy">Import as gallery item</button>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+            <button class="btn secondary" @onclick="LoadActivitiesAsync" disabled="@_busy">
+                Refresh list
+            </button>
+        </section>
+
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <p class="status">@_status</p>
+        }
+    }
+</div>
+
+<style>
+    .strava-admin { max-width: 920px; margin: 60px auto; padding: 0 24px; }
+    .strava-admin h1 { font-size: 1.8rem; margin-bottom: 24px; color: #1f2937; }
+    .strava-admin .card {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 24px 28px;
+        margin-bottom: 18px;
+        box-shadow: 0 6px 18px rgba(20, 30, 60, 0.06);
+    }
+    .strava-admin .card h2 { margin-top: 0; color: #2c3e50; font-size: 1.15rem; }
+    .strava-admin .btn {
+        display: inline-block;
+        padding: 9px 18px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-weight: 600;
+        font-family: inherit;
+        font-size: 0.95rem;
+        text-decoration: none;
+    }
+    .strava-admin .btn.primary { background: #FC4C02; color: #fff; }
+    .strava-admin .btn.primary:hover { filter: brightness(1.08); }
+    .strava-admin .btn.secondary { background: #fff; color: #4a5568; border-color: #e2e8f0; }
+    .strava-admin .btn.small { padding: 6px 12px; font-size: 0.85rem; }
+    .strava-admin .activity-list { list-style: none; padding: 0; }
+    .strava-admin .activity-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f5f9;
+        flex-wrap: wrap;
+    }
+    .strava-admin .activity-list .muted { color: #6b7280; font-weight: 400; }
+    .strava-admin .status { color: #4a5568; margin-top: 12px; }
+    .strava-admin .error { color: #b91c1c; }
+</style>
+
+@code {
+    private StravaTokenSet? _tokens;
+    private IReadOnlyList<StravaActivity> _activities = Array.Empty<StravaActivity>();
+    private string? _activitiesError;
+    private string? _status;
+    private bool _loading = true;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tokens = await TokenStore.LoadAsync();
+        if (_tokens is not null) await LoadActivitiesAsync();
+        _loading = false;
+    }
+
+    private async Task LoadActivitiesAsync()
+    {
+        _busy = true;
+        _activitiesError = null;
+        var result = await Sync.ListRecentActivitiesAsync();
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _activities = result.Value;
+        }
+        else
+        {
+            _activitiesError = result.Message;
+            _activities = Array.Empty<StravaActivity>();
+        }
+        _busy = false;
+    }
+
+    private async Task ImportAsync(long activityId)
+    {
+        _busy = true;
+        _status = $"Importing activity {activityId}…";
+        var result = await Sync.ImportActivityAsync(activityId);
+        _status = result.IsSuccess
+            ? $"Imported activity {activityId} as gallery item #{result.Value!.Id}."
+            : $"Import failed: {result.Message}";
+        _busy = false;
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", "Disconnect Strava? Tokens will be removed."))
+            return;
+        await TokenStore.DeleteAsync();
+        _tokens = null;
+        _activities = Array.Empty<StravaActivity>();
+        _status = "Strava disconnected.";
+    }
+}
