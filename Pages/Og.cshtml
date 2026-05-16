@@ -54,9 +54,7 @@
     <meta name="description" content="@Model.Description" />
     <link rel="canonical" href="@Model.CanonicalUrl" />
 
-    @* ── Auto-redirect humans to the interactive Blazor page ── *@
-    <meta http-equiv="refresh" content="0;url=@Model.CanonicalUrl" />
-
+    @* Human visitors: JS redirect (scrapers don't execute JS, so they won't follow it) *@
     <style>
         body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
              background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;
@@ -79,8 +77,13 @@
         }
         <h1>@Model.Title</h1>
         <p>@Model.Description</p>
-        <a href="@Model.CanonicalUrl">Open full gallery →</a>
+        <a href="@Model.CanonicalUrl" id="continue">Open full gallery →</a>
         <small>Redirecting…</small>
     </div>
+    <script>
+        // JS-only redirect — Facebook / WhatsApp / Twitter scrapers won't run this,
+        // so they stay on the static OG page. Humans get bounced to the full app.
+        setTimeout(function(){ window.location.replace(document.getElementById('continue').href); }, 200);
+    </script>
 </body>
 </html>
