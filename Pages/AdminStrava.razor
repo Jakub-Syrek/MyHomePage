@@ -51,14 +51,16 @@
                 <ul class="activity-list">
                     @foreach (var activity in _activities)
                     {
+                        var activityId = activity.Id;
+                        var localStart = activity.StartDate.ToLocalTime();
                         <li>
                             <div>
                                 <strong>@activity.Name</strong>
-                                <span class="muted"> · @activity.Type · @activity.StartDate.ToLocalTime():yyyy-MM-dd HH:mm</span>
+                                <span class="muted"> · @activity.Type · @localStart.ToString("yyyy-MM-dd HH:mm")</span>
                             </div>
                             <div class="actions">
                                 <button class="btn small primary"
-                                        @onclick="@(() => ImportAsync(activity.Id))"
+                                        @onclick="() => ImportAsync(activityId)"
                                         disabled="@_busy">Import as gallery item</button>
                             </div>
                         </li>
@@ -138,6 +140,8 @@
     {
         _busy = true;
         _activitiesError = null;
+        StateHasChanged();
+
         var result = await Sync.ListRecentActivitiesAsync();
         if (result.IsSuccess && result.Value is not null)
         {
@@ -149,17 +153,31 @@
             _activities = Array.Empty<StravaActivity>();
         }
         _busy = false;
+        StateHasChanged();
     }
 
     private async Task ImportAsync(long activityId)
     {
         _busy = true;
         _status = $"Importing activity {activityId}…";
-        var result = await Sync.ImportActivityAsync(activityId);
-        _status = result.IsSuccess
-            ? $"Imported activity {activityId} as gallery item #{result.Value!.Id}."
-            : $"Import failed: {result.Message}";
-        _busy = false;
+        StateHasChanged();
+
+        try
+        {
+            var result = await Sync.ImportActivityAsync(activityId);
+            _status = result.IsSuccess
+                ? $"Imported activity {activityId} as gallery item #{result.Value!.Id}."
+                : $"Import failed: {result.Message}";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Import threw: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task DisconnectAsync()
