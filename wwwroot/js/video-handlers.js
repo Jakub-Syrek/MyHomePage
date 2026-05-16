@@ -35,3 +35,18 @@ window.startVideoHandlerInterval = function() {
     window.setupVideoHandlers();
     setInterval(window.setupVideoHandlers, 500);
 };
+
+window.appShareSupported = function () {
+    return typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+};
+
+window.appShare = async function (title, text, url) {
+    if (!window.appShareSupported()) return false;
+    try {
+        await navigator.share({ title: title, text: text, url: url });
+        return true;
+    } catch (e) {
+        // User cancelled or share failed — silently swallow
+        return false;
+    }
+};

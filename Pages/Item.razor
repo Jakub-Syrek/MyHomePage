@@ -8,7 +8,7 @@
 
 @if (_item is not null)
 {
-    var pageUrl = Nav.ToAbsoluteUri($"/item/{Id}").ToString();
+    var pageUrl = _pageUrl;
     var firstImage = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Image);
     var firstVideo = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Video);
     var ogImageUrl = firstImage is not null
@@ -139,6 +139,44 @@ else
                 <button type="button" class="link-btn primary" @onclick="CopyPageLink">
                     @if (_pageCopied) { <span>✓ Page link copied</span> } else { <span>🔗 Copy page link</span> }
                 </button>
+                <a href="@($"https://www.facebook.com/sharer/sharer.php?u={Uri.EscapeDataString(_pageUrl)}")"
+                   target="_blank" rel="noopener noreferrer"
+                   class="link-btn share-fb"
+                   title="Share on Facebook">
+                    <span class="share-icon">f</span> Share on Facebook
+                </a>
+                <a href="@($"https://wa.me/?text={Uri.EscapeDataString($"{_item.Title} — {_pageUrl}")}")"
+                   target="_blank" rel="noopener noreferrer"
+                   class="link-btn share-wa"
+                   title="Share on WhatsApp">
+                    <span class="share-icon">📱</span> WhatsApp
+                </a>
+                <a href="@($"https://twitter.com/intent/tweet?text={Uri.EscapeDataString(_item.Title)}&url={Uri.EscapeDataString(_pageUrl)}")"
+                   target="_blank" rel="noopener noreferrer"
+                   class="link-btn share-x"
+                   title="Share on X / Twitter">
+                    <span class="share-icon">𝕏</span> Share on X
+                </a>
+                @if (_nativeShareSupported)
+                {
+                    <button type="button" class="link-btn share-native" @onclick="NativeShare" title="Open device share menu">
+                        <span class="share-icon">↗</span> Share…
+                    </button>
+                }
+                @{
+                    var primary = _media.FirstOrDefault();
+                }
+                @if (primary is not null)
+                {
+                    var dlUrl = $"/videos/{Id}/{primary.FileName}";
+                    var dlLabel = primary.Type == MediaType.Video ? "Download video" : "Download photo";
+                    <a href="@dlUrl"
+                       download="@primary.FileName"
+                       class="link-btn share-dl"
+                       title="Download the media file so you can upload it as a native photo/video post on Facebook">
+                        <span class="share-icon">⬇</span> @dlLabel
+                    </a>
+                }
                 <AuthorizeView>
                     <Authorized>
                         <a href="/edit-video/@_item.Id" class="link-btn">✏️ Edit</a>
@@ -346,6 +384,25 @@ else
         border-color: transparent;
     }
     .link-btn.primary:hover { filter: brightness(1.08); color: white; }
+
+    .share-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px;
+        border-radius: 4px;
+        font-weight: 800;
+        font-size: 0.85rem;
+        line-height: 1;
+    }
+    .link-btn.share-fb       { background:#1877F2; color:#fff; border-color:transparent; }
+    .link-btn.share-fb:hover { background:#0e63d3; color:#fff; }
+    .link-btn.share-wa       { background:#25D366; color:#fff; border-color:transparent; }
+    .link-btn.share-wa:hover { background:#1ebe5a; color:#fff; }
+    .link-btn.share-x        { background:#000;    color:#fff; border-color:transparent; }
+    .link-btn.share-x:hover  { background:#222;    color:#fff; }
+    .link-btn.share-native       { background:#4a5568; color:#fff; border-color:transparent; }
+    .link-btn.share-native:hover { background:#2d3748; color:#fff; }
+    .link-btn.share-dl           { background:#0ea371; color:#fff; border-color:transparent; }
+    .link-btn.share-dl:hover     { background:#08825a; color:#fff; }
 </style>
 
 @code {
@@ -356,15 +413,18 @@ else
 
     private Video? _item;
     private IReadOnlyList<MediaItem> _media = Array.Empty<MediaItem>();
+    private string _pageUrl = "";
     private string _backUrl = "/";
     private string _backLabel = "Home";
     private string _loadMessage = "Loading…";
     private bool _pageCopied;
+    private bool _nativeShareSupported;
     private Lightbox? _lightbox;
     private string? _autoOpened;
 
     protected override async Task OnParametersSetAsync()
     {
+        _pageUrl = Nav.ToAbsoluteUri($"/item/{Id}").ToString();
         _item = await VideoService.GetVideoByIdAsync(Id);
         if (_item is null)
         {
@@ -381,11 +441,29 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !string.IsNullOrEmpty(MediaQuery) && _lightbox is not null && _autoOpened != MediaQuery)
+        if (firstRender)
         {
-            _autoOpened = MediaQuery;
-            await _lightbox.OpenByFileNameAsync(MediaQuery);
+            try
+            {
+                _nativeShareSupported = await JS.InvokeAsync<bool>("appShareSupported");
+                if (_nativeShareSupported) StateHasChanged();
+            }
+            catch { /* JS not ready — ignore */ }
+
+            if (!string.IsNullOrEmpty(MediaQuery) && _lightbox is not null && _autoOpened != MediaQuery)
+            {
+                _autoOpened = MediaQuery;
+                await _lightbox.OpenByFileNameAsync(MediaQuery);
+            }
         }
+    }
+
+    private async Task NativeShare()
+    {
+        if (_item is null) return;
+        var descShort = (_item.Description ?? "").Replace("\n", " ").Replace("\r", " ").Trim();
+        if (descShort.Length > 200) descShort = descShort.Substring(0, 200) + "…";
+        await JS.InvokeAsync<bool>("appShare", _item.Title, descShort, _pageUrl);
     }
 
     private async Task OpenLightbox(int idx)
