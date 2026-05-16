@@ -29,13 +29,24 @@
     </div>
 
     @* ── Sliding tab rail (sits just below the header, sticky) ──────
-       Designed to accommodate multiple tabs in the future (Filter, View,
-       Search …). Each tab is a slim handle hanging from the header. *@
+       Each tab is a slim handle hanging from the header. Tabs are
+       mutually exclusive (opening one closes the other).
+       Two tabs: DETAILS (mobile-only — replaces the hero on small screens)
+                 FILTER (date range + sort) *@
     <div class="tabs-rail">
         <div class="tabs-strip">
+            @* Details tab — shown on mobile only (desktop has full hero bar above) *@
             <button type="button"
-                    class="tab-handle @(_showFilter ? "open" : "")"
-                    @onclick="ToggleFilter"
+                    class="tab-handle mobile-only @(_openTab == "details" ? "open" : "")"
+                    @onclick="@(() => ToggleTab("details"))"
+                    title="Details">
+                <span class="th-glyph">⌃</span>
+                <span class="th-label">@Category</span>
+            </button>
+
+            <button type="button"
+                    class="tab-handle @(_openTab == "filter" ? "open" : "")"
+                    @onclick="@(() => ToggleTab("filter"))"
                     title="Sort &amp; Filter">
                 <span class="th-glyph">⌃</span>
                 <span class="th-label">Filter</span>
@@ -44,46 +55,72 @@
                     <span class="th-dot" title="Custom filter/sort active"></span>
                 }
             </button>
-            @* Place additional tab handles here in the future *@
         </div>
 
-        <div class="tab-panel @(_showFilter ? "open" : "")">
-            <div class="filter-bar">
-                <div class="filter-group">
-                    <label>From</label>
-                    <input type="date" @bind="_dateFrom" @bind:event="oninput" />
+        <div class="tab-panel @(_openTab != null ? "open" : "")">
+            @* Subtle video backdrop in the panel — same loop as the header *@
+            <video class="tab-panel-bg" autoplay muted loop playsinline preload="auto"
+                   poster="/videos/header/header-bg.jpg" aria-hidden="true">
+                <source src="/videos/header/header-bg.mp4" type="video/mp4" />
+            </video>
+
+            @if (_openTab == "details")
+            {
+                <div class="tab-panel-inner">
+                    <div class="details-bar">
+                        <button class="btn-back" @onclick="GoHome">← Back</button>
+                        <h2 class="details-title">@Category</h2>
+                        <AuthorizeView>
+                            <Authorized>
+                                <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
+                                    @if (showUpload) { <span>✕ Close</span> } else { <span>+ Upload Media</span> }
+                                </button>
+                            </Authorized>
+                        </AuthorizeView>
+                    </div>
                 </div>
-                <div class="filter-group">
-                    <label>To</label>
-                    <input type="date" @bind="_dateTo" @bind:event="oninput" />
+            }
+            else if (_openTab == "filter")
+            {
+                <div class="tab-panel-inner">
+                    <div class="filter-bar">
+                        <div class="filter-group">
+                            <label>From</label>
+                            <input type="date" @bind="_dateFrom" @bind:event="oninput" />
+                        </div>
+                        <div class="filter-group">
+                            <label>To</label>
+                            <input type="date" @bind="_dateTo" @bind:event="oninput" />
+                        </div>
+                        <button type="button" class="filter-btn"
+                                @onclick="ToggleSort"
+                                title="Toggle sort order">
+                            @if (_sortDescending) { <span>↓ Newest first</span> } else { <span>↑ Oldest first</span> }
+                        </button>
+                        <button type="button" class="filter-btn ghost"
+                                @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-1); _dateTo = DateTime.Today; })"
+                                title="Reset to yesterday → today">
+                            📅 Last 24h
+                        </button>
+                        <button type="button" class="filter-btn ghost"
+                                @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-7); _dateTo = DateTime.Today; })"
+                                title="Last 7 days">
+                            📆 Week
+                        </button>
+                        <button type="button" class="filter-btn ghost"
+                                @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-30); _dateTo = DateTime.Today; })"
+                                title="Last 30 days">
+                            🗓️ Month
+                        </button>
+                        <button type="button" class="filter-btn ghost"
+                                @onclick="ClearFilter"
+                                disabled="@(!HasFilter)">
+                            ✕ All time
+                        </button>
+                        <span class="filter-stats">@FilteredVideos.Count / @(videos?.Count ?? 0) shown</span>
+                    </div>
                 </div>
-                <button type="button" class="filter-btn"
-                        @onclick="ToggleSort"
-                        title="Toggle sort order">
-                    @if (_sortDescending) { <span>↓ Newest first</span> } else { <span>↑ Oldest first</span> }
-                </button>
-                <button type="button" class="filter-btn ghost"
-                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-1); _dateTo = DateTime.Today; })"
-                        title="Reset to yesterday → today">
-                    📅 Last 24h
-                </button>
-                <button type="button" class="filter-btn ghost"
-                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-7); _dateTo = DateTime.Today; })"
-                        title="Last 7 days">
-                    📆 Week
-                </button>
-                <button type="button" class="filter-btn ghost"
-                        @onclick="@(() => { _dateFrom = DateTime.Today.AddDays(-30); _dateTo = DateTime.Today; })"
-                        title="Last 30 days">
-                    🗓️ Month
-                </button>
-                <button type="button" class="filter-btn ghost"
-                        @onclick="ClearFilter"
-                        disabled="@(!HasFilter)">
-                    ✕ All time
-                </button>
-                <span class="filter-stats">@FilteredVideos.Count / @(videos?.Count ?? 0) shown</span>
-            </div>
+            }
         </div>
     </div>
 
@@ -309,6 +346,7 @@
 
     /* Sliding panel */
     .tab-panel {
+        position: relative;
         pointer-events: auto;
         max-height: 0;
         overflow: hidden;
@@ -317,11 +355,69 @@
                     margin 0.22s ease;
         opacity: 0;
         margin-top: 0;
+        border-radius: 14px;
     }
     .tab-panel.open {
-        max-height: 280px;
+        max-height: 320px;
         opacity: 1;
         margin-top: 4px;
+    }
+    /* Video backdrop inside the open panel (same loop as header) */
+    .tab-panel-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 60%;
+        z-index: 0;
+        opacity: 0.55;
+        pointer-events: none;
+        border-radius: 14px;
+        filter: saturate(115%) brightness(85%);
+    }
+    .tab-panel-inner {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Details bar (inside the details tab) */
+    .details-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.32) 100%);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.6);
+        border-radius: 14px;
+        box-shadow:
+            0 8px 28px rgba(20, 30, 60, 0.12),
+            inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+    .details-title {
+        flex: 1;
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #2c3e50;
+        text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+    }
+
+    /* Tab visibility per breakpoint */
+    .tab-handle.mobile-only { display: none; }
+    @@media (max-width: 700px) {
+        .tab-handle.mobile-only { display: inline-flex; }
+        /* hide the big hero on mobile — its content lives in the Details tab */
+        .category-hero { display: none; }
+        .category-content { padding-top: 10px; }
+        .filter-bar { padding: 10px 12px; gap: 8px; }
+        .details-bar { padding: 10px 12px; gap: 8px; }
+        .details-title { font-size: 1rem; }
+        .btn-upload { padding: 8px 14px; font-size: 0.85rem; }
+        .btn-back { padding: 6px 10px; font-size: 0.82rem; }
     }
 
     /* ── Filter bar (glossy) ────────────────────────────────────────── */
@@ -538,9 +634,12 @@
     private DateTime? _dateFrom = DateTime.Today.AddDays(-1);
     private DateTime? _dateTo = DateTime.Today;
     private bool _sortDescending = true; // newest first by default
-    private bool _showFilter = false; // slide-down filter panel hidden by default
 
-    private void ToggleFilter() => _showFilter = !_showFilter;
+    /// <summary>Currently open tab ("details", "filter", or null = none).</summary>
+    private string? _openTab = null;
+
+    private void ToggleTab(string name) =>
+        _openTab = (_openTab == name) ? null : name;
 
     private Lightbox? _lightbox;
     private int _currentItemId;
