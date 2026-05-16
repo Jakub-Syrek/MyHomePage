@@ -141,18 +141,24 @@ try
     // Must come BEFORE any middleware that reads the scheme (auth, static files, etc.)
     app.UseForwardedHeaders();
 
-    // Rewrite /item/{id} → /og/{id} for social-media scrapers (FB, Twitter, …)
-    // so they see proper server-rendered Open Graph meta tags instead of
-    // empty Blazor-prerendered output.
+    // FIRST middleware — flag scraper traffic and rewrite /item/{id} → /og/{id}
+    // for them. Sets context.Items["IsScraper"]=true so everything downstream
+    // can opt-out of suspicious-traffic handling.
     app.UseScraperRewrite();
+
+    // Helper: was this request marked as scraper traffic by the rewrite middleware?
+    static bool IsScraperRequest(HttpContext ctx) =>
+        ctx.Items.TryGetValue(MyHomePage.Services.ScraperRewriteMiddleware.ContextKey, out var v)
+        && v is true;
 
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Error");
-        app.UseHsts();
+        // HSTS only for human browsers — some social scrapers refuse to follow http→https
+        app.UseWhen(ctx => !IsScraperRequest(ctx), branch => branch.UseHsts());
         // Railway terminates TLS at the edge — don't redirect there
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT")))
-            app.UseHttpsRedirection();
+            app.UseWhen(ctx => !IsScraperRequest(ctx), branch => branch.UseHttpsRedirection());
     }
 
     app.UseResponseCompression();
@@ -262,9 +268,14 @@ try
         }
     });
 
-    app.UseAuthentication();
-    app.UseAuthorization();
-    app.UseAntiforgery();
+    // Skip auth + antiforgery entirely for scraper traffic — they only hit
+    // public preview routes (/og/{id}), no cookies to validate, no forms.
+    app.UseWhen(ctx => !IsScraperRequest(ctx), branch =>
+    {
+        branch.UseAuthentication();
+        branch.UseAuthorization();
+        branch.UseAntiforgery();
+    });
 
     // ── Health endpoint for Railway / monitoring ──────────────────────────────
     app.MapGet("/health", () => Results.Ok(new

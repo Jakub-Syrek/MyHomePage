@@ -3,51 +3,68 @@ using System.Text.RegularExpressions;
 namespace MyHomePage.Services;
 
 /// <summary>
-/// When a social-media scraper (Facebook, Twitter, LinkedIn, Discord, etc.)
-/// requests <c>/item/{id}</c>, internally rewrite the path to <c>/og/{id}</c>
-/// — a static, server-rendered Razor Page with proper Open Graph meta tags.
+/// Bullet-proof handling of social-media scrapers (Facebook, WhatsApp,
+/// Twitter, LinkedIn, Discord, Slack, etc.).
 ///
-/// Why: Blazor Server's &lt;HeadContent&gt; is rendered client-side after the
-/// SignalR connection; scrapers don't execute JS and see only the default
-/// head from _Host.cshtml, which breaks rich previews.
+/// Goals:
+///   • Never treat a known scraper as suspicious — bypass rate-limiters,
+///     auth requirements and antiforgery for their requests.
+///   • For GET /item/{id} → internally rewrite to /og/{id} so they see a
+///     server-rendered Open Graph HTML document (Blazor's HeadContent is
+///     invisible to non-JS clients).
+///   • Strip HSTS / compression / restrictive cache headers from the
+///     response so the scraper can store the page comfortably.
 ///
-/// The browser's URL stays /item/{id} for both users and bots (rewrite, not
-/// redirect), so existing links keep working.
+/// Other middlewares can opt-in by checking
+///   <c>context.Items["IsScraper"]</c>.
 /// </summary>
 public sealed class ScraperRewriteMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ScraperRewriteMiddleware> _logger;
 
-    // Match /item/{id} (digits only). Optional trailing slash / query string.
+    public const string ContextKey = "IsScraper";
+
+    // Match /item/{id} (digits only). Optional trailing slash / query.
     private static readonly Regex ItemRoute = new(
         @"^/item/(\d+)/?$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // Known scraper user-agents. Lower-case substring match.
+    // Facebook / WhatsApp explicitly listed at the top so they're impossible
+    // to overlook — the rest follow alphabetically-ish.
     private static readonly string[] ScraperSubstrings =
     {
+        // === Meta family ===========
         "facebookexternalhit",
         "facebookcatalog",
         "meta-externalagent",
         "facebot",
+        "whatsapp",
+        "instagram",            // some IG previews use Instagram in UA
+        // === Other socials =========
         "twitterbot",
         "linkedinbot",
         "slackbot",
+        "slackbot-linkexpanding",
         "discordbot",
         "telegrambot",
-        "whatsapp",
         "skypeuripreview",
         "pinterestbot",
-        "embedly",
         "redditbot",
         "vkshare",
-        "applebot",          // iMessage previews
+        // === Apple / messaging =====
+        "applebot",
+        // === Aggregators ===========
+        "embedly",
+        "iframely",
+        // === Search engines ========
         "google-inspectiontool",
-        "googlebot",         // SEO + previews
+        "googlebot",
         "bingbot",
         "duckduckbot",
-        "yahoo!slurp"
+        "yahoo!slurp",
+        "yandexbot"
     };
 
     public ScraperRewriteMiddleware(RequestDelegate next, ILogger<ScraperRewriteMiddleware> logger)
@@ -58,24 +75,60 @@ public sealed class ScraperRewriteMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var path = context.Request.Path.Value;
-        if (path is not null && context.Request.Method == "GET")
+        var ua = context.Request.Headers.UserAgent.ToString();
+        var isScraper = IsScraper(ua);
+
+        if (isScraper)
         {
-            var match = ItemRoute.Match(path);
-            if (match.Success && IsScraper(context.Request.Headers.UserAgent.ToString()))
+            // Tag the request so any later middleware can short-circuit
+            // (e.g. skip auth, skip rate limit) if it knows about this flag.
+            context.Items[ContextKey] = true;
+
+            // GET /item/{id} → rewrite to server-rendered /og/{id}
+            var path = context.Request.Path.Value;
+            if (path is not null && context.Request.Method == "GET")
             {
-                var id = match.Groups[1].Value;
-                _logger.LogInformation(
-                    "Scraper detected ({UA}) — rewriting {From} → /og/{Id}",
-                    context.Request.Headers.UserAgent.ToString(), path, id);
-                context.Request.Path = $"/og/{id}";
+                var match = ItemRoute.Match(path);
+                if (match.Success)
+                {
+                    var id = match.Groups[1].Value;
+                    _logger.LogInformation(
+                        "Scraper detected ({UA}) — rewriting {From} → /og/{Id}",
+                        ua, path, id);
+                    context.Request.Path = $"/og/{id}";
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Scraper pass-through ({UA}) on {Path}", ua, path);
+                }
             }
+
+            // Make sure the response we send back is scraper-friendly:
+            //  - No HSTS (some old crawlers choke on it)
+            //  - No restrictive Cache-Control
+            //  - Plain text/html content type respected
+            //  - Allow indexing
+            context.Response.OnStarting(() =>
+            {
+                // Robots OK
+                context.Response.Headers["X-Robots-Tag"] = "all";
+                // Friendly cache (10 min) — but only if nothing more specific was set by the page
+                if (!context.Response.Headers.ContainsKey("Cache-Control")
+                    || context.Response.Headers["Cache-Control"].ToString().Contains("no-store"))
+                {
+                    context.Response.Headers["Cache-Control"] = "public, max-age=600";
+                }
+                // HSTS is harmless for browsers but some scrapers refuse to follow http→https — remove it.
+                context.Response.Headers.Remove("Strict-Transport-Security");
+                return Task.CompletedTask;
+            });
         }
 
         await _next(context);
     }
 
-    private static bool IsScraper(string userAgent)
+    public static bool IsScraper(string? userAgent)
     {
         if (string.IsNullOrWhiteSpace(userAgent)) return false;
         var lower = userAgent.ToLowerInvariant();
