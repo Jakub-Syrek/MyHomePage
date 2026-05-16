@@ -59,7 +59,7 @@
         top: 0;
         z-index: 100;
         background:
-            linear-gradient(135deg, rgba(102, 126, 234, 0.78) 0%, rgba(118, 75, 162, 0.78) 100%);
+            linear-gradient(135deg, rgba(102, 126, 234, 0.65) 0%, rgba(118, 75, 162, 0.65) 100%);
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         color: white;
@@ -108,17 +108,20 @@
     }
     .app-header > * { position: relative; z-index: 1; }
 
-    /* Looping video as the bottom-most layer of the header */
+    /* Looping video as the bottom-most layer of the header.
+       File ships the full Midjourney frame; CSS cover-crops to the
+       header bar and biases the visible slice toward the mountains
+       (which sit slightly below the centre of the original frame). */
     .header-bg-video {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         object-fit: cover;
+        object-position: center 60%;
         z-index: 0;
-        opacity: 0.6;
+        opacity: 0.75;
         pointer-events: none;
-        /* very mild filter — Midjourney clip already has blur baked in */
         filter: saturate(115%) contrast(95%);
     }
 
