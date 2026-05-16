@@ -83,3 +83,5 @@ logs/
 # Diagnostic temp files
 deploy-logs.txt
 runtime-logs.txt
+
+ai-logs.txt
