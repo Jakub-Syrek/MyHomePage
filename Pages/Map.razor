@@ -14,10 +14,27 @@
         @if (_videos is not null)
         {
             <p class="map-stats">
+                <strong>@FilteredCount</strong> shown /
                 <strong>@(_videos.Count(v => v.HasCoordinates))</strong> located /
-                <strong>@_videos.Count</strong> total items
+                <strong>@_videos.Count</strong> total
             </p>
         }
+    </div>
+
+    <div class="map-filter-bar">
+        <div class="map-fg">
+            <label>From</label>
+            <input type="date" @bind="_dateFrom" @bind:event="oninput" @bind:after="ResetMap" />
+        </div>
+        <div class="map-fg">
+            <label>To</label>
+            <input type="date" @bind="_dateTo" @bind:event="oninput" @bind:after="ResetMap" />
+        </div>
+        <button type="button" class="map-filter-btn ghost"
+                @onclick="ClearFilter"
+                disabled="@(!_dateFrom.HasValue && !_dateTo.HasValue)">
+            ✕ Clear filter
+        </button>
     </div>
 
     <div id="adventures-map" class="map-canvas"></div>
@@ -57,6 +74,37 @@
         display: inline-block;
         box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     }
+    .map-filter-bar {
+        display: flex; gap: 12px; flex-wrap: wrap; align-items: end;
+        margin: 14px 0;
+        padding: 12px 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.32) 100%);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.55);
+        border-radius: 14px;
+        box-shadow: 0 8px 28px rgba(20, 30, 60, 0.12), inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+    .map-fg { display: flex; flex-direction: column; gap: 2px; }
+    .map-fg label {
+        font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.05em; color: #4a5568;
+    }
+    .map-fg input[type="date"] {
+        padding: 6px 10px; border-radius: 8px;
+        border: 1px solid rgba(102,126,234,0.25);
+        background: rgba(255,255,255,0.9);
+        font-size: 0.9rem;
+    }
+    .map-filter-btn {
+        padding: 9px 14px; border-radius: 10px;
+        background: rgba(255,255,255,0.85);
+        color: #4a5568;
+        border: 1px solid rgba(0,0,0,0.08);
+        font-weight: 600; font-size: 0.88rem;
+        cursor: pointer;
+    }
+    .map-filter-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .map-canvas {
         height: 70vh;
         min-height: 500px;
@@ -76,6 +124,33 @@
     private IReadOnlyList<Video>? _videos;
     private bool _scriptLoaded;
     private bool _mapInitialized;
+
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+
+    private IEnumerable<Video> Located =>
+        _videos?.Where(v => v.HasCoordinates) ?? Enumerable.Empty<Video>();
+
+    private IEnumerable<Video> FilteredLocated
+    {
+        get
+        {
+            var q = Located;
+            if (_dateFrom.HasValue) q = q.Where(v => v.UploadedAt.Date >= _dateFrom.Value.Date);
+            if (_dateTo.HasValue) q = q.Where(v => v.UploadedAt.Date <= _dateTo.Value.Date);
+            return q;
+        }
+    }
+    private int FilteredCount => FilteredLocated.Count();
+
+    private void ClearFilter()
+    {
+        _dateFrom = null;
+        _dateTo = null;
+        ResetMap();
+    }
+
+    private void ResetMap() => _mapInitialized = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -102,8 +177,7 @@
 
         if (!_mapInitialized)
         {
-            var markers = _videos
-                .Where(v => v.HasCoordinates)
+            var markers = FilteredLocated
                 .Select(v => new
                 {
                     id = v.Id,
@@ -115,9 +189,7 @@
                     lon = v.Longitude!.Value,
                     thumb = $"/videos/{v.Id}/{v.GetAllMedia().First().FileName}",
                     isImage = v.GetAllMedia().First().Type == MediaType.Image,
-                    url = !string.IsNullOrEmpty(v.Category)
-                        ? VideoCategories.GetUrl(v.Category)
-                        : "/"
+                    url = $"/item/{v.Id}"
                 })
                 .ToArray();
 
@@ -129,11 +201,14 @@
                     function init() {{
                         if (typeof L === 'undefined') {{ setTimeout(init, 100); return; }}
                         const el = document.getElementById('adventures-map');
-                        if (!el || el.__init) return;
+                        if (!el) return;
+                        if (el.__map) {{ try {{ el.__map.remove(); }} catch(e){{}} el.__map = null; }}
+                        el.innerHTML = '';
                         el.__init = true;
 
                         const markers = {markersJson};
                         const map = L.map('adventures-map').setView([50, 19], 6);
+                        el.__map = map;
                         L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
                             maxZoom: 19,
                             attribution: '© OpenStreetMap contributors'
