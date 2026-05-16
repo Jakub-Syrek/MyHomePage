@@ -3,22 +3,27 @@
 [![.NET Build & Test](https://github.com/Jakub-Syrek/MyHomePage/workflows/.NET%20Build%20%26%20Test/badge.svg)](https://github.com/Jakub-Syrek/MyHomePage/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue)](https://dotnet.microsoft.com/download)
-[![Tests: 24/24](https://img.shields.io/badge/Tests-24%2F24%20passing-brightgreen)](MyHomePage.Tests)
+[![Tests: 43/43](https://img.shields.io/badge/Tests-43%2F43%20passing-brightgreen)](MyHomePage.Tests)
 
 A personal website for storing and browsing mountain adventure videos — hiking, rock climbing, bouldering, and gym sessions. Built with **ASP.NET Core 8 + Blazor Server**, zero database, all storage on the local file system.
 
 ## Features
 
 - **6 galleries** — Mountains, Rock Climbing, Bouldering, Indoor Climbing, Calisthenics, Running
-- **Strava sync** — OAuth + webhook integration imports activities as gallery items with distance / pace / HR / elevation metrics attached
-- **Automatic video compression** — H.264 via FFmpeg (auto-downloaded on first run), ~720p/CRF-30, configurable
-- **Hover card expansion** — hover a video thumbnail to get a fullscreen overlay; close with X, background click, or Escape
-- **Admin panel** — login-protected upload, edit, and delete
-- **Admin logs viewer** — `/admin/logs` page with real-time log filtering, search, and live auto-refresh (10s interval)
-- **Comprehensive logging** — Serilog with CLEF format, all requests/responses/errors logged to disk
-- **SVG category icons** — custom vector illustrations in the header and home page cards
-- **No database** — metadata stored as `metadata.json` files alongside each video
-- **SOLID architecture** — Repository, Strategy, Decorator, Result, Options, Factory, and more (see [ARCHITECTURE.md](ARCHITECTURE.md))
+- **Strava sync** — OAuth + webhook integration imports activities as gallery items with distance / pace / heart rate / elevation / GPS start point attached. Manual `Import` button on `/admin/strava` opens the editor with everything pre-filled so you can add photos / videos to the session.
+- **Adventures map** — Leaflet map at `/map` shows every located item as a pin. Strava-imported activities use a distinct orange marker and a popup with distance / duration / avg HR and a deep link back to Strava.
+- **Native social sharing** — per-item share bar for Facebook / WhatsApp / X / Web Share API plus a Download button so each photo or video can be re-uploaded as a native post when link previews aren't enough.
+- **Open Graph for scrapers** — server-rendered `/og/{id}` endpoint + UA-aware middleware so Facebook / WhatsApp / Twitter scrapers see proper meta tags despite the SPA being Blazor Server.
+- **Automatic video compression** — H.264 via FFmpeg (auto-downloaded on first run), configurable CRF / resolution / bitrate / preset.
+- **Hover card expansion** — hover a video thumbnail to get a fullscreen overlay; close with X, background click, or Escape.
+- **Admin panel** — login-protected upload, edit, delete, append-media, and Strava connection management.
+- **Admin logs viewer** — `/admin/logs` page with real-time log filtering, search, and live auto-refresh (10s interval).
+- **AI-assisted upload** — optional Claude integration suggests title / description / location from a few keywords (requires `ANTHROPIC_API_KEY`).
+- **Centralised authorship policy** — GitHub Actions workflow scans every push for Claude / Anthropic / OpenAI / GPT attribution and fails the check, enforcing the clean-history rule from `memory/commit_authorship_clean.md`.
+- **Comprehensive logging** — Serilog with CLEF format, all requests/responses/errors logged to disk.
+- **SVG category icons** — custom vector illustrations in the header and home page cards.
+- **No database** — metadata stored as `metadata.json` files alongside each video; Strava tokens stored as a single `strava-tokens.json` on the same volume.
+- **SOLID architecture** — Repository, Strategy, Decorator, Result, Options, Factory, Adapter and more (see [ARCHITECTURE.md](ARCHITECTURE.md)).
 
 ## Strava integration
 
@@ -76,13 +81,19 @@ dotnet test
 
 ### Test Coverage
 
-- **Unit tests** — 25 total tests covering Services, Repositories, and Models
-- **Service tests** — VideoService (10 tests), CredentialService (3 tests), LogReaderService (2 tests)
-- **Repository tests** — JsonVideoRepository (3 tests)
-- **Model tests** — OperationResult and OperationResult<T> (8 tests)
-- **Testing framework** — NUnit 4.3.2 with NSubstitute 5.1.0 for mocking
+| Suite                          | Tests | Surface                                                              |
+|--------------------------------|-------|----------------------------------------------------------------------|
+| `VideoServiceTests`            | 10    | Upload validation, delete, update, category filter                   |
+| `CredentialServiceTests`       | 3     | Login success, wrong password, missing / invalid file                |
+| `LogReaderServiceTests`        | 2     | CLEF parsing, ordering, entry limits                                 |
+| `StravaActivityMapperTests`    | 11    | Strava SportType → category mapping, training data, GPS, location    |
+| `StravaSyncServiceTests`       | 6     | Token gating, fetch failure, privacy filter, dedup, prefill          |
+| `JsonVideoRepositoryTests`     | 3     | Empty folder, malformed metadata, round-trip save                    |
+| `OperationResultTests`         | 8     | Success / failure factories for both generic and non-generic results |
 
-Tests are required to pass before merging (enforced by GitHub Actions).
+- **Testing framework** — NUnit 4.3.2 with NSubstitute 5.1.0 for mocking.
+- **Patterns** — Arrange / Act / Assert; helper `[SetUp]` builds mocks; descriptive `MethodName_Scenario_Expected` naming.
+- **CI gate** — `.NET Build & Test` workflow on every push and PR. Cannot merge to `master` while red.
 
 ## CI/CD Pipeline
 
@@ -141,17 +152,30 @@ All tuneable values live under the `"VideoStorage"` section in `appsettings.json
 
 ## Pages
 
-| Route | Page |
-|---|---|
-| `/` | Home — category overview |
-| `/gory` | Mountains gallery |
-| `/wspinaczka-skalowa` | Rock Climbing gallery |
-| `/bouldering` | Bouldering gallery |
-| `/prowadzeni-hala` | Indoor Climbing gallery |
-| `/edit-video/{id}` | Edit video metadata |
-| `/login` | Admin login |
-| `/admin/logs` | Application logs (admin only) — filter by level, search, auto-refresh |
-| `/about` | About page |
+| Route                          | Page                                                                                |
+|--------------------------------|-------------------------------------------------------------------------------------|
+| `/`                            | Home — category overview                                                            |
+| `/gory`                        | Mountains gallery                                                                   |
+| `/wspinaczka-skalowa`          | Rock Climbing gallery                                                               |
+| `/bouldering`                  | Bouldering gallery                                                                  |
+| `/prowadzeni-hala`             | Indoor Climbing gallery                                                             |
+| `/calisthenics`                | Calisthenics gallery                                                                |
+| `/running`                     | Running gallery                                                                     |
+| `/item/{id}`                   | Single item view (photos / videos + training stats + share bar)                     |
+| `/map`                         | Leaflet map with date filter and training pins                                      |
+| `/edit-video/{id}`             | Edit metadata + append photos / videos                                              |
+| `/login`                       | Admin login                                                                         |
+| `/admin/logs`                  | Application logs (admin only) — filter by level, search, auto-refresh               |
+| `/admin/strava`                | Strava connection state + recent activities + manual `Import`                       |
+| `/auth/strava/login`           | OAuth entry point (admin only) — redirects to Strava authorize page                 |
+| `/auth/strava/callback`        | OAuth callback — exchanges code for tokens, redirects to `/admin/strava`            |
+| `/auth/strava/disconnect`      | Removes the persisted token set                                                     |
+| `/api/strava/webhook`          | Strava push subscription endpoint (handshake + create / update activity events)    |
+| `/api/strava/import/{id}`      | Authenticated POST that imports a single activity by id                             |
+| `/api/strava/attach/{video}/{activity}` | Authenticated POST that attaches an activity to an existing gallery item   |
+| `/og/{id}`                     | Server-rendered Open Graph preview for social-media scrapers                        |
+| `/health`                      | Health probe (Railway / monitoring)                                                 |
+| `/about`                       | About page                                                                          |
 
 ## Authentication & Credentials
 
@@ -193,10 +217,15 @@ All application events (requests, responses, errors, video operations) are logge
 ## Storage layout
 
 ```
-wwwroot/videos/
+{VIDEO_STORAGE_ROOT}/               ← wwwroot/videos locally, /data/videos on Railway
+├── strava-tokens.json              ← persisted Strava OAuth tokens (DPAPI alternative)
 └── {id}/
-    ├── video.mp4        ← compressed output (H.264)
-    └── metadata.json    ← title, description, location, category, date, size
+    ├── video.mp4                   ← primary video (compressed H.264)
+    ├── video-02.mp4                ← additional videos in upload order
+    ├── photo-01.jpg                ← additional photos resized to long edge 2560 px
+    ├── photo-02.jpg
+    ├── thumbnail.jpg               ← auto-generated poster for the primary video
+    └── metadata.json               ← title, description, location, GPS, training data, media list
 ```
 
 ### metadata.json
@@ -204,13 +233,34 @@ wwwroot/videos/
 ```json
 {
   "Id": 1,
-  "Title": "Summer hike",
-  "Description": "...",
+  "Title": "Morning Run",
+  "Description": "Recovery loop after yesterday's intervals.",
   "FileName": "video.mp4",
-  "Location": "Tatra Mountains",
-  "Category": "Mountains",
-  "UploadedAt": "2026-05-06T10:00:00Z",
-  "FileSizeBytes": 52428800
+  "Location": "Krakow, Poland",
+  "Category": "Running",
+  "UploadedAt": "2026-05-15T05:17:22Z",
+  "FileSizeBytes": 52428800,
+  "Latitude": 50.0614,
+  "Longitude": 19.9366,
+  "Media": [
+    { "FileName": "video.mp4", "Type": "Video", "SizeBytes": 50000000, "Order": 0 },
+    { "FileName": "photo-01.jpg", "Type": "Image", "SizeBytes": 2400000, "Order": 1 }
+  ],
+  "Training": {
+    "Source": "Strava",
+    "ExternalId": "15234112344",
+    "ActivityType": "Run",
+    "StartTimeUtc": "2026-05-15T05:17:22Z",
+    "Duration": "00:32:14",
+    "DistanceMeters": 6800,
+    "AveragePaceSecondsPerKm": 284,
+    "ElevationGainMeters": 38,
+    "AverageHeartRate": 152,
+    "MaxHeartRate": 174,
+    "Calories": 540,
+    "RoutePolyline": "_p~iF~ps|U_ulLnnqC...",
+    "ExternalUrl": "https://www.strava.com/activities/15234112344"
+  }
 }
 ```
 
