@@ -121,6 +121,14 @@
 </style>
 
 @code {
+    /// <summary>
+    /// Optional gallery item id passed via <c>?item=42</c>. When set, the
+    /// map zooms in on that item's pin and pops its bubble open on first
+    /// render. Lets every collection tile deep-link straight to its spot.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "item")]
+    public int? FocusItemId { get; set; }
+
     private IReadOnlyList<Video>? _videos;
     private bool _scriptLoaded;
     private bool _mapInitialized;
@@ -209,6 +217,7 @@
                 .ToArray();
 
             var markersJson = JsonSerializer.Serialize(markers);
+            var focusId = FocusItemId?.ToString() ?? "null";
 
             // Wait for Leaflet to load then init map
             await JS.InvokeVoidAsync("eval", $@"
@@ -288,6 +297,23 @@
                             map.fitBounds(bounds, {{ padding: [40, 40] }});
                         }} else {{
                             map.setView(bounds[0], 12);
+                        }}
+
+                        // Deep-link focus: if ?item={{id}} was supplied, zoom in
+                        // on that pin and open its popup so the user lands on it.
+                        const focusId = {focusId};
+                        if (focusId !== null) {{
+                            const target = markers.find(x => x.id === focusId);
+                            if (target) {{
+                                map.setView([target.lat, target.lon], 15, {{ animate: true }});
+                                map.eachLayer(layer => {{
+                                    if (layer instanceof L.Marker
+                                        && layer.getLatLng().lat === target.lat
+                                        && layer.getLatLng().lng === target.lon) {{
+                                        layer.openPopup();
+                                    }}
+                                }});
+                            }}
                         }}
                     }}
                     init();
