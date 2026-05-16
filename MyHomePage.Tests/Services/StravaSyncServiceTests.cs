@@ -12,6 +12,7 @@ public sealed class StravaSyncServiceTests
     private IStravaTokenStore _store = null!;
     private IVideoRepository _videos = null!;
     private IAiAssistantService _ai = null!;
+    private IReverseGeocoder _geocoder = null!;
     private StravaTokenService _tokens = null!;
     private StravaSyncService _sync = null!;
     private StravaOptions _options = null!;
@@ -24,6 +25,10 @@ public sealed class StravaSyncServiceTests
         _videos = Substitute.For<IVideoRepository>();
         _ai = Substitute.For<IAiAssistantService>();
         _ai.IsEnabled.Returns(false);
+        _geocoder = Substitute.For<IReverseGeocoder>();
+        _geocoder.ResolveAsync(
+                Arg.Any<double>(), Arg.Any<double>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
         _options = new StravaOptions
         {
             ClientId = "1",
@@ -36,8 +41,8 @@ public sealed class StravaSyncServiceTests
 
         var syncLogger = Substitute.For<ILogger<StravaSyncService>>();
         _sync = new StravaSyncService(
-            _api, _tokens, _videos, _ai,
-            Options.Create(_options),
+            _api, _tokens, _videos, _ai, _geocoder,
+            Microsoft.Extensions.Options.Options.Create(_options),
             syncLogger);
     }
 

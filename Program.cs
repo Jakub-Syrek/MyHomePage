@@ -115,6 +115,7 @@ try
     builder.Services.AddScoped<ICompressionStrategy, H264CompressionStrategy>();
     builder.Services.AddScoped<ILocationExtractor, GpsLocationExtractor>();
     builder.Services.AddScoped<IDateTakenExtractor, MetadataDateTakenExtractor>();
+    builder.Services.AddHttpClient<IReverseGeocoder, NominatimReverseGeocoder>();
 
     // AI assistant — calls Anthropic API (requires ANTHROPIC_API_KEY env var)
     builder.Services.AddHttpClient<IAiAssistantService, ClaudeAssistantService>();

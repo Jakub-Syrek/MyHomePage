@@ -18,6 +18,7 @@ public sealed class StravaSyncService : IStravaSyncService
     private readonly StravaTokenService _tokens;
     private readonly IVideoRepository _videos;
     private readonly IAiAssistantService _ai;
+    private readonly IReverseGeocoder _geocoder;
     private readonly StravaOptions _options;
     private readonly ILogger<StravaSyncService> _logger;
 
@@ -28,6 +29,7 @@ public sealed class StravaSyncService : IStravaSyncService
     /// <param name="tokens">OAuth lifecycle helper.</param>
     /// <param name="videos">Gallery repository for creating / updating items.</param>
     /// <param name="ai">AI assistant used as a last-resort location extractor.</param>
+    /// <param name="geocoder">Reverse geocoder used when GPS is known but the city is not.</param>
     /// <param name="options">Bound Strava options (privacy filter etc.).</param>
     /// <param name="logger">Structured logger for diagnostic events.</param>
     public StravaSyncService(
@@ -35,6 +37,7 @@ public sealed class StravaSyncService : IStravaSyncService
         StravaTokenService tokens,
         IVideoRepository videos,
         IAiAssistantService ai,
+        IReverseGeocoder geocoder,
         IOptions<StravaOptions> options,
         ILogger<StravaSyncService> logger)
     {
@@ -42,6 +45,7 @@ public sealed class StravaSyncService : IStravaSyncService
         _tokens = tokens;
         _videos = videos;
         _ai = ai;
+        _geocoder = geocoder;
         _options = options.Value;
         _logger = logger;
     }
@@ -164,9 +168,9 @@ public sealed class StravaSyncService : IStravaSyncService
     }
 
     /// <summary>
-    /// Builds the location label using a four-tier fallback so even indoor
-    /// activities (no GPS, no Strava city) still surface a useful venue
-    /// when the athlete typed one into the title or description.
+    /// Builds the location label using a five-tier fallback so outdoor
+    /// activities without a Strava-supplied city and indoor activities
+    /// with the venue buried in the description both end up labelled.
     /// </summary>
     private async Task<string?> ResolveLocationAsync(
         StravaActivity activity,
@@ -181,7 +185,27 @@ public sealed class StravaSyncService : IStravaSyncService
         var fromTitle = StravaActivityMapper.ExtractVenueFromTitle(activity.Name);
         if (!string.IsNullOrWhiteSpace(fromTitle)) return fromTitle;
 
-        // 3. AI fallback — Claude reads the title + description and returns
+        // 3. Reverse-geocode the start coordinates via OpenStreetMap when
+        //    Strava skipped the city but the activity does carry GPS
+        //    (either start_latlng or the polyline first point).
+        var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
+        if (lat is not null && lng is not null)
+        {
+            try
+            {
+                var fromGeocode = await _geocoder.ResolveAsync(
+                    lat.Value, lng.Value, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(fromGeocode)) return fromGeocode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex,
+                    "Reverse geocoding failed for activity {ActivityId}",
+                    activity.Id);
+            }
+        }
+
+        // 4. AI fallback — Claude reads the title + description and returns
         //    the most likely venue when one is mentioned in prose.
         if (_ai.IsEnabled)
         {
@@ -202,7 +226,7 @@ public sealed class StravaSyncService : IStravaSyncService
             }
         }
 
-        // 4. Give up — the editor lets the user fill it in manually.
+        // 5. Give up — the editor lets the user fill it in manually.
         return null;
     }
 
