@@ -195,6 +195,8 @@
         .header-content {
             padding: 14px 16px;
             gap: 14px;
+            /* allow children (nav-menu) to overflow & scroll */
+            overflow: hidden;
         }
         .logo {
             font-size: 1.1rem;
@@ -206,20 +208,35 @@
         }
         .nav-menu {
             gap: 18px;
+            /* Critical: start items at the LEFT so the first ones are reachable
+               by default; user swipes RIGHT to see later ones. */
+            justify-content: flex-start;
             overflow-x: auto;
             overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
-            scrollbar-width: none;       /* Firefox */
-            -ms-overflow-style: none;    /* IE/Edge legacy */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             padding-bottom: 2px;
-            mask-image: linear-gradient(90deg, transparent 0, black 12px, black calc(100% - 12px), transparent 100%);
-            -webkit-mask-image: linear-gradient(90deg, transparent 0, black 12px, black calc(100% - 12px), transparent 100%);
+            /* Tells the browser this element wants horizontal pan gestures.
+               Without this, iOS Safari can hijack swipes for browser-back. */
+            touch-action: pan-x;
+            /* Force a separate compositor layer — fixes sticky + scroll
+               interaction quirk on iOS Safari. */
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            /* Subtle edge fade to hint scrollability */
+            -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
+                    mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
         }
         .nav-menu::-webkit-scrollbar { display: none; }
         .nav-menu a {
             font-size: 0.88rem;
             padding: 4px 2px;
+            /* Bigger touch target without changing visual size */
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
         }
     }
     @@media (max-width: 500px) {
