@@ -79,10 +79,81 @@
                         </button>
                     </div>
                 </form>
+
+                <section class="upload-section">
+                    <h3>📦 Add photos / videos</h3>
+                    <p class="upload-hint">Drop or browse files. Videos are compressed to H.264 on save.</p>
+                    <InputFile multiple OnChange="OnFilesSelected" class="file-input" accept=".mp4,.webm,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+
+                    @if (selectedFiles.Count > 0)
+                    {
+                        <ul class="file-list">
+                            @foreach (var file in selectedFiles)
+                            {
+                                <li>
+                                    <strong>@file.Name</strong>
+                                    <span class="muted"> · @($"{file.Size / 1024.0 / 1024.0:F1} MB")</span>
+                                </li>
+                            }
+                        </ul>
+                        <button type="button" class="btn-save"
+                                @onclick="AppendMedia"
+                                disabled="@isAppending">
+                            @if (isAppending) { <span>Uploading…</span> }
+                            else { <span>📤 Upload @selectedFiles.Count file(s)</span> }
+                        </button>
+                    }
+
+                    @if (!string.IsNullOrEmpty(uploadMessage))
+                    {
+                        <div class="alert" style="margin-top: 12px;
+                             background: @(isUploadSuccess ? "#d4edda" : "#f8d7da");
+                             color: @(isUploadSuccess ? "#155724" : "#721c24");">
+                            @uploadMessage
+                        </div>
+                    }
+                </section>
             </div>
         </div>
     }
 </div>
+
+<style>
+    .upload-section {
+        margin-top: 32px;
+        padding-top: 24px;
+        border-top: 1px solid #e2e8f0;
+    }
+    .upload-section h3 {
+        margin: 0 0 6px;
+        color: #2c3e50;
+        font-size: 1.05rem;
+    }
+    .upload-section .upload-hint {
+        color: #6b7280;
+        margin: 0 0 14px;
+        font-size: 0.9rem;
+    }
+    .upload-section .file-input {
+        display: block;
+        width: 100%;
+        padding: 14px;
+        border: 2px dashed #cbd5e1;
+        border-radius: 10px;
+        background: #f8fafc;
+        cursor: pointer;
+    }
+    .upload-section .file-list {
+        list-style: none;
+        padding: 12px 0;
+        margin: 0;
+    }
+    .upload-section .file-list li {
+        padding: 6px 0;
+        font-size: 0.95rem;
+    }
+    .upload-section .muted { color: #6b7280; }
+</style>
 
 @code {
     [Parameter] public int VideoId { get; set; }
@@ -96,6 +167,82 @@
     private string message = "";
     private bool isSaveSuccess = false;
     private bool isSaving = false;
+
+    private const long MaxBytesPerFile = 5L * 1024 * 1024 * 1024;
+    private List<Microsoft.AspNetCore.Components.Forms.IBrowserFile> selectedFiles = new();
+    private bool isAppending;
+    private string uploadMessage = "";
+    private bool isUploadSuccess;
+
+    private void OnFilesSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        selectedFiles = e.GetMultipleFiles(maximumFileCount: 50).ToList();
+        uploadMessage = "";
+    }
+
+    private async Task AppendMedia()
+    {
+        if (selectedFiles.Count == 0) return;
+
+        isAppending = true;
+        uploadMessage = "Uploading…";
+        StateHasChanged();
+
+        try
+        {
+            // IBrowserFile.OpenReadStream defaults to 512 KB — raise it so
+            // we can stream files up to the configured upload limit.
+            var staged = selectedFiles
+                .Select(f => (Microsoft.AspNetCore.Components.Forms.IBrowserFile)
+                    new StagedFile(f, MaxBytesPerFile))
+                .ToList();
+
+            var result = await VideoService.AppendMediaAsync(VideoId, staged);
+            isUploadSuccess = result.IsSuccess;
+            uploadMessage = result.Message;
+
+            if (result.IsSuccess)
+            {
+                selectedFiles.Clear();
+                video = await VideoService.GetVideoByIdAsync(VideoId);
+            }
+        }
+        catch (Exception ex)
+        {
+            isUploadSuccess = false;
+            uploadMessage = $"Upload error: {ex.Message}";
+        }
+        finally
+        {
+            isAppending = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Thin wrapper that re-routes <see cref="Microsoft.AspNetCore.Components.Forms.IBrowserFile.OpenReadStream"/>
+    /// through a raised size cap so large originals make it past Blazor's
+    /// 512 KB default. All other members delegate to the wrapped instance.
+    /// </summary>
+    private sealed class StagedFile : Microsoft.AspNetCore.Components.Forms.IBrowserFile
+    {
+        private readonly Microsoft.AspNetCore.Components.Forms.IBrowserFile _inner;
+        private readonly long _maxBytes;
+
+        public StagedFile(Microsoft.AspNetCore.Components.Forms.IBrowserFile inner, long maxBytes)
+        {
+            _inner = inner;
+            _maxBytes = maxBytes;
+        }
+
+        public string Name => _inner.Name;
+        public DateTimeOffset LastModified => _inner.LastModified;
+        public long Size => _inner.Size;
+        public string ContentType => _inner.ContentType;
+
+        public Stream OpenReadStream(long maxAllowedSize = 512000, CancellationToken cancellationToken = default) =>
+            _inner.OpenReadStream(_maxBytes, cancellationToken);
+    }
 
     protected override async Task OnInitializedAsync()
     {

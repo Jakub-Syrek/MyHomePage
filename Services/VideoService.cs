@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Options;
 using MyHomePage.Abstractions;
 using MyHomePage.Models;
@@ -219,6 +220,65 @@ public sealed class VideoService : IVideoService
         }
     }
 
+    public async Task<OperationResult> AppendMediaAsync(
+        int videoId,
+        IReadOnlyList<IBrowserFile> files)
+    {
+        if (files.Count == 0)
+            return OperationResult.Failure("No files were selected.");
+
+        var validation = ValidateFiles(files);
+        if (!validation.IsSuccess) return validation;
+
+        var video = await _repository.GetByIdAsync(videoId);
+        if (video is null)
+            return OperationResult.Failure($"Gallery item {videoId} not found.");
+
+        try
+        {
+            _storage.EnsureVideoDirectoryExists(videoId);
+            var media = video.Media.ToList();
+            var imageCount = media.Count(m => m.Type == MediaType.Image);
+            var videoCount = media.Count(m => m.Type == MediaType.Video);
+            var totalSizeDelta = 0L;
+            var ordered = files.OrderBy(f => IsImage(f.Name) ? 1 : 0).ToList();
+
+            foreach (var file in ordered)
+            {
+                var order = media.Count;
+                if (IsImage(file.Name))
+                {
+                    imageCount++;
+                    var item = await StoreImageAsync(file, videoId, imageCount, order);
+                    media.Add(item);
+                    totalSizeDelta += item.SizeBytes;
+                }
+                else
+                {
+                    videoCount++;
+                    var (item, primary) = await StoreVideoAsync(
+                        file, videoId, videoCount, order, hasPrimary: !string.IsNullOrEmpty(video.FileName));
+                    media.Add(item);
+                    totalSizeDelta += item.SizeBytes;
+                    if (primary is not null) video.FileName = primary;
+                }
+            }
+
+            video.Media = media;
+            if (string.IsNullOrEmpty(video.FileName) && media.Count > 0)
+                video.FileName = media[0].FileName;
+            video.FileSizeBytes += totalSizeDelta;
+
+            await _repository.SaveAsync(video);
+            return OperationResult.Success($"Added {files.Count} file(s) to item {videoId}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Append failed for item {Id}", videoId);
+            return OperationResult.Failure($"Append error: {ex.Message}");
+        }
+    }
+
     public async Task<OperationResult> DeleteVideoAsync(int id)
     {
         _logger.LogInformation("Deleting item {Id}", id);
@@ -248,8 +308,12 @@ public sealed class VideoService : IVideoService
     {
         if (request.Files.Count == 0)
             return OperationResult.Failure("No files were selected.");
+        return ValidateFiles(request.Files);
+    }
 
-        foreach (var file in request.Files)
+    private OperationResult ValidateFiles(IReadOnlyList<IBrowserFile> files)
+    {
+        foreach (var file in files)
         {
             if (file.Size > _options.MaxFileSizeBytes)
                 return OperationResult.Failure(
@@ -262,6 +326,45 @@ public sealed class VideoService : IVideoService
         }
 
         return OperationResult.Success();
+    }
+
+    private async Task<MediaItem> StoreImageAsync(
+        IBrowserFile file, int videoId, int photoIndex, int order)
+    {
+        var targetName = $"photo-{photoIndex:D2}.jpg";
+        var savedPath = await _storage.SaveImageWithResizeAsync(
+            file, videoId, _options.MaxFileSizeBytes, targetName);
+        var size = new FileInfo(savedPath).Length;
+        _logger.LogInformation(
+            "Item {Id}: appended image {Name} ({KB} KB)",
+            videoId, targetName, size / 1024);
+        return MediaItem.Create(targetName, MediaType.Image, size, order);
+    }
+
+    private async Task<(MediaItem Item, string? NewPrimary)> StoreVideoAsync(
+        IBrowserFile file, int videoId, int videoIndex, int order, bool hasPrimary)
+    {
+        var compressedName = hasPrimary
+            ? $"video-{videoIndex:D2}.mp4"
+            : "video.mp4";
+
+        var originalPath = await _storage.SaveUploadedFileAsync(
+            file, videoId, _options.MaxFileSizeBytes,
+            targetFileName: $"orig-{videoIndex:D2}{Path.GetExtension(file.Name)}");
+
+        var compressedPath = Path.Combine(
+            _storage.GetVideoDirectoryPath(videoId), compressedName);
+
+        var (finalName, finalSize) = await CompressAndFinalizeAsync(
+            originalPath, compressedPath, file.Size, videoId);
+
+        _logger.LogInformation(
+            "Item {Id}: appended video {Name} ({MB} MB)",
+            videoId, finalName, finalSize / (1024 * 1024));
+
+        return (
+            MediaItem.Create(finalName, MediaType.Video, finalSize, order),
+            hasPrimary ? null : finalName);
     }
 
     private async Task<(string FileName, long Size)> CompressAndFinalizeAsync(
