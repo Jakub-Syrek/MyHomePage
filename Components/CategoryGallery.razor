@@ -264,8 +264,9 @@
     private IReadOnlyList<Video>? videos;
     private bool showUpload = false;
 
-    private DateTime? _dateFrom;
-    private DateTime? _dateTo;
+    // Default date range: yesterday → today (last 24-48h)
+    private DateTime? _dateFrom = DateTime.Today.AddDays(-1);
+    private DateTime? _dateTo = DateTime.Today;
     private bool _sortDescending = true; // newest first by default
 
     private Lightbox? _lightbox;
