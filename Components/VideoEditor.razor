@@ -63,7 +63,7 @@
 
                     <div class="form-group">
                         <label>File Size</label>
-                        <input type="text" value="@(video.FileSizeBytes / (1024 * 1024))MB" readonly />
+                        <input type="text" value="@FormatSize(EffectiveSizeBytes)" readonly />
                     </div>
 
                     @if (!string.IsNullOrEmpty(message))
@@ -338,6 +338,23 @@
         {
             isGenerating = false;
             StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Total size in bytes used for the read-only "File Size" field.
+    /// Prefers the stored aggregate, but falls back to summing the media
+    /// list when the aggregate is stale or zero — Strava placeholders
+    /// start with FileSizeBytes = 0 and we want the display to reflect
+    /// what is actually on disk once media is appended.
+    /// </summary>
+    private long EffectiveSizeBytes
+    {
+        get
+        {
+            if (video is null) return 0;
+            var fromMedia = video.Media.Sum(m => m.SizeBytes);
+            return Math.Max(video.FileSizeBytes, fromMedia);
         }
     }
 
