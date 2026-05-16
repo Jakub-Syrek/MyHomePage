@@ -84,6 +84,13 @@ public sealed class ScraperRewriteMiddleware
             // (e.g. skip auth, skip rate limit) if it knows about this flag.
             context.Items[ContextKey] = true;
 
+            // Disable response compression for scrapers. The Content-Encoding
+            // header is sometimes stripped by the upstream Railway edge proxy,
+            // leaving the client with a gzipped body it can't decode. By
+            // overriding Accept-Encoding to "identity" we force ASP.NET's
+            // ResponseCompression middleware to send plain bytes.
+            context.Request.Headers["Accept-Encoding"] = "identity";
+
             // GET /item/{id} → rewrite to server-rendered /og/{id}
             var path = context.Request.Path.Value;
             if (path is not null && context.Request.Method == "GET")
