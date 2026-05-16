@@ -13,7 +13,7 @@
       - Sort direction (newest first / oldest first)
 *@
 
-<div class="category-page" style="--bg-url: url('@BackgroundImage');">
+<div class="category-page" style="--bg-url: url('@BackgroundImage'); --bg-position: @BackgroundPosition;">
     <div class="category-hero">
         <div class="category-hero-inner">
             <button class="btn-back" @onclick="GoHome">← Back</button>
@@ -170,7 +170,7 @@
             var(--bg-url, none);
         background-size: cover;
         background-attachment: fixed;
-        background-position: center;
+        background-position: var(--bg-position, center);
     }
 
     .category-hero {
@@ -527,6 +527,8 @@
 @code {
     [Parameter, EditorRequired] public string Category { get; set; } = "";
     [Parameter, EditorRequired] public string BackgroundImage { get; set; } = "";
+    /// <summary>CSS background-position value (e.g. "center", "right center", "75% center").</summary>
+    [Parameter] public string BackgroundPosition { get; set; } = "center";
     [Parameter] public string EmptyMessage { get; set; } = "No media yet. Be the first to upload!";
 
     private IReadOnlyList<Video>? videos;
