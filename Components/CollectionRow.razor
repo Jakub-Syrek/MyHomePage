@@ -1,0 +1,210 @@
+@namespace MyHomePage.Components
+@using MyHomePage.Models
+
+@*
+    One collection rendered as a row: header (title + meta + actions) on top,
+    horizontally scrolling strip of MediaTiles below. Click any tile opens
+    the shared Lightbox (parent controls it).
+*@
+
+<section class="collection-row">
+    <header class="cr-header">
+        <div class="cr-title-block">
+            <a href="/item/@Item.Id" class="cr-title">@Item.Title</a>
+            <div class="cr-meta">
+                @if (!string.IsNullOrEmpty(Item.Location))
+                {
+                    <span class="cr-chip">📍 @Item.Location</span>
+                }
+                @if (Item.HasCoordinates)
+                {
+                    <a class="cr-chip cr-chip-link" href="/map" title="@Item.Latitude, @Item.Longitude">🗺️ On map</a>
+                }
+                <span class="cr-chip">📅 @Item.UploadedAt.ToString("MMM d, yyyy")</span>
+                <span class="cr-chip">@_media.Count item(s)</span>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Item.Description))
+            {
+                <p class="cr-desc">@Truncate(Item.Description, 220)</p>
+            }
+        </div>
+        <div class="cr-actions">
+            <a href="/item/@Item.Id" class="cr-link-btn">View full →</a>
+            <AuthorizeView>
+                <Authorized>
+                    <a href="/edit-video/@Item.Id" class="cr-link-btn ghost">Edit</a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <div class="cr-strip-wrap">
+        <button type="button" class="cr-scroll prev"
+                onclick="this.parentElement.querySelector('.cr-strip').scrollBy({left:-400,behavior:'smooth'})"
+                aria-label="Scroll left">‹</button>
+        <div class="cr-strip">
+            @for (int i = 0; i < _media.Count; i++)
+            {
+                var idx = i;
+                var m = _media[i];
+                var url = $"/videos/{Item.Id}/{m.FileName}";
+                <MediaTile Url="@url"
+                           FileName="@m.FileName"
+                           Type="@m.Type"
+                           OnOpen="@(() => OnTileOpen.InvokeAsync(idx))" />
+            }
+        </div>
+        <button type="button" class="cr-scroll next"
+                onclick="this.parentElement.querySelector('.cr-strip').scrollBy({left:400,behavior:'smooth'})"
+                aria-label="Scroll right">›</button>
+    </div>
+</section>
+
+<style>
+    .collection-row {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(14px);
+        border-radius: 16px;
+        padding: 22px 24px 26px;
+        margin: 0 auto 28px;
+        max-width: 1400px;
+        box-shadow: 0 6px 32px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+    }
+
+    .cr-header {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+    .cr-title-block { flex: 1; min-width: 220px; }
+    .cr-title {
+        display: block;
+        color: #1a202c;
+        text-decoration: none;
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 8px;
+        transition: color 0.2s;
+    }
+    .cr-title:hover { color: #667eea; }
+
+    .cr-meta {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        margin-bottom: 10px;
+    }
+    .cr-chip {
+        background: #f1f3f8;
+        color: #4a5568;
+        font-size: 0.82rem;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 999px;
+        text-decoration: none;
+        transition: background 0.18s;
+    }
+    .cr-chip-link { color: #667eea; }
+    .cr-chip-link:hover { background: #e0e4ef; }
+
+    .cr-desc {
+        color: #4a5568;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        margin: 6px 0 0;
+        max-width: 720px;
+    }
+
+    .cr-actions {
+        display: flex; gap: 8px; flex-wrap: wrap;
+        align-self: center;
+    }
+    .cr-link-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 9px 16px;
+        border-radius: 10px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: transform 0.18s, box-shadow 0.18s;
+        display: inline-block;
+    }
+    .cr-link-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35);
+        color: white;
+    }
+    .cr-link-btn.ghost {
+        background: white;
+        color: #4a5568;
+        border: 1px solid #e2e8f0;
+    }
+    .cr-link-btn.ghost:hover { color: #2d3748; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+    .cr-strip-wrap {
+        position: relative;
+    }
+    .cr-strip {
+        display: flex; gap: 14px;
+        overflow-x: auto; overflow-y: hidden;
+        padding: 6px 4px 12px;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+    }
+    .cr-strip > * { scroll-snap-align: start; }
+    .cr-strip::-webkit-scrollbar { height: 6px; }
+    .cr-strip::-webkit-scrollbar-track { background: transparent; }
+    .cr-strip::-webkit-scrollbar-thumb {
+        background: rgba(102, 126, 234, 0.35); border-radius: 3px;
+    }
+    .cr-strip::-webkit-scrollbar-thumb:hover { background: rgba(102, 126, 234, 0.55); }
+
+    .cr-scroll {
+        position: absolute; top: 50%; transform: translateY(-50%);
+        width: 38px; height: 38px;
+        background: rgba(255,255,255,0.95);
+        color: #4a5568;
+        border: 1px solid #e2e8f0;
+        border-radius: 50%;
+        font-size: 1.4rem; cursor: pointer;
+        z-index: 3;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+        opacity: 0.85;
+    }
+    .cr-scroll:hover {
+        background: #667eea; color: white; opacity: 1;
+        transform: translateY(-50%) scale(1.08);
+    }
+    .cr-scroll.prev { left: -10px; }
+    .cr-scroll.next { right: -10px; }
+
+    @@media (max-width: 700px) {
+        .collection-row { padding: 18px 14px 22px; }
+        .cr-title { font-size: 1.3rem; }
+        .cr-scroll { display: none; }
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public Video Item { get; set; } = default!;
+    [Parameter] public EventCallback<int> OnTileOpen { get; set; }
+
+    private IReadOnlyList<MediaItem> _media = Array.Empty<MediaItem>();
+
+    protected override void OnParametersSet()
+    {
+        _media = Item.GetAllMedia();
+    }
+
+    private static string Truncate(string s, int n)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Length > n ? s.Substring(0, n) + "…" : s;
+    }
+}

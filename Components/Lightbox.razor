@@ -1,0 +1,279 @@
+@namespace MyHomePage.Components
+@using MyHomePage.Models
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+@*
+    Fullscreen lightbox viewer for a list of MediaItems.
+    - ESC / backdrop click closes
+    - Arrow keys / on-screen arrows navigate
+    - Each media has a unique deep-link via ?m={filename}
+    - Copy link button, Open original, Download
+*@
+
+@if (_open && _items.Count > 0)
+{
+    var current = _items[_index];
+    var url = $"/videos/{ItemId}/{current.FileName}";
+    <div class="lb-backdrop" @onclick="HandleBackdrop">
+        <button class="lb-close" @onclick="Close" title="Close (Esc)">✕</button>
+
+        @if (_items.Count > 1)
+        {
+            <button class="lb-nav prev" @onclick:stopPropagation @onclick="Prev" title="Previous (←)">‹</button>
+            <button class="lb-nav next" @onclick:stopPropagation @onclick="Next" title="Next (→)">›</button>
+        }
+
+        <div class="lb-content" @onclick:stopPropagation>
+            @if (current.Type == MediaType.Image)
+            {
+                <img src="@url" alt="@(current.FileName)" class="lb-media" />
+            }
+            else
+            {
+                <video src="@url" controls autoplay playsinline class="lb-media"></video>
+            }
+        </div>
+
+        <div class="lb-footer" @onclick:stopPropagation>
+            <div class="lb-info">
+                <span class="lb-counter">@(_index + 1) / @_items.Count</span>
+                <span class="lb-name">@current.FileName</span>
+            </div>
+            <div class="lb-actions">
+                <a class="lb-btn" href="@url" target="_blank" rel="noopener" title="Open original in new tab">↗ Open</a>
+                <a class="lb-btn" href="@url" download title="Download">⬇ Download</a>
+                <button class="lb-btn" @onclick="CopyDeepLink" title="Copy link to this media">
+                    @if (_copied) { <span>✓ Copied</span> } else { <span>🔗 Copy link</span> }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .lb-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.92);
+        backdrop-filter: blur(8px);
+        z-index: 10000;
+        display: flex; align-items: center; justify-content: center;
+        animation: lbFade 0.18s ease-out;
+    }
+    @@keyframes lbFade { from { opacity: 0; } to { opacity: 1; } }
+
+    .lb-content {
+        max-width: 96vw;
+        max-height: 86vh;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .lb-media {
+        max-width: 96vw;
+        max-height: 86vh;
+        object-fit: contain;
+        border-radius: 4px;
+        box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+    }
+
+    .lb-close {
+        position: fixed; top: 18px; right: 22px;
+        z-index: 10010;
+        width: 44px; height: 44px;
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border: none; border-radius: 50%;
+        font-size: 1.4rem; cursor: pointer;
+        transition: background 0.2s, transform 0.2s;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .lb-close:hover { background: rgba(255,255,255,0.25); transform: scale(1.06); }
+
+    .lb-nav {
+        position: fixed; top: 50%; transform: translateY(-50%);
+        width: 56px; height: 56px;
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border: none; border-radius: 50%;
+        font-size: 2.2rem; line-height: 1; cursor: pointer;
+        z-index: 10010;
+        display: flex; align-items: center; justify-content: center;
+        transition: background 0.2s, transform 0.2s;
+    }
+    .lb-nav:hover { background: rgba(255,255,255,0.25); }
+    .lb-nav.prev { left: 24px; }
+    .lb-nav.next { right: 24px; }
+    .lb-nav.prev:hover { transform: translateY(-50%) translateX(-3px); }
+    .lb-nav.next:hover { transform: translateY(-50%) translateX(3px); }
+
+    .lb-footer {
+        position: fixed; bottom: 24px; left: 50%;
+        transform: translateX(-50%);
+        background: rgba(20, 20, 25, 0.78);
+        backdrop-filter: blur(12px);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 12px;
+        display: flex; gap: 20px; align-items: center;
+        max-width: 90vw;
+        flex-wrap: wrap;
+        z-index: 10010;
+    }
+    .lb-info { display: flex; flex-direction: column; min-width: 0; }
+    .lb-counter { font-size: 0.8rem; opacity: 0.7; }
+    .lb-name {
+        font-family: 'SF Mono', 'Consolas', monospace;
+        font-size: 0.88rem;
+        max-width: 280px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .lb-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: rgba(255,255,255,0.12);
+        color: white;
+        border: none; border-radius: 8px;
+        padding: 7px 12px;
+        font-size: 0.82rem;
+        cursor: pointer; text-decoration: none;
+        transition: background 0.18s, transform 0.18s;
+        font-family: inherit;
+    }
+    .lb-btn:hover {
+        background: rgba(255,255,255,0.22);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    @@media (max-width: 600px) {
+        .lb-nav { width: 44px; height: 44px; font-size: 1.6rem; }
+        .lb-nav.prev { left: 8px; }
+        .lb-nav.next { right: 8px; }
+        .lb-footer { bottom: 8px; padding: 10px 14px; }
+        .lb-name { max-width: 160px; }
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public int ItemId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<MediaItem> Items { get; set; } = Array.Empty<MediaItem>();
+
+    /// <summary>Optional: callback when lightbox closes (so parent can clear URL ?m=).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<MediaItem> _items = Array.Empty<MediaItem>();
+    private int _index = 0;
+    private bool _open = false;
+    private bool _copied = false;
+    private DotNetObjectReference<Lightbox>? _selfRef;
+    private bool _keyHandlerRegistered = false;
+
+    protected override void OnParametersSet()
+    {
+        _items = Items;
+    }
+
+    public async Task OpenAtAsync(int index)
+    {
+        if (_items.Count == 0) return;
+        _index = Math.Clamp(index, 0, _items.Count - 1);
+        _open = true;
+        _copied = false;
+        await EnsureKeyHandler();
+        StateHasChanged();
+    }
+
+    public async Task OpenByFileNameAsync(string fileName)
+    {
+        var idx = -1;
+        for (int i = 0; i < _items.Count; i++)
+            if (string.Equals(_items[i].FileName, fileName, StringComparison.OrdinalIgnoreCase))
+            { idx = i; break; }
+        if (idx >= 0) await OpenAtAsync(idx);
+    }
+
+    public bool IsOpen => _open;
+    public MediaItem? Current => _open && _index < _items.Count ? _items[_index] : null;
+
+    private async Task EnsureKeyHandler()
+    {
+        if (_keyHandlerRegistered) return;
+        _selfRef ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                window.__lbKey = function(e) {
+                    if (!window.__lbDotnet) return;
+                    if (e.key === 'Escape') window.__lbDotnet.invokeMethodAsync('JsClose');
+                    else if (e.key === 'ArrowRight') window.__lbDotnet.invokeMethodAsync('JsNext');
+                    else if (e.key === 'ArrowLeft') window.__lbDotnet.invokeMethodAsync('JsPrev');
+                };
+                document.addEventListener('keydown', window.__lbKey);
+            ");
+            await JS.InvokeVoidAsync("eval", "window.__lbDotnet = arguments[0];", _selfRef);
+        }
+        catch { /* ignore */ }
+        _keyHandlerRegistered = true;
+    }
+
+    [JSInvokable]
+    public Task JsClose() { return Close(); }
+
+    [JSInvokable]
+    public Task JsNext() { Next(); return Task.CompletedTask; }
+
+    [JSInvokable]
+    public Task JsPrev() { Prev(); return Task.CompletedTask; }
+
+    private async Task HandleBackdrop() => await Close();
+
+    private async Task Close()
+    {
+        _open = false;
+        StateHasChanged();
+        if (OnClose.HasDelegate) await OnClose.InvokeAsync();
+    }
+
+    private void Next()
+    {
+        if (_items.Count == 0) return;
+        _index = (_index + 1) % _items.Count;
+        _copied = false;
+        StateHasChanged();
+    }
+
+    private void Prev()
+    {
+        if (_items.Count == 0) return;
+        _index = (_index - 1 + _items.Count) % _items.Count;
+        _copied = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyDeepLink()
+    {
+        if (!_open || _index >= _items.Count) return;
+        var file = _items[_index].FileName;
+        var url = Nav.ToAbsoluteUri($"/item/{ItemId}?m={Uri.EscapeDataString(file)}").ToString();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(1500);
+        _copied = false;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_keyHandlerRegistered)
+            {
+                await JS.InvokeVoidAsync("eval",
+                    "if (window.__lbKey) document.removeEventListener('keydown', window.__lbKey); delete window.__lbKey; delete window.__lbDotnet;");
+            }
+        }
+        catch { /* ignore */ }
+        _selfRef?.Dispose();
+    }
+}

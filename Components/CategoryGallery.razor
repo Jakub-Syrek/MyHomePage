@@ -4,89 +4,144 @@
 @inject IJSRuntime JSRuntime
 
 @*
-    Generic category gallery component.
-    Template Method / DRY principle: the four category pages (Gory, Bouldering, etc.)
-    previously duplicated identical markup and logic. Now each page is a thin wrapper
-    that passes category-specific parameters to this single reusable component.
+    Vertical wall of CollectionRows: each gallery item is its own row with a
+    horizontally scrolling strip of media tiles. Clicking any tile opens the
+    shared fullscreen Lightbox.
 *@
 
-<div class="gallery-container" style="background-image: url('@BackgroundImage'); background-size: 100% 100%;">
-    <div class="gallery-header">
-        <div>
+<div class="category-page" style="--bg-url: url('@BackgroundImage');">
+    <div class="category-hero">
+        <div class="category-hero-inner">
             <button class="btn-back" @onclick="GoHome">← Back</button>
+            <h1>@Category</h1>
+            <AuthorizeView>
+                <Authorized>
+                    <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
+                        @if (showUpload) { <span>✕ Close</span> } else { <span>+ Upload Media</span> }
+                    </button>
+                </Authorized>
+            </AuthorizeView>
         </div>
-        <AuthorizeView>
-            <Authorized>
-                <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
-                    + Upload Media
-                </button>
-            </Authorized>
-        </AuthorizeView>
     </div>
 
-    @if (showUpload)
-    {
-        <VideoUploadCategory Category="@Category" OnUploadSuccess="RefreshVideos" />
+    <div class="category-content">
+        @if (showUpload)
+        {
+            <VideoUploadCategory Category="@Category" OnUploadSuccess="RefreshVideos" />
+        }
+
+        @if (videos == null)
+        {
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading media...</p>
+            </div>
+        }
+        else if (videos.Count == 0)
+        {
+            <div class="empty-state-wall">
+                <p>@EmptyMessage</p>
+            </div>
+        }
+        else
+        {
+            <div class="rows-wall">
+                @foreach (var v in videos)
+                {
+                    <CollectionRow Item="v" OnTileOpen="@(idx => OpenLightbox(v, idx))" @key="v.Id" />
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<Lightbox @ref="_lightbox"
+          ItemId="_currentItemId"
+          Items="_currentMedia" />
+
+<style>
+    .category-page {
+        min-height: 100vh;
+        background:
+            linear-gradient(180deg, rgba(245, 247, 250, 0.85) 0%, rgba(195, 207, 226, 0.95) 100%),
+            var(--bg-url, none);
+        background-size: cover;
+        background-attachment: fixed;
+        background-position: center;
     }
 
-    @if (videos == null)
-    {
-        <div class="loading">
-            <div class="spinner"></div>
-            <p>Loading media...</p>
-        </div>
+    .category-hero {
+        padding: 60px 24px 40px;
+        background: linear-gradient(135deg, rgba(102,126,234,0.92) 0%, rgba(118,75,162,0.92) 100%);
+        color: white;
+        box-shadow: 0 6px 30px rgba(0,0,0,0.12);
     }
-    else if (videos.Count == 0)
-    {
-        <div class="empty-state">
-            <p>@EmptyMessage</p>
-        </div>
+    .category-hero-inner {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
     }
-    else
-    {
-        <div class="grid">
-            @foreach (var video in videos)
-            {
-                <div class="video-card" @key="video.Id">
-                    <div class="card-image">
-                        <MediaCarousel Item="video" />
-                        @{ var mediaCount = video.GetAllMedia().Count; }
-                        @if (mediaCount > 1)
-                        {
-                            <span class="card-badge">@mediaCount items</span>
-                        }
-                    </div>
-                    <div class="card-content">
-                        <a href="/item/@video.Id" class="card-title-link">
-                            <h3>@video.Title</h3>
-                        </a>
-                        <p class="description">@video.Description</p>
-                        <div class="meta">
-                            @if (!string.IsNullOrEmpty(video.Location))
-                            {
-                                <span class="location">📍 @video.Location</span>
-                            }
-                            @if (video.HasCoordinates)
-                            {
-                                <a class="gps" href="/map" title="@video.Latitude, @video.Longitude">🗺️ on map</a>
-                            }
-                            <span class="date">@video.UploadedAt.ToString("MMM dd, yyyy")</span>
-                        </div>
-                        <div class="card-actions">
-                            <a class="btn-small view" href="/item/@video.Id">View detail →</a>
-                            <AuthorizeView>
-                                <Authorized>
-                                    <button class="btn-small edit" @onclick="() => EditVideo(video.Id)">Edit</button>
-                                    <button class="btn-small delete" @onclick="() => DeleteVideo(video.Id)">Delete</button>
-                                </Authorized>
-                            </AuthorizeView>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
+    .category-hero h1 {
+        flex: 1;
+        font-size: 2.4rem;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
-</div>
+    .btn-back {
+        background: rgba(255,255,255,0.18);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.25);
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .btn-back:hover { background: rgba(255,255,255,0.32); }
+
+    .btn-upload {
+        padding: 11px 22px;
+        background: white;
+        color: #667eea;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .btn-upload:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    }
+
+    .category-content {
+        padding: 36px 20px 60px;
+    }
+    .rows-wall {
+        display: flex;
+        flex-direction: column;
+    }
+    .empty-state-wall {
+        text-align: center; padding: 80px 20px; color: #4a5568;
+        background: rgba(255,255,255,0.7);
+        max-width: 720px; margin: 40px auto;
+        border-radius: 16px;
+        backdrop-filter: blur(8px);
+    }
+    .loading {
+        text-align: center; padding: 80px 20px;
+    }
+
+    @@media (max-width: 700px) {
+        .category-hero { padding: 40px 16px 28px; }
+        .category-hero h1 { font-size: 1.6rem; }
+    }
+</style>
 
 @code {
     [Parameter, EditorRequired] public string Category { get; set; } = "";
@@ -95,6 +150,10 @@
 
     private IReadOnlyList<Video>? videos;
     private bool showUpload = false;
+
+    private Lightbox? _lightbox;
+    private int _currentItemId;
+    private IReadOnlyList<MediaItem> _currentMedia = Array.Empty<MediaItem>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -109,17 +168,13 @@
 
     private void ToggleUpload() => showUpload = !showUpload;
 
-    private void EditVideo(int id) =>
-        Navigation.NavigateTo($"/edit-video/{id}");
-
-    private async Task DeleteVideo(int id)
+    private async Task OpenLightbox(Video v, int index)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>(
-            "confirm", "Are you sure you want to delete this video? This cannot be undone.");
-        if (!confirmed) return;
-
-        await VideoService.DeleteVideoAsync(id);
-        await RefreshVideos();
+        _currentItemId = v.Id;
+        _currentMedia = v.GetAllMedia();
+        StateHasChanged();
+        if (_lightbox is not null)
+            await _lightbox.OpenAtAsync(index);
     }
 
     private void GoHome() => Navigation.NavigateTo("/");

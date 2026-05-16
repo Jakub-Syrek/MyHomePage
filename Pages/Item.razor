@@ -47,7 +47,6 @@
             <meta property="place:location:latitude" content="@_item.Latitude" />
             <meta property="place:location:longitude" content="@_item.Longitude" />
         }
-
         <meta name="twitter:card" content="@(firstImage is not null ? "summary_large_image" : "player")" />
         <meta name="twitter:title" content="@_item.Title" />
         <meta name="twitter:description" content="@descShort" />
@@ -90,41 +89,33 @@ else
                         <a class="badge map" href="/map">🗺️ Show on map</a>
                     }
                     <span class="badge date">@_item.UploadedAt.ToString("MMM dd, yyyy")</span>
-                    <span class="badge files">@_media.Count file(s)</span>
+                    <span class="badge files">@_media.Count item(s)</span>
                 </div>
             </div>
         </header>
 
         <div class="item-body">
-            <section class="media-section">
-                @foreach (var (m, idx) in _media.Select((m, i) => (m, i)))
+            <section class="item-grid">
+                @for (int i = 0; i < _media.Count; i++)
                 {
-                    <div class="media-block" id="m-@idx">
+                    var idx = i;
+                    var m = _media[i];
+                    var url = $"/videos/{Id}/{m.FileName}";
+                    <div class="grid-tile @(m.Type == MediaType.Image ? "is-image" : "is-video")"
+                         @onclick="() => OpenLightbox(idx)"
+                         id="m-@idx">
                         @if (m.Type == MediaType.Image)
                         {
-                            <img src="@MediaUrl(m)" alt="@_item.Title" class="media-asset" loading="lazy" />
+                            <img src="@url" alt="@_item.Title" loading="lazy" />
                         }
                         else
                         {
-                            <video class="media-asset" controls preload="metadata" playsinline>
-                                <source src="@MediaUrl(m)" type="video/mp4" />
+                            <video preload="metadata" muted playsinline>
+                                <source src="@(url + "#t=0.5")" type="video/mp4" />
                             </video>
+                            <div class="grid-play">▶</div>
                         }
-                        <div class="media-toolbar">
-                            <span class="media-label">@(m.Type == MediaType.Image ? "🖼️ Photo" : "🎬 Video") @(idx + 1) / @_media.Count</span>
-                            <div class="media-actions">
-                                <a href="@MediaUrl(m)" target="_blank" rel="noopener" class="link-btn" title="Open original in new tab">
-                                    ↗ Open
-                                </a>
-                                <a href="@MediaUrl(m)" download class="link-btn" title="Download file">
-                                    ⬇ Download
-                                </a>
-                                <button type="button" class="link-btn copy"
-                                        @onclick="() => CopyLink(MediaUrl(m), m.FileName)">
-                                    @if (_copiedFile == m.FileName) { <span>✓ Copied</span> } else { <span>🔗 Copy link</span> }
-                                </button>
-                            </div>
-                        </div>
+                        <div class="grid-tag">@(m.Type == MediaType.Image ? "PHOTO" : "VIDEO") @(idx + 1)</div>
                     </div>
                 }
             </section>
@@ -134,7 +125,6 @@ else
                 <aside class="item-description">
                     <h2>About this trip</h2>
                     <p>@_item.Description</p>
-
                     @if (_item.HasCoordinates)
                     {
                         <div class="coords">
@@ -157,6 +147,8 @@ else
             </div>
         </div>
     </article>
+
+    <Lightbox @ref="_lightbox" ItemId="Id" Items="_media" OnClose="OnLightboxClosed" />
 }
 
 <style>
@@ -171,121 +163,103 @@ else
     }
     @@keyframes spin { to { transform: rotate(360deg); } }
 
-    .item-page {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding-bottom: 60px;
-    }
+    .item-page { padding-bottom: 60px; }
+
     .item-hero {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 50px 24px 40px;
+        padding: 60px 24px 50px;
     }
-    .item-hero-inner { max-width: 1100px; margin: 0 auto; }
+    .item-hero-inner { max-width: 1200px; margin: 0 auto; }
     .back-link {
         color: rgba(255,255,255,0.85);
         text-decoration: none;
         font-weight: 500;
         margin-bottom: 16px;
         display: inline-block;
-        transition: color 0.2s;
     }
     .back-link:hover { color: white; }
     .item-title {
-        margin: 4px 0 16px;
-        font-size: 2.3rem;
-        font-weight: 700;
-        line-height: 1.15;
+        margin: 6px 0 18px;
+        font-size: 2.6rem;
+        font-weight: 800;
+        line-height: 1.1;
         text-shadow: 0 2px 12px rgba(0,0,0,0.2);
     }
     .item-meta { display:flex; flex-wrap:wrap; gap:10px; }
     .badge {
         display: inline-flex; align-items: center; gap: 4px;
-        background: rgba(255,255,255,0.16);
+        background: rgba(255,255,255,0.18);
         backdrop-filter: blur(4px);
         color: white;
-        padding: 6px 12px;
+        padding: 7px 14px;
         border-radius: 999px;
-        font-size: 0.88rem;
+        font-size: 0.9rem;
         font-weight: 500;
         text-decoration: none;
-        transition: background 0.2s;
+        transition: background 0.18s;
     }
-    .badge:hover { background: rgba(255,255,255,0.28); }
+    .badge:hover { background: rgba(255,255,255,0.32); }
 
     .item-body {
-        max-width: 1100px;
-        margin: -30px auto 0;
-        padding: 0 24px;
+        max-width: 1200px;
+        margin: -28px auto 0;
+        padding: 0 20px;
         position: relative;
         z-index: 2;
     }
 
-    .media-section {
+    .item-grid {
         display: grid;
-        gap: 24px;
-        margin-bottom: 30px;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 14px;
+        margin-bottom: 28px;
     }
-    .media-block {
-        background: white;
+    .grid-tile {
+        position: relative;
+        aspect-ratio: 4 / 3;
         border-radius: 14px;
         overflow: hidden;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-    }
-    .media-asset {
-        width: 100%; height: auto; display: block;
-        max-height: 80vh;
-        object-fit: contain;
-        background: #000;
-    }
-    .media-toolbar {
-        display: flex; justify-content: space-between; align-items: center;
-        flex-wrap: wrap; gap: 12px;
-        padding: 14px 20px;
-        background: #fafbfd;
-        border-top: 1px solid #ebeef5;
-    }
-    .media-label { color: #7f8c8d; font-size: 0.9rem; font-weight: 500; }
-    .media-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .link-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        background: white;
-        color: #4a5568;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 8px 14px;
-        font-size: 0.88rem;
-        font-weight: 500;
-        text-decoration: none;
+        background: #1a1a1a;
         cursor: pointer;
-        transition: all 0.18s ease;
-        font-family: inherit;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+        transition: transform 0.25s, box-shadow 0.25s;
     }
-    .link-btn:hover {
-        background: #f7fafc;
-        border-color: #cbd5e0;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    .grid-tile:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.2);
     }
-    .link-btn.primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-color: transparent;
+    .grid-tile img, .grid-tile video {
+        width: 100%; height: 100%;
+        object-fit: cover; display: block;
     }
-    .link-btn.primary:hover { filter: brightness(1.08); }
-    .link-btn.copy.copied { background: #d4edda; color: #155724; }
+    .grid-play {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-size: 2.6rem;
+        text-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        pointer-events: none;
+    }
+    .grid-tag {
+        position: absolute; top: 10px; left: 10px;
+        background: rgba(0,0,0,0.65); color: white;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+        padding: 4px 10px; border-radius: 999px;
+        backdrop-filter: blur(4px);
+        pointer-events: none;
+    }
 
     .item-description {
         background: white;
-        border-radius: 14px;
-        padding: 28px;
+        border-radius: 16px;
+        padding: 30px;
         margin-bottom: 24px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+        box-shadow: 0 6px 28px rgba(0,0,0,0.06);
     }
     .item-description h2 {
         margin: 0 0 14px;
         color: #2c3e50;
-        font-size: 1.3rem;
+        font-size: 1.35rem;
     }
     .item-description p {
         color: #4a5568;
@@ -306,19 +280,47 @@ else
         display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
         padding: 16px;
     }
+    .link-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: white;
+        color: #4a5568;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        font-family: inherit;
+    }
+    .link-btn:hover {
+        background: #f7fafc;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    }
+    .link-btn.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+    }
+    .link-btn.primary:hover { filter: brightness(1.08); color: white; }
 </style>
 
 @code {
     [Parameter] public int Id { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "m")]
+    public string? MediaQuery { get; set; }
 
     private Video? _item;
     private IReadOnlyList<MediaItem> _media = Array.Empty<MediaItem>();
     private string _backUrl = "/";
     private string _backLabel = "Home";
     private string _loadMessage = "Loading…";
-
-    private string? _copiedFile;
     private bool _pageCopied;
+    private Lightbox? _lightbox;
+    private string? _autoOpened;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -336,17 +338,25 @@ else
         }
     }
 
-    private string MediaUrl(MediaItem m) => $"/videos/{Id}/{m.FileName}";
-
-    private async Task CopyLink(string url, string fileName)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var absolute = Nav.ToAbsoluteUri(url).ToString();
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", absolute);
-        _copiedFile = fileName;
-        StateHasChanged();
-        await Task.Delay(1500);
-        _copiedFile = null;
-        StateHasChanged();
+        if (firstRender && !string.IsNullOrEmpty(MediaQuery) && _lightbox is not null && _autoOpened != MediaQuery)
+        {
+            _autoOpened = MediaQuery;
+            await _lightbox.OpenByFileNameAsync(MediaQuery);
+        }
+    }
+
+    private async Task OpenLightbox(int idx)
+    {
+        if (_lightbox is not null) await _lightbox.OpenAtAsync(idx);
+    }
+
+    private void OnLightboxClosed()
+    {
+        // strip ?m= from URL without reloading
+        _autoOpened = null;
+        Nav.NavigateTo($"/item/{Id}", forceLoad: false, replace: true);
     }
 
     private async Task CopyPageLink()
