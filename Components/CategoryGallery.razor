@@ -28,20 +28,26 @@
         </div>
     </div>
 
-    @* ── Sliding filter tab (sits just below the header, sticky) ───── *@
-    <div class="filter-tab-wrap">
-        <button type="button" class="filter-tab @(_showFilter ? "open" : "")"
-                @onclick="ToggleFilter">
-            <span class="ft-icon">@(_showFilter ? "▲" : "▼")</span>
-            <span>Sort &amp; Filter</span>
-            @if (HasFilter || !_sortDescending)
-            {
-                <span class="ft-dot" title="Custom filter/sort active"></span>
-            }
-            <span class="ft-count">@FilteredVideos.Count / @(videos?.Count ?? 0)</span>
-        </button>
+    @* ── Sliding tab rail (sits just below the header, sticky) ──────
+       Designed to accommodate multiple tabs in the future (Filter, View,
+       Search …). Each tab is a slim handle hanging from the header. *@
+    <div class="tabs-rail">
+        <div class="tabs-strip">
+            <button type="button"
+                    class="tab-handle @(_showFilter ? "open" : "")"
+                    @onclick="ToggleFilter"
+                    title="Sort &amp; Filter">
+                <span class="th-glyph">⌃</span>
+                <span class="th-label">Filter</span>
+                @if (HasFilter || !_sortDescending)
+                {
+                    <span class="th-dot" title="Custom filter/sort active"></span>
+                }
+            </button>
+            @* Place additional tab handles here in the future *@
+        </div>
 
-        <div class="filter-panel @(_showFilter ? "open" : "")">
+        <div class="tab-panel @(_showFilter ? "open" : "")">
             <div class="filter-bar">
                 <div class="filter-group">
                     <label>From</label>
@@ -218,8 +224,8 @@
 
     .category-content { padding: 14px 20px 60px; }
 
-    /* ── Slide-down filter tab (tucked under header) ───────────────── */
-    .filter-tab-wrap {
+    /* ── Tab rail (slim handles tucked under the header) ───────────── */
+    .tabs-rail {
         position: sticky;
         top: 0;
         z-index: 50;
@@ -228,70 +234,81 @@
         padding: 0 20px;
         pointer-events: none;
     }
-    .filter-tab {
+    .tabs-strip {
+        display: flex;
+        gap: 6px;
+        padding-left: 24px;
+    }
+    .tab-handle {
         pointer-events: auto;
         position: relative;
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        padding: 9px 18px 11px;
-        margin-left: 24px;
+        gap: 6px;
+        padding: 4px 14px 6px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.7) 100%);
-        backdrop-filter: blur(18px) saturate(170%);
-        -webkit-backdrop-filter: blur(18px) saturate(170%);
-        border: 1px solid rgba(255,255,255,0.7);
+            linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.62) 100%);
+        backdrop-filter: blur(14px) saturate(160%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.6);
         border-top: 0;
-        border-radius: 0 0 14px 14px;
-        color: #2d3748;
-        font-size: 0.92rem;
+        border-radius: 0 0 10px 10px;
+        color: #4a5568;
+        font-size: 0.74rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         cursor: pointer;
         box-shadow:
-            0 8px 24px rgba(20, 30, 60, 0.18),
+            0 4px 14px rgba(20, 30, 60, 0.12),
             inset 0 -1px 0 rgba(255,255,255,0.5);
-        transition: transform 0.22s, box-shadow 0.22s, background 0.22s;
+        transition: transform 0.22s, box-shadow 0.22s, background 0.22s, color 0.22s, padding 0.22s;
         font-family: inherit;
+        opacity: 0.85;
+        min-width: 0;
     }
-    .filter-tab:hover {
-        transform: translateY(2px);
-        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.82) 100%);
-        box-shadow: 0 12px 30px rgba(20, 30, 60, 0.22);
+    .tab-handle:hover {
+        transform: translateY(3px);
+        padding: 6px 14px 8px;
+        opacity: 1;
+        color: #2d3748;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.78) 100%);
+        box-shadow: 0 8px 22px rgba(20, 30, 60, 0.18);
     }
-    .filter-tab.open {
-        background: linear-gradient(180deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%);
+    .tab-handle.open {
+        background: linear-gradient(180deg, rgba(102,126,234,0.96) 0%, rgba(118,75,162,0.96) 100%);
         color: white;
-        border-color: rgba(255,255,255,0.5);
+        opacity: 1;
+        padding: 6px 16px 9px;
+        border-color: rgba(255,255,255,0.45);
+        box-shadow: 0 10px 26px rgba(102, 126, 234, 0.4);
     }
-    .ft-icon {
+    .th-glyph {
         display: inline-block;
+        font-size: 0.85rem;
+        line-height: 1;
         transition: transform 0.22s;
-        font-size: 0.7rem;
     }
-    .filter-tab.open .ft-icon { transform: rotate(0deg); }
-    .ft-dot {
-        width: 8px; height: 8px;
+    .tab-handle.open .th-glyph { transform: rotate(180deg); }
+    .th-label {
+        line-height: 1;
+    }
+    .th-dot {
+        width: 6px; height: 6px;
         border-radius: 50%;
         background: #f59e0b;
-        box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-        animation: ftPulse 1.4s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(245, 158, 11, 0.65);
+        animation: thPulse 1.4s ease-in-out infinite;
+        flex-shrink: 0;
     }
-    @@keyframes ftPulse {
+    .tab-handle.open .th-dot { background: white; box-shadow: 0 0 6px rgba(255,255,255,0.85); }
+    @@keyframes thPulse {
         0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(0.85); }
+        50% { opacity: 0.55; transform: scale(0.8); }
     }
-    .ft-count {
-        background: rgba(0,0,0,0.08);
-        color: inherit;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.78rem;
-        font-weight: 600;
-    }
-    .filter-tab.open .ft-count { background: rgba(255,255,255,0.22); }
 
-    /* Sliding panel (clipped on collapse) */
-    .filter-panel {
+    /* Sliding panel */
+    .tab-panel {
         pointer-events: auto;
         max-height: 0;
         overflow: hidden;
@@ -301,10 +318,10 @@
         opacity: 0;
         margin-top: 0;
     }
-    .filter-panel.open {
-        max-height: 240px;
+    .tab-panel.open {
+        max-height: 280px;
         opacity: 1;
-        margin-top: 6px;
+        margin-top: 4px;
     }
 
     /* ── Filter bar (glossy) ────────────────────────────────────────── */
