@@ -24,18 +24,20 @@
                 <a href="/prowadzeni-hala">Indoor Climbing</a>
                 <a href="/calisthenics">Calisthenics</a>
                 <a href="/running">Running</a>
-                <a href="/map">Map</a>
             </nav>
-            <AuthorizeView>
-                <Authorized>
-                    <div class="admin-controls">
+            <div class="pinned-controls">
+                <a href="/map" class="pinned-globe" title="Adventures map" aria-label="Map">
+                    <span class="pinned-globe-orb"></span>
+                </a>
+                <AuthorizeView>
+                    <Authorized>
                         <a href="/admin/strava" class="admin-strava" title="Strava integration" aria-label="Strava">
                             <img src="/images/icons/strava.svg" alt="Strava" class="admin-strava-icon" />
                         </a>
                         <a href="/admin/logs">Logs</a>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
             <div class="auth-controls">
                 <AuthorizeView>
                     <Authorized>
@@ -221,23 +223,52 @@
         opacity: 0.8;
     }
 
-    /* Admin-only links pinned next to auth-controls so they never
-       drift off-screen when nav-menu overflows horizontally. */
-    .admin-controls {
+    /* Always-visible pinned controls — globe goes to /map (public),
+       Strava + Logs (admin-only) appear behind AuthorizeView. Sits
+       between the scrollable nav-menu and the auth pill. */
+    .pinned-controls {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         flex-shrink: 0;
         margin-left: 18px;
     }
-    .admin-controls a {
+    .pinned-controls a {
         color: white;
         text-decoration: none;
         font-weight: 500;
         white-space: nowrap;
         transition: opacity 0.18s;
     }
-    .admin-controls a:hover { opacity: 0.8; }
+    .pinned-controls a:hover { opacity: 0.85; }
+
+    /* Blue Earth orb that deep-links to /map. Pure CSS — no extra
+       network round-trip for an icon file. */
+    .pinned-globe {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    .pinned-globe-orb {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background:
+            radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 35%),
+            radial-gradient(circle at 70% 75%, rgba(20, 100, 200, 0.65) 0%, rgba(20, 100, 200, 0) 40%),
+            linear-gradient(135deg, #1d4ed8 0%, #2563eb 45%, #0ea5e9 100%);
+        box-shadow:
+            0 2px 6px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.45);
+        transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .pinned-globe:hover .pinned-globe-orb {
+        transform: scale(1.12) rotate(8deg);
+        box-shadow:
+            0 4px 12px rgba(29, 78, 216, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
 
     .admin-strava {
         display: inline-flex;
