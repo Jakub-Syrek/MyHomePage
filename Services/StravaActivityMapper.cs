@@ -80,4 +80,37 @@ public static class StravaActivityMapper
         !string.IsNullOrWhiteSpace(activity.SportType)
             ? activity.SportType!
             : activity.Type;
+
+    /// <summary>
+    /// Extracts the start coordinates from a Strava activity. Strava returns
+    /// the start position as a two-element <c>[lat, lng]</c> array which is
+    /// empty for activities recorded without GPS (e.g. indoor weight training).
+    /// </summary>
+    /// <param name="activity">Activity returned by the Strava API.</param>
+    /// <returns>A tuple of nullable doubles; both null when no GPS fix.</returns>
+    public static (double? Latitude, double? Longitude) ExtractStartCoordinates(
+        StravaActivity activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        var coords = activity.StartLatLng;
+        if (coords is null || coords.Length < 2) return (null, null);
+        if (coords[0] == 0 && coords[1] == 0) return (null, null);
+        return (coords[0], coords[1]);
+    }
+
+    /// <summary>
+    /// Builds a human-readable location label from Strava's free-text fields,
+    /// preferring the most specific tier available. Returns null when none of
+    /// the fields are populated.
+    /// </summary>
+    /// <param name="activity">Activity returned by the Strava API.</param>
+    public static string? ExtractLocationLabel(StravaActivity activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        var parts = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(activity.LocationCity))    parts.Add(activity.LocationCity!);
+        if (!string.IsNullOrWhiteSpace(activity.LocationState))   parts.Add(activity.LocationState!);
+        if (!string.IsNullOrWhiteSpace(activity.LocationCountry)) parts.Add(activity.LocationCountry!);
+        return parts.Count == 0 ? null : string.Join(", ", parts);
+    }
 }

@@ -178,18 +178,30 @@
         if (!_mapInitialized)
         {
             var markers = FilteredLocated
-                .Select(v => new
+                .Select(v =>
                 {
-                    id = v.Id,
-                    title = v.Title,
-                    description = v.Description,
-                    location = v.Location,
-                    category = v.Category,
-                    lat = v.Latitude!.Value,
-                    lon = v.Longitude!.Value,
-                    thumb = $"/videos/{v.Id}/{v.GetAllMedia().First().FileName}",
-                    isImage = v.GetAllMedia().First().Type == MediaType.Image,
-                    url = $"/item/{v.Id}"
+                    var primary = v.GetAllMedia().FirstOrDefault();
+                    var hasMedia = primary is not null && !string.IsNullOrEmpty(primary.FileName);
+                    return new
+                    {
+                        id = v.Id,
+                        title = v.Title,
+                        description = v.Description,
+                        location = v.Location,
+                        category = v.Category,
+                        lat = v.Latitude!.Value,
+                        lon = v.Longitude!.Value,
+                        thumb = hasMedia ? $"/videos/{v.Id}/{primary!.FileName}" : null,
+                        isImage = hasMedia && primary!.Type == MediaType.Image,
+                        url = $"/item/{v.Id}",
+                        hasTraining = v.HasTraining,
+                        trainingSource = v.Training?.Source.ToString(),
+                        trainingActivityType = v.Training?.ActivityType,
+                        distanceKm = v.Training?.DistanceMeters / 1000.0,
+                        durationMin = v.Training is null ? (double?)null : v.Training.Duration.TotalMinutes,
+                        avgHr = v.Training?.AverageHeartRate,
+                        externalUrl = v.Training?.ExternalUrl
+                    };
                 })
                 .ToArray();
 
@@ -218,19 +230,46 @@
 
                         const bounds = [];
                         markers.forEach(m => {{
+                            let mediaBlock = '';
+                            if (m.thumb) {{
+                                mediaBlock = m.isImage
+                                    ? `<img src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' />`
+                                    : `<video src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' preload='metadata' controls></video>`;
+                            }}
+                            let trainingBlock = '';
+                            if (m.hasTraining) {{
+                                const stats = [];
+                                if (m.distanceKm) stats.push(`📏 ${{m.distanceKm.toFixed(2)}} km`);
+                                if (m.durationMin) stats.push(`⏱ ${{Math.round(m.durationMin)}} min`);
+                                if (m.avgHr) stats.push(`❤️ ${{m.avgHr}} bpm`);
+                                const stravaLink = m.externalUrl
+                                    ? ` · <a href='${{m.externalUrl}}' target='_blank' rel='noopener' style='color:#FC4C02;font-weight:600;text-decoration:none'>Strava ↗</a>`
+                                    : '';
+                                trainingBlock = `<p style='margin:6px 0;color:#2c3e50;font-size:0.85rem'>${{stats.join(' · ')}}${{stravaLink}}</p>`;
+                            }}
                             const popup = `
                                 <div style='min-width:200px'>
-                                    ${{m.isImage
-                                        ? `<img src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' />`
-                                        : `<video src='${{m.thumb}}' style='width:100%;border-radius:6px;margin-bottom:8px' preload='metadata' controls></video>`}}
+                                    ${{mediaBlock}}
                                     <h4 style='margin:4px 0;color:#2c3e50'>${{m.title}}</h4>
                                     ${{m.location ? `<p style='margin:2px 0;color:#7f8c8d;font-size:0.85rem'>📍 ${{m.location}}</p>` : ''}}
                                     ${{m.category ? `<p style='margin:2px 0;color:#7f8c8d;font-size:0.8rem'>🏷️ ${{m.category}}</p>` : ''}}
-                                    <p style='margin:6px 0 2px;color:#555;font-size:0.85rem'>${{(m.description||'').substring(0,140)}}</p>
+                                    ${{trainingBlock}}
+                                    ${{m.description ? `<p style='margin:6px 0 2px;color:#555;font-size:0.85rem'>${{m.description.substring(0,140)}}</p>` : ''}}
                                     <a href='${{m.url}}' style='display:inline-block;margin-top:6px;color:#667eea;text-decoration:none;font-weight:600'>View gallery →</a>
                                 </div>
                             `;
-                            const marker = L.marker([m.lat, m.lon]).addTo(map);
+                            const icon = m.hasTraining
+                                ? L.divIcon({{
+                                    className: 'training-marker',
+                                    html: `<div style='background:#FC4C02;color:#fff;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);border:2px solid #fff'><span style='transform:rotate(45deg);font-size:14px'>🏃</span></div>`,
+                                    iconSize: [30, 30],
+                                    iconAnchor: [15, 30],
+                                    popupAnchor: [0, -30]
+                                  }})
+                                : null;
+                            const marker = icon
+                                ? L.marker([m.lat, m.lon], {{ icon: icon }}).addTo(map)
+                                : L.marker([m.lat, m.lon]).addTo(map);
                             marker.bindPopup(popup, {{ maxWidth: 320 }});
                             bounds.push([m.lat, m.lon]);
                         }});

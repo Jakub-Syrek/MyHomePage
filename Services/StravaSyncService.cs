@@ -134,6 +134,7 @@ public sealed class StravaSyncService : IStravaSyncService
         cancellationToken.ThrowIfCancellationRequested();
         var training = StravaActivityMapper.ToTrainingData(activity);
         var category = StravaActivityMapper.ResolveCategory(activity);
+        var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
         var video = Video.Create(
             id: _videos.GenerateNextId(),
             title: string.IsNullOrWhiteSpace(activity.Name)
@@ -141,16 +142,19 @@ public sealed class StravaSyncService : IStravaSyncService
                 : activity.Name,
             description: activity.Description ?? string.Empty,
             fileName: string.Empty,
-            location: null,
+            location: StravaActivityMapper.ExtractLocationLabel(activity),
             category: category,
-            fileSizeBytes: 0);
+            fileSizeBytes: 0,
+            latitude: lat,
+            longitude: lng);
 
         video.UploadedAt = training.StartTimeUtc;
         video.Training = training;
         await _videos.SaveAsync(video);
         _logger.LogInformation(
-            "Created gallery item {VideoId} from Strava activity {ActivityId} (category {Category})",
-            video.Id, activity.Id, category);
+            "Created gallery item {VideoId} from Strava activity {ActivityId} " +
+            "(category {Category}, GPS {Lat:F4},{Lng:F4})",
+            video.Id, activity.Id, category, lat ?? 0, lng ?? 0);
         return video;
     }
 

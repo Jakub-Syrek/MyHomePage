@@ -48,6 +48,11 @@ public sealed class StravaActivity
     [JsonPropertyName("average_speed")] public double? AverageSpeedMps { get; set; }
     [JsonPropertyName("visibility")] public string? Visibility { get; set; }
     [JsonPropertyName("map")] public StravaActivityMap? Map { get; set; }
+    [JsonPropertyName("start_latlng")] public double[]? StartLatLng { get; set; }
+    [JsonPropertyName("end_latlng")] public double[]? EndLatLng { get; set; }
+    [JsonPropertyName("location_city")] public string? LocationCity { get; set; }
+    [JsonPropertyName("location_state")] public string? LocationState { get; set; }
+    [JsonPropertyName("location_country")] public string? LocationCountry { get; set; }
 }
 
 /// <summary>Encoded polyline payload nested inside an activity response.</summary>
