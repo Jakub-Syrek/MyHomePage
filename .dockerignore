@@ -31,9 +31,13 @@ logs/
 ffmpeg/
 
 # Media — these stay outside the image (Railway volume mounts at /data/videos)
-wwwroot/videos/
+wwwroot/videos/*
+!wwwroot/videos/header/
 wwwroot/images/*.mp4
 wwwroot/images/*.webm
+
+# Raw source assets (Midjourney exports) — not deployed
+Images/
 wwwroot/images/*.mkv
 
 # Node frontend (if any)

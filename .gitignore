@@ -53,7 +53,15 @@ dist/
 wwwroot/images/*
 !wwwroot/images/icons/
 !wwwroot/images/*-bg.jpg
-wwwroot/videos/
+# Ignore top-level files inside wwwroot/videos/ (user-uploaded media)
+# but keep the header/ subfolder (ships with the app)
+wwwroot/videos/*
+!wwwroot/videos/header/
+# Explicit override of the global *.mp4 rule for our looping header asset
+!wwwroot/videos/header/header-bg.mp4
+
+# Raw source assets (Midjourney exports, originals) — staged into wwwroot, not deployed
+/Images/
 
 # Audio files
 *.mp3
