@@ -195,10 +195,10 @@
         -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
                 mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
     }
-    /* Right-align nav when content fits; collapses to 0 when items overflow
-       so scrolling reveals the LEFT (primary) links first instead of the
-       admin links at the end. */
-    .nav-menu > :first-child { margin-left: auto; }
+    /* Nav items flow left-to-right starting right after the logo. The
+       auth pill sits at the far right via the parent's space-between,
+       so removing the previous margin-left:auto on the first nav item
+       leaves the maximum horizontal room for the link list. */
     .nav-menu::-webkit-scrollbar { display: none; }
 
     @@media (max-width: 1280px) {
@@ -219,12 +219,14 @@
 
     /* Auth controls pinned to the far right, OUTSIDE the scrollable
        nav-menu so the Login / Logout button is always visible even
-       when the category links overflow horizontally. */
+       when the category links overflow horizontally. Bigger left
+       margin keeps a visible gap from the rightmost nav link so the
+       pill never sits on top of "Logs". */
     .auth-controls {
         display: flex;
         align-items: center;
         flex-shrink: 0;
-        margin-left: 6px;
+        margin-left: 28px;
     }
     .auth-btn {
         display: inline-flex;
