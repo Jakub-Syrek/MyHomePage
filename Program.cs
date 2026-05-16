@@ -141,6 +141,11 @@ try
     // Must come BEFORE any middleware that reads the scheme (auth, static files, etc.)
     app.UseForwardedHeaders();
 
+    // Rewrite /item/{id} → /og/{id} for social-media scrapers (FB, Twitter, …)
+    // so they see proper server-rendered Open Graph meta tags instead of
+    // empty Blazor-prerendered output.
+    app.UseScraperRewrite();
+
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Error");
