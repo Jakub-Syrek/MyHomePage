@@ -7,17 +7,19 @@
     - Horizontal swipe inside: ◄ ► buttons + dots indicator.
     - Click on media → opens shared fullscreen Lightbox via OnTileOpen.
     - Same card width on every collection → consistent vertical feed.
+    - Authorized users see Edit + Delete icons next to the title via the
+      universal <AdminItemActions /> component, which raises OnDeleted
+      so the parent gallery can refresh after a successful delete.
 *@
 
 <article class="ig-post">
     <header class="ig-head">
         <div class="ig-title-row">
             <a href="/item/@Item.Id" class="ig-title">@Item.Title</a>
-            <AuthorizeView>
-                <Authorized>
-                    <a href="/edit-video/@Item.Id" class="ig-icon-btn" title="Edit">✏️</a>
-                </Authorized>
-            </AuthorizeView>
+            <AdminItemActions Item="@Item"
+                              Variant="icon"
+                              ExtraClass="ig-actions"
+                              OnDeleted="@OnDeleted" />
         </div>
         <div class="ig-meta">
             @if (!string.IsNullOrEmpty(Item.Location))
@@ -315,6 +317,7 @@
 @code {
     [Parameter, EditorRequired] public Video Item { get; set; } = default!;
     [Parameter] public EventCallback<int> OnTileOpen { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
 
     private IReadOnlyList<MediaItem> _media = Array.Empty<MediaItem>();
     private int _index = 0;

@@ -1,0 +1,171 @@
+@namespace MyHomePage.Components
+@using MyHomePage.Abstractions
+@using MyHomePage.Models
+@inject IVideoService VideoService
+@inject IJSRuntime Js
+@inject NavigationManager Nav
+
+@*
+    Universal admin action strip for a single gallery item.
+    Renders Edit + Delete icons wrapped in <AuthorizeView> so only admins
+    see them. Drop the component into any tile / card / detail page that
+    needs item-level admin controls — no per-tile boilerplate.
+
+    Variants:
+      - "icon"   (default): two square 32 px glyph buttons, sized for tile
+                            headers / corners.
+      - "compact": same buttons at a smaller scale for very dense lists.
+      - "labeled": glyph + text label, fits the "share bar" of a detail page.
+
+    Parameters:
+      - Item:             the gallery item the actions apply to.
+      - OnDeleted:        callback fired after a successful delete so the
+                          parent (gallery, feed) can refresh its list.
+      - RedirectOnDelete: when true, navigates back to the item's category
+                          page after a successful delete instead of just
+                          notifying via OnDeleted.
+      - ExtraClass:       optional CSS class hook for per-site overrides
+                          (e.g. to absolutely-position the strip inside a
+                          tile, change background, etc.).
+*@
+
+<AuthorizeView>
+    <Authorized>
+        <div class="aia-strip aia-@Variant @ExtraClass">
+            <a href="/edit-video/@Item.Id"
+               class="aia-btn aia-edit"
+               title="Edit this gallery item">
+                <span class="aia-glyph">✏️</span>
+                @if (Variant == "labeled") { <span class="aia-label">Edit</span> }
+            </a>
+            <button type="button"
+                    class="aia-btn aia-delete"
+                    @onclick="DeleteAsync"
+                    disabled="@_isDeleting"
+                    title="Delete this gallery item">
+                <span class="aia-glyph">@(_isDeleting ? "⌛" : "🗑")</span>
+                @if (Variant == "labeled") { <span class="aia-label">Delete</span> }
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="aia-error">@_error</p>
+        }
+    </Authorized>
+</AuthorizeView>
+
+<style>
+    .aia-strip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .aia-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.85);
+        color: #4a5568;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: none;
+        transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .aia-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+    }
+    .aia-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .aia-edit:hover { background: #eef2ff; color: #4338ca; }
+    .aia-delete { color: #b91c1c; }
+    .aia-delete:hover:not(:disabled) {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+
+    .aia-glyph { font-size: 1rem; line-height: 1; }
+    .aia-label { font-size: 0.88rem; font-weight: 600; }
+
+    .aia-icon .aia-btn    { width: 32px; height: 32px; padding: 0; }
+    .aia-compact .aia-btn { width: 26px; height: 26px; padding: 0; }
+    .aia-compact .aia-glyph { font-size: 0.85rem; }
+    .aia-labeled .aia-btn { padding: 8px 14px; }
+
+    .aia-error {
+        margin: 6px 0 0;
+        color: #b91c1c;
+        font-size: 0.82rem;
+    }
+</style>
+
+@code {
+    /// <summary>The gallery item these admin actions apply to.</summary>
+    [Parameter, EditorRequired] public Video Item { get; set; } = default!;
+
+    /// <summary>Called after a successful delete so the parent can refresh.</summary>
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    /// <summary>
+    /// When true, after a successful delete the user is navigated back to
+    /// the item's category page. Defaults to false: detail pages set it
+    /// true, list pages leave it false and rely on <see cref="OnDeleted"/>.
+    /// </summary>
+    [Parameter] public bool RedirectOnDelete { get; set; }
+
+    /// <summary>
+    /// Visual variant: "icon" (default 32 px icons), "compact" (smaller
+    /// 26 px icons), or "labeled" (icon + text label).
+    /// </summary>
+    [Parameter] public string Variant { get; set; } = "icon";
+
+    /// <summary>Optional CSS class hook for per-consumer positioning.</summary>
+    [Parameter] public string? ExtraClass { get; set; }
+
+    private bool _isDeleting;
+    private string? _error;
+
+    private async Task DeleteAsync()
+    {
+        if (_isDeleting) return;
+
+        var confirmed = await Js.InvokeAsync<bool>("confirm",
+            $"Delete gallery item #{Item.Id} ('{Item.Title}')? " +
+            "Every photo and video attached to it will be removed. This cannot be undone.");
+        if (!confirmed) return;
+
+        _isDeleting = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await VideoService.DeleteVideoAsync(Item.Id);
+            if (!result.IsSuccess)
+            {
+                _error = result.Message;
+                return;
+            }
+
+            if (RedirectOnDelete)
+            {
+                Nav.NavigateTo(VideoCategories.GetUrl(Item.Category), forceLoad: false);
+                return;
+            }
+
+            await OnDeleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Delete error: {ex.Message}";
+        }
+        finally
+        {
+            _isDeleting = false;
+            StateHasChanged();
+        }
+    }
+}

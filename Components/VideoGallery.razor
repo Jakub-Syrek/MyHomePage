@@ -66,12 +66,9 @@
                         </div>
                         <div class="card-actions">
                             <a class="btn-small view" href="/item/@video.Id">View detail →</a>
-                            <AuthorizeView>
-                                <Authorized>
-                                    <button class="btn-small edit" @onclick="() => EditVideo(video.Id)">Edit</button>
-                                    <button class="btn-small delete" @onclick="() => DeleteVideo(video.Id)">Delete</button>
-                                </Authorized>
-                            </AuthorizeView>
+                            <AdminItemActions Item="@video"
+                                              Variant="compact"
+                                              OnDeleted="RefreshVideos" />
                         </div>
                     </div>
                 </div>
@@ -96,18 +93,6 @@
     }
 
     private void ToggleUpload() => showUpload = !showUpload;
-
-    private void EditVideo(int id) =>
-        Navigation.NavigateTo($"/edit-video/{id}");
-
-    private async Task DeleteVideo(int id)
-    {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?"))
-        {
-            await VideoService.DeleteVideoAsync(id);
-            await RefreshVideos();
-        }
-    }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

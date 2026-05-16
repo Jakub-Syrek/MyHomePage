@@ -185,7 +185,9 @@
                     @foreach (var v in FilteredVideos)
                     {
                         <div id="col-@v.Id" class="rows-anchor" @key="v.Id">
-                            <CollectionRow Item="v" OnTileOpen="@(idx => OpenLightbox(v, idx))" />
+                            <CollectionRow Item="v"
+                                           OnTileOpen="@(idx => OpenLightbox(v, idx))"
+                                           OnDeleted="RefreshVideos" />
                         </div>
                     }
                 </div>

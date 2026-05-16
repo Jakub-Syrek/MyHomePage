@@ -179,11 +179,10 @@ else
                         <span class="share-icon">⬇</span> @dlLabel
                     </a>
                 }
-                <AuthorizeView>
-                    <Authorized>
-                        <a href="/edit-video/@_item.Id" class="link-btn">✏️ Edit</a>
-                    </Authorized>
-                </AuthorizeView>
+                <AdminItemActions Item="@_item"
+                                  Variant="labeled"
+                                  ExtraClass="item-actions"
+                                  RedirectOnDelete="true" />
             </div>
         </div>
     </article>
