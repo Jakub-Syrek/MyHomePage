@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="run-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFA86A"/>
+      <stop offset="100%" stop-color="#FFD7B5"/>
+    </linearGradient>
+    <linearGradient id="run-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34495e"/>
+      <stop offset="100%" stop-color="#1a2533"/>
+    </linearGradient>
+    <linearGradient id="run-ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B5A3C"/>
+      <stop offset="100%" stop-color="#5C3A26"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#run-sky)"/>
+  <!-- Sun -->
+  <circle cx="92" cy="40" r="11" fill="#FFD580" opacity="0.7"/>
+  <!-- Distant horizon line -->
+  <path d="M 8 96 L 120 96 L 120 110 L 8 110 Z" fill="url(#run-ground)"/>
+  <!-- Speed lines behind runner -->
+  <path d="M 14 60 L 28 60" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <path d="M 10 70 L 26 70" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+  <path d="M 16 80 L 30 80" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+  <!-- Runner silhouette (mid-stride, leaning forward) -->
+  <!-- Head -->
+  <circle cx="74" cy="42" r="7" fill="url(#run-body)"/>
+  <!-- Torso (leaning forward) -->
+  <path d="M 68 49 L 80 49 L 78 72 L 64 72 Z" fill="url(#run-body)"/>
+  <!-- Front arm (swinging forward and up) -->
+  <path d="M 78 52 L 84 52 L 96 38 L 92 34 Z" fill="url(#run-body)"/>
+  <!-- Back arm (swinging back) -->
+  <path d="M 68 52 L 64 52 L 52 70 L 56 72 Z" fill="url(#run-body)"/>
+  <!-- Front leg (extended forward, foot landing) -->
+  <path d="M 72 72 L 80 72 L 96 92 L 88 94 Z" fill="url(#run-body)"/>
+  <!-- Back leg (kicked up behind, knee bent) -->
+  <path d="M 64 72 L 72 72 L 60 88 L 52 84 Z" fill="url(#run-body)"/>
+  <!-- Back lower leg / foot kicked up -->
+  <path d="M 52 84 L 60 88 L 50 96 L 44 90 Z" fill="url(#run-body)"/>
+  <!-- Front foot -->
+  <ellipse cx="92" cy="94" rx="6" ry="2" fill="url(#run-body)"/>
+  <!-- Dust kick -->
+  <circle cx="46" cy="98" r="3" fill="#FFFFFF" opacity="0.4"/>
+  <circle cx="42" cy="100" r="2" fill="#FFFFFF" opacity="0.3"/>
+  <!-- Ring border -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+</svg>

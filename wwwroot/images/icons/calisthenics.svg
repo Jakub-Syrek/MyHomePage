@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="cal-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB17A"/>
+      <stop offset="100%" stop-color="#FFE0B2"/>
+    </linearGradient>
+    <linearGradient id="cal-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34495e"/>
+      <stop offset="100%" stop-color="#1a2533"/>
+    </linearGradient>
+    <linearGradient id="cal-bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9CA3AF"/>
+      <stop offset="100%" stop-color="#4B5563"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#cal-sky)"/>
+  <!-- Sun -->
+  <circle cx="64" cy="42" r="14" fill="#FFD580" opacity="0.55"/>
+  <!-- Pull-up bar uprights -->
+  <rect x="20" y="32" width="6" height="78" rx="2" fill="url(#cal-bar)"/>
+  <rect x="102" y="32" width="6" height="78" rx="2" fill="url(#cal-bar)"/>
+  <!-- Pull-up bar top -->
+  <rect x="18" y="30" width="92" height="7" rx="3" fill="url(#cal-bar)"/>
+  <!-- Athlete silhouette: hands grip bar at y~37, arms extend down to shoulders y~58 -->
+  <!-- Left arm -->
+  <path d="M 52 37 L 52 38 L 54 60 L 56 60 L 56 38 Z" fill="url(#cal-body)"/>
+  <!-- Right arm -->
+  <path d="M 72 37 L 72 38 L 74 60 L 76 60 L 76 38 Z" fill="url(#cal-body)"/>
+  <!-- Head -->
+  <circle cx="64" cy="55" r="7" fill="url(#cal-body)"/>
+  <!-- Torso -->
+  <path d="M 52 60 L 76 60 L 74 86 L 54 86 Z" fill="url(#cal-body)"/>
+  <!-- Legs (tucked / front-lever-ish: bent at knees) -->
+  <path d="M 54 86 L 58 86 L 60 100 L 56 100 Z" fill="url(#cal-body)"/>
+  <path d="M 70 86 L 74 86 L 72 100 L 68 100 Z" fill="url(#cal-body)"/>
+  <!-- Calves bent forward -->
+  <path d="M 56 100 L 60 100 L 66 92 L 62 92 Z" fill="url(#cal-body)"/>
+  <path d="M 68 100 L 72 100 L 78 92 L 74 92 Z" fill="url(#cal-body)"/>
+  <!-- Ring border -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+</svg>
