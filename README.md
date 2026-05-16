@@ -9,7 +9,8 @@ A personal website for storing and browsing mountain adventure videos — hiking
 
 ## Features
 
-- **4 video galleries** — Mountains, Rock Climbing, Bouldering, Indoor Climbing
+- **6 galleries** — Mountains, Rock Climbing, Bouldering, Indoor Climbing, Calisthenics, Running
+- **Strava sync** — OAuth + webhook integration imports activities as gallery items with distance / pace / HR / elevation metrics attached
 - **Automatic video compression** — H.264 via FFmpeg (auto-downloaded on first run), ~720p/CRF-30, configurable
 - **Hover card expansion** — hover a video thumbnail to get a fullscreen overlay; close with X, background click, or Escape
 - **Admin panel** — login-protected upload, edit, and delete
@@ -18,6 +19,52 @@ A personal website for storing and browsing mountain adventure videos — hiking
 - **SVG category icons** — custom vector illustrations in the header and home page cards
 - **No database** — metadata stored as `metadata.json` files alongside each video
 - **SOLID architecture** — Repository, Strategy, Decorator, Result, Options, Factory, and more (see [ARCHITECTURE.md](ARCHITECTURE.md))
+
+## Strava integration
+
+The app can pull activities from Strava and surface their metrics (distance,
+pace, heart rate, elevation, route polyline) on each gallery item.
+
+### One-time setup
+
+1. Create an API application at <https://www.strava.com/settings/api>.
+   - **Authorization Callback Domain**: the host where the app runs
+     (e.g. `mountains.cruxbeta.net`; localhost is also allowed for dev).
+2. Configure the following values via environment variables or
+   `appsettings.Local.json` (never commit them):
+
+   | Setting                       | Description                                          |
+   |-------------------------------|------------------------------------------------------|
+   | `Strava__ClientId`            | OAuth client id from the developer console.         |
+   | `Strava__ClientSecret`        | OAuth client secret from the developer console.     |
+   | `Strava__RedirectUri`         | Full URL of `/auth/strava/callback` on this host.   |
+   | `Strava__WebhookVerifyToken`  | Shared secret echoed during webhook subscription.   |
+   | `Strava__ImportPublicOnly`    | `true` (default) limits auto-import to public runs. |
+
+3. Log in to the admin panel and open **Strava** in the header.
+   Click *Connect Strava* and approve consent. Tokens are persisted as
+   `strava-tokens.json` next to the video volume and refreshed automatically.
+
+### Webhook subscription (optional, enables push imports)
+
+```bash
+curl -X POST https://www.strava.com/api/v3/push_subscriptions \
+  -F client_id=$CLIENT_ID \
+  -F client_secret=$CLIENT_SECRET \
+  -F callback_url=https://<your-host>/api/strava/webhook \
+  -F verify_token=$WEBHOOK_VERIFY_TOKEN
+```
+
+Strava issues a single `GET` to the callback URL with `hub.mode=subscribe`
+and the configured `verify_token`; the app answers with the expected
+`hub.challenge` echo. Once verified, every `create` / `update` activity
+event triggers an import in the background.
+
+### Manual attach
+
+In the Strava admin page, each recent activity has an *Import* button that
+creates a placeholder gallery item in the matching category. Photos / videos
+can then be uploaded onto the same item from the standard upload flow.
 
 ## Testing
 
