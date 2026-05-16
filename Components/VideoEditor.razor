@@ -1,6 +1,8 @@
 @namespace MyHomePage.Components
 @page "/edit-video/{VideoId:int}"
+@using Microsoft.AspNetCore.Components.Forms
 @inject IVideoService VideoService
+@inject IAiAssistantService Ai
 @inject NavigationManager Navigation
 
 <div class="editor-container">
@@ -80,27 +82,76 @@
                     </div>
                 </form>
 
+                @if (Ai.IsEnabled)
+                {
+                    <section class="ai-section">
+                        <h3>✨ AI Assistant</h3>
+                        <p class="upload-hint">A few keywords → Claude suggests title, description, location.</p>
+                        <div class="ai-row">
+                            <input type="text" class="ai-input"
+                                   @bind="aiKeywords"
+                                   placeholder="e.g., Tatra, sunrise, ridge scrambling" />
+                            <button type="button" class="btn-save"
+                                    @onclick="GenerateWithAi"
+                                    disabled="@(isGenerating || string.IsNullOrWhiteSpace(aiKeywords))">
+                                @if (isGenerating) { <span>Generating…</span> }
+                                else { <span>✨ Generate</span> }
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(aiMessage))
+                        {
+                            <p class="ai-msg">@aiMessage</p>
+                        }
+                    </section>
+                }
+
                 <section class="upload-section">
                     <h3>📦 Add photos / videos</h3>
-                    <p class="upload-hint">Drop or browse files. Videos are compressed to H.264 on save.</p>
-                    <InputFile multiple OnChange="OnFilesSelected" class="file-input" accept=".mp4,.webm,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+                    <p class="upload-hint">Drop or browse files. Videos are compressed to H.264 on upload, photos resized to 2560 px long edge. Max 5 GB per file.</p>
+
+                    <label class="dropzone @(selectedFiles.Count > 0 ? "has-files" : "")">
+                        <InputFile OnChange="OnFilesSelected" multiple
+                                   class="dropzone-input"
+                                   accept=".mp4,.webm,.mkv,.avi,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+                        <div class="dropzone-inner">
+                            @if (selectedFiles.Count == 0)
+                            {
+                                <div class="dropzone-icon">⤓</div>
+                                <p class="dropzone-title">Drop files here</p>
+                                <p class="dropzone-sub">or click to browse</p>
+                            }
+                            else
+                            {
+                                <div class="dropzone-icon small">📂</div>
+                                <p class="dropzone-title">@selectedFiles.Count file@(selectedFiles.Count == 1 ? "" : "s") ready</p>
+                                <p class="dropzone-sub">Click to replace</p>
+                            }
+                        </div>
+                    </label>
 
                     @if (selectedFiles.Count > 0)
                     {
-                        <ul class="file-list">
+                        <ul class="file-pill-list">
                             @foreach (var file in selectedFiles)
                             {
-                                <li>
-                                    <strong>@file.Name</strong>
-                                    <span class="muted"> · @($"{file.Size / 1024.0 / 1024.0:F1} MB")</span>
+                                <li class="file-pill">
+                                    <span class="file-pill-icon">@(IsImage(file.Name) ? "🖼️" : "🎬")</span>
+                                    <span class="file-pill-name" title="@file.Name">@file.Name</span>
+                                    <span class="file-pill-size">@FormatSize(file.Size)</span>
                                 </li>
                             }
                         </ul>
                         <button type="button" class="btn-save"
                                 @onclick="AppendMedia"
                                 disabled="@isAppending">
-                            @if (isAppending) { <span>Uploading…</span> }
-                            else { <span>📤 Upload @selectedFiles.Count file(s)</span> }
+                            @if (isAppending)
+                            {
+                                <span>Uploading & compressing…</span>
+                            }
+                            else
+                            {
+                                <span>📤 Upload @selectedFiles.Count file@(selectedFiles.Count == 1 ? "" : "s")</span>
+                            }
                         </button>
                     }
 
@@ -119,40 +170,72 @@
 </div>
 
 <style>
+    .ai-section,
     .upload-section {
-        margin-top: 32px;
-        padding-top: 24px;
+        margin-top: 28px;
+        padding-top: 22px;
         border-top: 1px solid #e2e8f0;
     }
+    .ai-section h3,
     .upload-section h3 {
         margin: 0 0 6px;
         color: #2c3e50;
         font-size: 1.05rem;
     }
-    .upload-section .upload-hint {
+    .upload-hint {
         color: #6b7280;
         margin: 0 0 14px;
         font-size: 0.9rem;
     }
-    .upload-section .file-input {
-        display: block;
-        width: 100%;
-        padding: 14px;
-        border: 2px dashed #cbd5e1;
+    .ai-row { display: flex; gap: 10px; align-items: stretch; }
+    .ai-input {
+        flex: 1;
+        padding: 10px 14px;
         border-radius: 10px;
-        background: #f8fafc;
-        cursor: pointer;
-    }
-    .upload-section .file-list {
-        list-style: none;
-        padding: 12px 0;
-        margin: 0;
-    }
-    .upload-section .file-list li {
-        padding: 6px 0;
+        border: 1px solid #cbd5e1;
         font-size: 0.95rem;
     }
-    .upload-section .muted { color: #6b7280; }
+    .ai-msg { margin: 10px 0 0; color: #4a5568; font-size: 0.9rem; }
+
+    .dropzone {
+        display: block;
+        position: relative;
+        padding: 26px 18px;
+        text-align: center;
+        background: #f8fafc;
+        border: 2px dashed #cbd5e1;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+    }
+    .dropzone:hover { background: #eef2ff; border-color: #667eea; }
+    .dropzone.has-files { background: #ecfdf5; border-color: #34d399; }
+    .dropzone-input {
+        position: absolute; inset: 0;
+        opacity: 0; cursor: pointer;
+    }
+    .dropzone-icon { font-size: 1.9rem; line-height: 1; }
+    .dropzone-icon.small { font-size: 1.4rem; }
+    .dropzone-title { margin: 8px 0 2px; font-weight: 700; color: #2c3e50; }
+    .dropzone-sub   { margin: 0; color: #6b7280; font-size: 0.85rem; }
+
+    .file-pill-list {
+        list-style: none;
+        margin: 14px 0 14px;
+        padding: 0;
+        display: flex; flex-direction: column; gap: 6px;
+    }
+    .file-pill {
+        display: flex; align-items: center; gap: 10px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    .file-pill-icon { font-size: 1.1rem; }
+    .file-pill-name { flex: 1; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-pill-size { color: #6b7280; font-variant-numeric: tabular-nums; }
 </style>
 
 @code {
@@ -168,13 +251,16 @@
     private bool isSaveSuccess = false;
     private bool isSaving = false;
 
-    private const long MaxBytesPerFile = 5L * 1024 * 1024 * 1024;
-    private List<Microsoft.AspNetCore.Components.Forms.IBrowserFile> selectedFiles = new();
+    private List<IBrowserFile> selectedFiles = new();
     private bool isAppending;
     private string uploadMessage = "";
     private bool isUploadSuccess;
 
-    private void OnFilesSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    private string aiKeywords = "";
+    private string aiMessage = "";
+    private bool isGenerating;
+
+    private void OnFilesSelected(InputFileChangeEventArgs e)
     {
         selectedFiles = e.GetMultipleFiles(maximumFileCount: 50).ToList();
         uploadMessage = "";
@@ -185,25 +271,24 @@
         if (selectedFiles.Count == 0) return;
 
         isAppending = true;
-        uploadMessage = "Uploading…";
+        uploadMessage = "Uploading & compressing…";
         StateHasChanged();
 
         try
         {
-            // IBrowserFile.OpenReadStream defaults to 512 KB — raise it so
-            // we can stream files up to the configured upload limit.
-            var staged = selectedFiles
-                .Select(f => (Microsoft.AspNetCore.Components.Forms.IBrowserFile)
-                    new StagedFile(f, MaxBytesPerFile))
-                .ToList();
-
-            var result = await VideoService.AppendMediaAsync(VideoId, staged);
+            // FileStorageService passes the per-file size limit to
+            // IBrowserFile.OpenReadStream itself, so the raw IBrowserFile
+            // instances from InputFileChangeEventArgs work as-is — no
+            // wrapper needed.
+            var result = await VideoService.AppendMediaAsync(VideoId, selectedFiles);
             isUploadSuccess = result.IsSuccess;
             uploadMessage = result.Message;
 
             if (result.IsSuccess)
             {
-                selectedFiles.Clear();
+                selectedFiles = new List<IBrowserFile>();
+                // Refresh the video reference so MediaCarousel re-renders
+                // with the newly attached files.
                 video = await VideoService.GetVideoByIdAsync(VideoId);
             }
         }
@@ -219,29 +304,53 @@
         }
     }
 
-    /// <summary>
-    /// Thin wrapper that re-routes <see cref="Microsoft.AspNetCore.Components.Forms.IBrowserFile.OpenReadStream"/>
-    /// through a raised size cap so large originals make it past Blazor's
-    /// 512 KB default. All other members delegate to the wrapped instance.
-    /// </summary>
-    private sealed class StagedFile : Microsoft.AspNetCore.Components.Forms.IBrowserFile
+    private async Task GenerateWithAi()
     {
-        private readonly Microsoft.AspNetCore.Components.Forms.IBrowserFile _inner;
-        private readonly long _maxBytes;
+        if (string.IsNullOrWhiteSpace(aiKeywords) || video is null) return;
 
-        public StagedFile(Microsoft.AspNetCore.Components.Forms.IBrowserFile inner, long maxBytes)
+        isGenerating = true;
+        aiMessage = "";
+        StateHasChanged();
+
+        try
         {
-            _inner = inner;
-            _maxBytes = maxBytes;
+            var suggestion = await Ai.SuggestForUploadAsync(video.Category, aiKeywords);
+            if (suggestion is null)
+            {
+                aiMessage = "Could not generate. Check the API key or try again.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(editTitle)) editTitle = suggestion.Title;
+            if (string.IsNullOrWhiteSpace(editDescription)) editDescription = suggestion.Description;
+            if (string.IsNullOrWhiteSpace(editLocation) && !string.IsNullOrWhiteSpace(suggestion.Location))
+                editLocation = suggestion.Location;
+            if (editLatitude is null && suggestion.Latitude.HasValue) editLatitude = suggestion.Latitude;
+            if (editLongitude is null && suggestion.Longitude.HasValue) editLongitude = suggestion.Longitude;
+
+            aiMessage = "✓ Suggestions filled — review the form above and save.";
         }
+        catch (Exception ex)
+        {
+            aiMessage = $"AI error: {ex.Message}";
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
+    }
 
-        public string Name => _inner.Name;
-        public DateTimeOffset LastModified => _inner.LastModified;
-        public long Size => _inner.Size;
-        public string ContentType => _inner.ContentType;
+    private static bool IsImage(string fileName) =>
+        Models.MediaItem.DetectType(fileName) == Models.MediaType.Image;
 
-        public Stream OpenReadStream(long maxAllowedSize = 512000, CancellationToken cancellationToken = default) =>
-            _inner.OpenReadStream(_maxBytes, cancellationToken);
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0) return "—";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024L * 1024 * 1024) return $"{bytes / 1024.0 / 1024.0:F1} MB";
+        return $"{bytes / 1024.0 / 1024.0 / 1024.0:F2} GB";
     }
 
     protected override async Task OnInitializedAsync()
