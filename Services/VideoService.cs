@@ -18,6 +18,7 @@ public sealed class VideoService : IVideoService
     private readonly IFileStorageService _storage;
     private readonly ICompressionStrategy _compression;
     private readonly ILocationExtractor _locationExtractor;
+    private readonly IDateTakenExtractor _dateExtractor;
     private readonly VideoStorageOptions _options;
     private readonly ILogger<VideoService> _logger;
 
@@ -26,6 +27,7 @@ public sealed class VideoService : IVideoService
         IFileStorageService storage,
         ICompressionStrategy compression,
         ILocationExtractor locationExtractor,
+        IDateTakenExtractor dateExtractor,
         IOptions<VideoStorageOptions> options,
         ILogger<VideoService> logger)
     {
@@ -33,6 +35,7 @@ public sealed class VideoService : IVideoService
         _storage = storage;
         _compression = compression;
         _locationExtractor = locationExtractor;
+        _dateExtractor = dateExtractor;
         _options = options.Value;
         _logger = logger;
     }
@@ -69,6 +72,7 @@ public sealed class VideoService : IVideoService
             long totalSize = 0;
             double? latitude = request.Latitude;
             double? longitude = request.Longitude;
+            DateTime? earliestCapture = null;
 
             // Process all files in order: first video → primary (compressed),
             // subsequent videos → media-XX.mp4, images → media-XX.jpg
@@ -103,6 +107,7 @@ public sealed class VideoService : IVideoService
                             longitude = coords.Value.Longitude;
                         }
                     }
+                    TrackEarliestCapture(savedPath, ref earliestCapture);
                     _logger.LogInformation(
                         "Item {Id}: saved image {Name} ({KB} KB)",
                         videoId, targetName, size / 1024);
@@ -128,6 +133,7 @@ public sealed class VideoService : IVideoService
                             longitude = coords.Value.Longitude;
                         }
                     }
+                    TrackEarliestCapture(originalPath, ref earliestCapture);
 
                     var compressedPath = Path.Combine(
                         _storage.GetVideoDirectoryPath(videoId), compressedName);
@@ -163,6 +169,17 @@ public sealed class VideoService : IVideoService
                 mediaItems,
                 latitude,
                 longitude);
+
+            // Prefer the earliest "date taken" found in the uploaded files,
+            // falling back to the current time set by Video.Create when no
+            // file carried a usable timestamp.
+            if (earliestCapture.HasValue)
+            {
+                video.UploadedAt = earliestCapture.Value;
+                _logger.LogInformation(
+                    "Item {Id}: UploadedAt set from file metadata to {Date:o}",
+                    video.Id, video.UploadedAt);
+            }
 
             await _repository.SaveAsync(video);
 
@@ -364,6 +381,21 @@ public sealed class VideoService : IVideoService
 
     private bool IsImage(string fileName) =>
         MediaItem.DetectType(fileName) == MediaType.Image;
+
+    /// <summary>
+    /// Reads the capture timestamp from the given file and remembers the
+    /// earliest one across the whole upload. The collection's
+    /// <see cref="Video.UploadedAt"/> is then anchored to that timestamp
+    /// instead of "now" so a photo dump taken six months ago lands on the
+    /// timeline at its real date.
+    /// </summary>
+    private void TrackEarliestCapture(string filePath, ref DateTime? earliest)
+    {
+        var captured = _dateExtractor.TryExtract(filePath);
+        if (captured is null) return;
+        if (earliest is null || captured.Value < earliest.Value)
+            earliest = captured.Value;
+    }
 
     private OperationResult Validate(VideoUploadRequest request)
     {

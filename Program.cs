@@ -114,6 +114,7 @@ try
     builder.Services.AddScoped<IFileStorageService, FileStorageService>();
     builder.Services.AddScoped<ICompressionStrategy, H264CompressionStrategy>();
     builder.Services.AddScoped<ILocationExtractor, GpsLocationExtractor>();
+    builder.Services.AddScoped<IDateTakenExtractor, MetadataDateTakenExtractor>();
 
     // AI assistant — calls Anthropic API (requires ANTHROPIC_API_KEY env var)
     builder.Services.AddHttpClient<IAiAssistantService, ClaudeAssistantService>();

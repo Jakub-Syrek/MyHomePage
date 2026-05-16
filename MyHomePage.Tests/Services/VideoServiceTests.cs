@@ -8,6 +8,7 @@ public class VideoServiceTests
     private IFileStorageService _mockFileStorage = null!;
     private ICompressionStrategy _mockCompression = null!;
     private ILocationExtractor _mockLocationExtractor = null!;
+    private IDateTakenExtractor _mockDateExtractor = null!;
     private ILogger<VideoService> _mockLogger = null!;
     private VideoStorageOptions _options = null!;
 
@@ -18,6 +19,7 @@ public class VideoServiceTests
         _mockFileStorage = Substitute.For<IFileStorageService>();
         _mockCompression = Substitute.For<ICompressionStrategy>();
         _mockLocationExtractor = Substitute.For<ILocationExtractor>();
+        _mockDateExtractor = Substitute.For<IDateTakenExtractor>();
         _mockLogger = Substitute.For<ILogger<VideoService>>();
         _options = new VideoStorageOptions();
 
@@ -26,6 +28,7 @@ public class VideoServiceTests
             _mockFileStorage,
             _mockCompression,
             _mockLocationExtractor,
+            _mockDateExtractor,
             Microsoft.Extensions.Options.Options.Create(_options),
             _mockLogger
         );
