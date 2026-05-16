@@ -35,9 +35,9 @@
                  FILTER (date range + sort) *@
     <div class="tabs-rail">
         <div class="tabs-strip">
-            @* Details tab — shown on mobile only (desktop has full hero bar above) *@
+            @* Details tab — shown on all sizes; replaces the old hero bar *@
             <button type="button"
-                    class="tab-handle mobile-only @(_openTab == "details" ? "open" : "")"
+                    class="tab-handle @(_openTab == "details" ? "open" : "")"
                     @onclick="@(() => ToggleTab("details"))"
                     title="Details">
                 <span class="th-glyph">⌃</span>
@@ -406,13 +406,11 @@
         text-shadow: 0 1px 2px rgba(255,255,255,0.6);
     }
 
-    /* Tab visibility per breakpoint */
-    .tab-handle.mobile-only { display: none; }
+    /* Hero bar is no longer rendered — its content lives in the Details tab */
+    .category-hero { display: none; }
+    .category-content { padding-top: 10px; }
+
     @@media (max-width: 700px) {
-        .tab-handle.mobile-only { display: inline-flex; }
-        /* hide the big hero on mobile — its content lives in the Details tab */
-        .category-hero { display: none; }
-        .category-content { padding-top: 10px; }
         .filter-bar { padding: 10px 12px; gap: 8px; }
         .details-bar { padding: 10px 12px; gap: 8px; }
         .details-title { font-size: 1rem; }
