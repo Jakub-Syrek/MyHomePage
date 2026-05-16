@@ -109,11 +109,43 @@
         }
         else
         {
-            <div class="rows-wall">
-                @foreach (var v in FilteredVideos)
-                {
-                    <CollectionRow Item="v" OnTileOpen="@(idx => OpenLightbox(v, idx))" @key="v.Id" />
-                }
+            <div class="feed-layout">
+                @* Desktop-only thumbnail rail: jumps to each collection *@
+                <aside class="thumb-rail" aria-label="Collections quick nav">
+                    @foreach (var v in FilteredVideos)
+                    {
+                        var first = v.GetAllMedia().FirstOrDefault();
+                        var thumbUrl = first is null ? "" : $"/videos/{v.Id}/{first.FileName}";
+                        var isVideo = first?.Type == MediaType.Video;
+                        <a class="thumb-rail-item" href="#col-@v.Id" title="@v.Title — @v.UploadedAt.ToString("MMM d, yyyy")">
+                            @if (first is null)
+                            {
+                                <div class="thumb-empty"></div>
+                            }
+                            else if (first.Type == MediaType.Image)
+                            {
+                                <img src="@thumbUrl" alt="" loading="lazy" />
+                            }
+                            else
+                            {
+                                <video preload="metadata" muted playsinline>
+                                    <source src="@(thumbUrl + "#t=0.5")" type="video/mp4" />
+                                </video>
+                                <span class="thumb-play">▶</span>
+                            }
+                            <span class="thumb-date">@v.UploadedAt.ToString("MMM d")</span>
+                        </a>
+                    }
+                </aside>
+
+                <div class="rows-wall">
+                    @foreach (var v in FilteredVideos)
+                    {
+                        <div id="col-@v.Id" class="rows-anchor" @key="v.Id">
+                            <CollectionRow Item="v" OnTileOpen="@(idx => OpenLightbox(v, idx))" />
+                        </div>
+                    }
+                </div>
             </div>
         }
     </div>
@@ -124,6 +156,7 @@
           Items="_currentMedia" />
 
 <style>
+    html { scroll-behavior: smooth; }
     .category-page {
         min-height: 100vh;
         background:
@@ -354,10 +387,107 @@
         border-radius: 999px;
     }
 
+    /* ── Feed layout: rail on left + centered feed ─────────────────── */
+    .feed-layout {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
     .rows-wall {
         display: flex; flex-direction: column;
         align-items: center;
         padding: 4px 0;
+        min-width: 0; /* allow shrink */
+    }
+    .rows-anchor {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        scroll-margin-top: 90px;
+    }
+
+    /* ── Thumbnail rail (desktop only) ────────────────────────────── */
+    .thumb-rail { display: none; }
+    @@media (min-width: 1100px) {
+        .feed-layout {
+            grid-template-columns: 130px minmax(0, 1fr);
+            align-items: start;
+        }
+        .thumb-rail {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: sticky;
+            top: 90px; /* clears header + filter tab */
+            padding: 12px 10px;
+            max-height: calc(100vh - 110px);
+            overflow-y: auto;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.35) 100%);
+            backdrop-filter: blur(18px) saturate(160%);
+            -webkit-backdrop-filter: blur(18px) saturate(160%);
+            border: 1px solid rgba(255,255,255,0.55);
+            border-radius: 16px;
+            box-shadow:
+                0 10px 30px rgba(20, 30, 60, 0.14),
+                inset 0 1px 0 rgba(255,255,255,0.7);
+            z-index: 20;
+            align-self: start;
+            justify-self: start;
+            margin-left: 8px;
+        }
+        .thumb-rail::-webkit-scrollbar { width: 4px; }
+        .thumb-rail::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.35); border-radius: 2px;
+        }
+    }
+    .thumb-rail-item {
+        position: relative;
+        display: block;
+        width: 90px; height: 90px;
+        border-radius: 12px;
+        overflow: hidden;
+        text-decoration: none;
+        border: 2px solid rgba(255, 255, 255, 0.5);
+        box-shadow:
+            0 4px 14px rgba(20, 30, 60, 0.14),
+            inset 0 1px 0 rgba(255,255,255,0.45);
+        background: #0a0a12;
+        transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+    }
+    .thumb-rail-item:hover {
+        transform: scale(1.06);
+        border-color: #667eea;
+        box-shadow:
+            0 8px 22px rgba(102, 126, 234, 0.32),
+            inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+    .thumb-rail-item img, .thumb-rail-item video {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .thumb-empty { width: 100%; height: 100%; background: #2d3748; }
+    .thumb-play {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        color: white;
+        font-size: 1.1rem;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+        pointer-events: none;
+    }
+    .thumb-date {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: linear-gradient(180deg, transparent, rgba(0,0,0,0.78));
+        color: white;
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-align: center;
+        padding: 12px 4px 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
     .empty-state-wall {
         text-align: center; padding: 60px 20px; color: #4a5568;
