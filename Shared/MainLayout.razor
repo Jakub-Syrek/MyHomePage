@@ -25,13 +25,15 @@
                 <a href="/calisthenics">Calisthenics</a>
                 <a href="/running">Running</a>
                 <a href="/map">Map</a>
-                <AuthorizeView>
-                    <Authorized>
+            </nav>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="admin-controls">
                         <a href="/admin/strava">Strava</a>
                         <a href="/admin/logs">Logs</a>
-                    </Authorized>
-                </AuthorizeView>
-            </nav>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
             <div class="auth-controls">
                 <AuthorizeView>
                     <Authorized>
@@ -217,16 +219,32 @@
         opacity: 0.8;
     }
 
+    /* Admin-only links pinned next to auth-controls so they never
+       drift off-screen when nav-menu overflows horizontally. */
+    .admin-controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-shrink: 0;
+        margin-left: 18px;
+    }
+    .admin-controls a {
+        color: white;
+        text-decoration: none;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: opacity 0.18s;
+    }
+    .admin-controls a:hover { opacity: 0.8; }
+
     /* Auth controls pinned to the far right, OUTSIDE the scrollable
        nav-menu so the Login / Logout button is always visible even
-       when the category links overflow horizontally. Bigger left
-       margin keeps a visible gap from the rightmost nav link so the
-       pill never sits on top of "Logs". */
+       when the category links overflow horizontally. */
     .auth-controls {
         display: flex;
         align-items: center;
         flex-shrink: 0;
-        margin-left: 28px;
+        margin-left: 18px;
     }
     .auth-btn {
         display: inline-flex;
