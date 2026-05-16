@@ -44,6 +44,16 @@ public class Video
     public bool HasCoordinates => Latitude.HasValue && Longitude.HasValue;
 
     /// <summary>
+    /// Optional training session attached to this gallery item — distance,
+    /// pace, heart rate, route polyline. Null for items that are pure
+    /// media without a corresponding workout (the legacy case).
+    /// </summary>
+    public TrainingData? Training { get; set; }
+
+    /// <summary>True if this item has training metrics attached.</summary>
+    public bool HasTraining => Training is not null;
+
+    /// <summary>
     /// Returns Media if populated, otherwise a synthesised single-item list
     /// built from FileName (so legacy items still render uniformly).
     /// </summary>
