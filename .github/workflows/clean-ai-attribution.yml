@@ -1,0 +1,94 @@
+name: Clean AI attribution from history
+
+# Manual-trigger workflow that rewrites the entire branch history to remove
+# any Claude / Anthropic / OpenAI / generic AI attribution from commit
+# messages and force-pushes the cleaned history back. Use this only when
+# the strict 'No AI attribution' check has already failed on master.
+#
+# Side effect: rewrites SHAs. Anyone with a local checkout must re-clone
+# or run `git fetch --all && git reset --hard origin/master`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to clean (default: master)'
+        required: true
+        default: master
+        type: string
+      confirm:
+        description: 'Type the branch name again to confirm force-push'
+        required: true
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    name: Rewrite and force-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate confirmation token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.target_branch }}" != "${{ inputs.confirm }}" ]]; then
+            echo "::error::Confirmation token does not match target_branch — aborting."
+            exit 1
+          fi
+
+      - name: Checkout target branch (full history)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install git-filter-repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet git-filter-repo
+
+      - name: Rewrite commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Jakub Syrek"
+          git config user.email "jakubvonsyrek@gmail.com"
+
+          git filter-repo --force --message-callback '
+import re
+
+text = message.decode("utf-8", errors="replace")
+
+# Strip Co-Authored-By lines pointing at AI providers
+text = re.sub(
+    r"^Co-Authored-By:.*([Cc]laude|[Aa]nthropic|GPT|OpenAI|noreply@anthropic\.com).*\n?",
+    "",
+    text,
+    flags=re.MULTILINE,
+)
+
+# Strip Claude Code / Generated with markers
+text = re.sub(r"\n?🤖[^\n]*Generated[^\n]*\n?", "\n", text)
+text = re.sub(r"\n?Generated with[^\n]*Claude[^\n]*\n?", "\n", text)
+text = re.sub(r"\n?\[Claude Code\][^\n]*\n?", "\n", text)
+text = re.sub(r"\n?https://claude\.com[^\s]*\n?", "\n", text)
+
+# Collapse runs of blank lines and trim trailing whitespace
+text = re.sub(r"\n{3,}", "\n\n", text).rstrip()
+if not text.endswith("\n"):
+    text += "\n"
+return text.encode("utf-8")
+'
+
+      - name: Force-push cleaned branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:${{ inputs.target_branch }}" --force-with-lease
+          echo "✅ Pushed cleaned history to ${{ inputs.target_branch }}"

@@ -1,0 +1,80 @@
+name: No AI attribution
+
+# Blocks any commit that references Claude, Anthropic, OpenAI, GPT or
+# generic AI-generated markers in its author/committer fields or message
+# body. Combined with a branch protection rule that requires this check
+# to pass before merging (or just before pushing to master, when "Restrict
+# who can push to matching branches" is enforced), the policy from
+# memory/commit_authorship_clean.md is enforced centrally on GitHub.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scan commits for AI attribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve commit range
+        id: range
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "range=$BASE..$HEAD" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.sha }}"
+            # New branch or forced push from a zero ref -> fall back to last 50 commits
+            if [[ "$BEFORE" =~ ^0+$ ]]; then
+              echo "range=HEAD~50..HEAD" >> "$GITHUB_OUTPUT"
+            else
+              echo "range=$BEFORE..$AFTER" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "range=HEAD~20..HEAD" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          RANGE="${{ steps.range.outputs.range }}"
+          PATTERN='(Co-Authored-By:.*([Cc]laude|[Aa]nthropic|GPT|OpenAI|noreply@anthropic\.com)|claude\.com|noreply@anthropic\.com|\[Claude Code\]|🤖.*Generated|Generated with.*Claude)'
+
+          echo "Scanning commit range: $RANGE"
+          # Each commit is rendered as id + author + committer + body + sentinel,
+          # so a single grep covers metadata and message together.
+          REPORT=$(git log "$RANGE" --format='%n----COMMIT %H----%nAuthor: %an <%ae>%nCommitter: %cn <%ce>%n%B' || true)
+
+          if echo "$REPORT" | grep -iEq "$PATTERN"; then
+            echo "::error::Forbidden AI attribution detected in commit metadata or message body."
+            echo "::group::Offending lines"
+            echo "$REPORT" | grep -niE "$PATTERN" | head -50
+            echo "::endgroup::"
+            echo
+            echo "Fix locally:"
+            echo "  git rebase -i <base>                  # remove Co-Authored-By lines"
+            echo "  git commit --amend --reset-author     # if author is wrong"
+            echo "  git push --force-with-lease           # then re-push"
+            echo
+            echo "Or run the 'Clean AI attribution from history' workflow manually."
+            exit 1
+          fi
+
+          echo "✅ No forbidden AI attribution found in $RANGE"
