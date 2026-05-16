@@ -26,7 +26,7 @@ public sealed class ClaudeAssistantService : IAiAssistantService
 {
     private const string ApiUrl = "https://api.anthropic.com/v1/messages";
     private const string AnthropicVersion = "2023-06-01";
-    private const string DefaultModel = "claude-haiku-4-7";
+    private const string DefaultModel = "claude-haiku-4-5-20251001";
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
