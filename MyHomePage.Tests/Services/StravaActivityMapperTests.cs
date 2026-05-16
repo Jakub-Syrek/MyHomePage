@@ -124,6 +124,25 @@ public sealed class StravaActivityMapperTests
     }
 
     [Test]
+    public void ExtractStartCoordinates_StartLatLngEmptyButPolylinePresent_FallsBackToFirstPoint()
+    {
+        var activity = new StravaActivity
+        {
+            StartLatLng = new[] { 0.0, 0.0 },
+            Map = new StravaActivityMap
+            {
+                // Canonical Google polyline sample: 38.5, -120.2 / 40.7, -120.95 / 43.252, -126.453
+                SummaryPolyline = "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+            }
+        };
+
+        var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
+
+        Assert.That(lat, Is.EqualTo(38.5).Within(0.001));
+        Assert.That(lng, Is.EqualTo(-120.2).Within(0.001));
+    }
+
+    [Test]
     public void ExtractLocationLabel_AllFieldsPresent_JoinsWithComma()
     {
         var activity = new StravaActivity

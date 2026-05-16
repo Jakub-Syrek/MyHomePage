@@ -83,19 +83,30 @@ public static class StravaActivityMapper
 
     /// <summary>
     /// Extracts the start coordinates from a Strava activity. Strava returns
-    /// the start position as a two-element <c>[lat, lng]</c> array which is
-    /// empty for activities recorded without GPS (e.g. indoor weight training).
+    /// the start position as a two-element <c>[lat, lng]</c> array, which is
+    /// occasionally empty even for outdoor activities (auto-trim, paused
+    /// start, indoor warm-up). When that happens the encoded summary polyline
+    /// almost always still contains the full GPS track — TCX files Strava
+    /// lets you download carry the same information — so the first decoded
+    /// point becomes the fallback.
     /// </summary>
     /// <param name="activity">Activity returned by the Strava API.</param>
-    /// <returns>A tuple of nullable doubles; both null when no GPS fix.</returns>
+    /// <returns>A tuple of nullable doubles; both null when no GPS fix anywhere.</returns>
     public static (double? Latitude, double? Longitude) ExtractStartCoordinates(
         StravaActivity activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
+
         var coords = activity.StartLatLng;
-        if (coords is null || coords.Length < 2) return (null, null);
-        if (coords[0] == 0 && coords[1] == 0) return (null, null);
-        return (coords[0], coords[1]);
+        if (coords is { Length: >= 2 } && !(coords[0] == 0 && coords[1] == 0))
+            return (coords[0], coords[1]);
+
+        var fromPolyline = PolylineDecoder.FirstPoint(
+            activity.Map?.SummaryPolyline ?? activity.Map?.Polyline);
+        if (fromPolyline is null) return (null, null);
+        if (fromPolyline.Value.Latitude == 0 && fromPolyline.Value.Longitude == 0)
+            return (null, null);
+        return (fromPolyline.Value.Latitude, fromPolyline.Value.Longitude);
     }
 
     /// <summary>
