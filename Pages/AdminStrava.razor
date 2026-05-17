@@ -5,8 +5,10 @@
 @using MyHomePage.Models
 @inject IStravaTokenStore TokenStore
 @inject IStravaSyncService Sync
+@inject ICollectionMergeService MergeService
 @inject IJSRuntime Js
 @inject NavigationManager Nav
+@inject ILogger<AdminStrava> Logger
 
 <PageTitle>Strava - Admin</PageTitle>
 
@@ -61,8 +63,17 @@
                     {
                         var activityId = activity.Id;
                         var localStart = activity.StartDate.ToLocalTime();
-                        <li>
-                            <div>
+                        var isSelected = _selectedActivityIds.Contains(activityId);
+                        <li class="@(isSelected ? "selected" : "")">
+                            <label class="merge-tick" title="Tick to merge this activity with others">
+                                <input type="checkbox"
+                                       checked="@isSelected"
+                                       @onchange="@(e => ToggleActivitySelection(activityId, (bool?)e.Value ?? false))" />
+                                <span class="merge-tick-box" aria-hidden="true">
+                                    @if (isSelected) { <span>✓</span> }
+                                </span>
+                            </label>
+                            <div class="activity-main">
                                 <strong>@activity.Name</strong>
                                 <span class="muted"> · @activity.Type · @localStart.ToString("yyyy-MM-dd HH:mm")</span>
                             </div>
@@ -98,6 +109,65 @@
         {
             <p class="status">@_status</p>
         }
+    }
+
+    @if (_selectedActivityIds.Count > 0)
+    {
+        <div class="merge-bar" role="status" aria-live="polite">
+            <div class="merge-bar-info">
+                <strong>@_selectedActivityIds.Count</strong> Strava activities selected — pick at least 2 to combine.
+            </div>
+            <div class="merge-bar-buttons">
+                <button class="btn secondary" @onclick="ClearSelection" disabled="@_mergeRunning">Clear</button>
+                <button class="btn primary"
+                        @onclick="OpenMergeDialog"
+                        disabled="@(_selectedActivityIds.Count < 2 || _mergeRunning || _busy)">
+                    ⇄ Merge @_selectedActivityIds.Count into one
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (_mergeDialogOpen)
+    {
+        <div class="merge-modal-backdrop" @onclick="CloseMergeDialog">
+            <div class="merge-modal" @onclick:stopPropagation>
+                <h2>Merge @_selectedActivityIds.Count Strava activities</h2>
+                <p class="hint">
+                    Each selected activity is first imported into the gallery (or
+                    matched to an existing stump), then everything is rolled up
+                    into one multi-sport collection. Original per-activity entries
+                    are removed; the new one keeps a clickable Strava link for
+                    every source and a generated <code>summary.md</code>.
+                </p>
+                <label class="merge-field">
+                    <span>Title</span>
+                    <input type="text" @bind="_mergeTitle" maxlength="120"
+                           placeholder="Multi-sport day" />
+                </label>
+                <label class="merge-field">
+                    <span>Description (optional)</span>
+                    <textarea rows="3" maxlength="600" @bind="_mergeDescription"
+                              placeholder="What ties these sessions together?"></textarea>
+                </label>
+                @if (!string.IsNullOrEmpty(_mergeError))
+                {
+                    <div class="merge-modal-error">@_mergeError</div>
+                }
+                @if (!string.IsNullOrEmpty(_mergeProgress))
+                {
+                    <div class="merge-progress">@_mergeProgress</div>
+                }
+                <div class="merge-modal-actions">
+                    <button class="btn secondary" @onclick="CloseMergeDialog" disabled="@_mergeRunning">Cancel</button>
+                    <button class="btn primary"
+                            @onclick="ConfirmMergeAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(_mergeTitle) || _mergeRunning)">
+                        @(_mergeRunning ? "Merging…" : "Merge")
+                    </button>
+                </div>
+            </div>
+        </div>
     }
 </div>
 
@@ -175,6 +245,111 @@
         background: rgba(239, 68, 68, 0.10);
         color: #991b1b;
         border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    /* ── Merge mode for Strava activity list ─────────────────────────── */
+    .strava-admin .activity-list li.selected {
+        background: rgba(252, 76, 2, 0.08);
+        border-radius: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    .strava-admin .activity-main { flex: 1; min-width: 200px; }
+    .strava-admin .merge-tick {
+        display: inline-flex; align-items: center;
+        cursor: pointer; flex-shrink: 0;
+    }
+    .strava-admin .merge-tick input[type="checkbox"] {
+        position: absolute; opacity: 0; pointer-events: none;
+    }
+    .strava-admin .merge-tick-box {
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(252, 76, 2, 0.45);
+        box-shadow: 0 2px 6px rgba(20, 30, 60, 0.08);
+        display: inline-flex; align-items: center; justify-content: center;
+        color: #FC4C02;
+        font-weight: 700;
+        font-size: 0.78rem;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+    }
+    .strava-admin .activity-list li.selected .merge-tick-box {
+        background: #FC4C02; color: white; transform: scale(1.05);
+    }
+
+    .strava-admin .merge-bar {
+        position: fixed;
+        left: 50%; bottom: 24px;
+        transform: translateX(-50%);
+        z-index: 200;
+        display: flex; align-items: center; gap: 18px;
+        padding: 12px 20px;
+        background: white;
+        border: 1px solid rgba(252, 76, 2, 0.35);
+        border-radius: 999px;
+        box-shadow: 0 24px 60px rgba(20, 30, 60, 0.32);
+        font-size: 0.92rem;
+        color: #2d3748;
+        max-width: calc(100vw - 28px);
+        flex-wrap: wrap; justify-content: center;
+    }
+    .strava-admin .merge-bar-info strong { color: #FC4C02; }
+    .strava-admin .merge-bar-buttons { display: flex; gap: 8px; }
+
+    .strava-admin .merge-modal-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(15, 20, 40, 0.55);
+        backdrop-filter: blur(6px);
+        z-index: 300;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+    }
+    .strava-admin .merge-modal {
+        max-width: 520px; width: 100%;
+        background: white;
+        border-radius: 16px;
+        padding: 24px 26px;
+        box-shadow: 0 30px 70px rgba(20, 30, 60, 0.4);
+    }
+    .strava-admin .merge-modal h2 { margin: 0 0 6px; color: #2c3e50; font-size: 1.25rem; }
+    .strava-admin .merge-field { display: block; margin-bottom: 14px; }
+    .strava-admin .merge-field > span {
+        display: block;
+        font-size: 0.78rem; font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 4px;
+    }
+    .strava-admin .merge-field input,
+    .strava-admin .merge-field textarea {
+        width: 100%; box-sizing: border-box;
+        padding: 10px 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: inherit;
+        resize: vertical;
+    }
+    .strava-admin .merge-field input:focus,
+    .strava-admin .merge-field textarea:focus {
+        outline: none; border-color: #FC4C02;
+        box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.18);
+    }
+    .strava-admin .merge-modal-error {
+        background: #fee2e2; color: #991b1b;
+        border-radius: 8px; padding: 10px 12px;
+        font-size: 0.9rem; margin-bottom: 12px;
+    }
+    .strava-admin .merge-progress {
+        background: rgba(252, 76, 2, 0.08); color: #c2410c;
+        border-radius: 8px; padding: 10px 12px;
+        font-size: 0.9rem; margin-bottom: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .strava-admin .merge-modal-actions {
+        display: flex; justify-content: flex-end; gap: 8px;
     }
 </style>
 
@@ -366,5 +541,128 @@
         _tokens = null;
         _activities = Array.Empty<StravaActivity>();
         _status = "Strava disconnected.";
+    }
+
+    // ── Merge-from-Strava-list feature ──────────────────────────────────────
+
+    /// <summary>Strava activity ids ticked for the multi-sport merge.</summary>
+    private readonly HashSet<long> _selectedActivityIds = new();
+
+    private bool _mergeDialogOpen;
+    private bool _mergeRunning;
+    private string _mergeTitle = string.Empty;
+    private string _mergeDescription = string.Empty;
+    private string? _mergeError;
+    private string? _mergeProgress;
+
+    private void ToggleActivitySelection(long activityId, bool checkedNow)
+    {
+        if (checkedNow) _selectedActivityIds.Add(activityId);
+        else _selectedActivityIds.Remove(activityId);
+    }
+
+    private void ClearSelection() => _selectedActivityIds.Clear();
+
+    private void OpenMergeDialog()
+    {
+        if (_selectedActivityIds.Count < 2) return;
+        var startDates = _activities
+            .Where(a => _selectedActivityIds.Contains(a.Id))
+            .Select(a => a.StartDate.ToLocalTime())
+            .OrderBy(d => d)
+            .ToList();
+        _mergeTitle = startDates.Count > 0
+            ? $"Multi-sport — {startDates.First():MMM d, yyyy}"
+            : "Multi-sport";
+        _mergeDescription = string.Empty;
+        _mergeError = null;
+        _mergeProgress = null;
+        _mergeDialogOpen = true;
+    }
+
+    private void CloseMergeDialog()
+    {
+        if (_mergeRunning) return;
+        _mergeDialogOpen = false;
+    }
+
+    /// <summary>
+    /// Imports every selected Strava activity (the import service is idempotent
+    /// and returns the existing stump if one is already in the gallery), then
+    /// merges all of them into a single new collection via
+    /// <see cref="ICollectionMergeService"/>. Redirects to the merged item's
+    /// editor on success so the operator can attach media right away.
+    /// </summary>
+    private async Task ConfirmMergeAsync()
+    {
+        if (_selectedActivityIds.Count < 2 || string.IsNullOrWhiteSpace(_mergeTitle)) return;
+
+        _mergeRunning = true;
+        _mergeError = null;
+        _mergeProgress = "Importing Strava activities…";
+        StateHasChanged();
+
+        var importedVideoIds = new List<int>();
+        var failures = new List<string>();
+        var activityIdsInOrder = _selectedActivityIds.ToList();
+
+        try
+        {
+            for (var i = 0; i < activityIdsInOrder.Count; i++)
+            {
+                var activityId = activityIdsInOrder[i];
+                _mergeProgress = $"Importing activity {i + 1} of {activityIdsInOrder.Count} (id {activityId})…";
+                StateHasChanged();
+
+                var imported = await Sync.ImportActivityAsync(activityId, enforcePrivacyFilter: false);
+                if (imported.IsSuccess && imported.Value is not null)
+                {
+                    importedVideoIds.Add(imported.Value.Id);
+                }
+                else
+                {
+                    failures.Add($"#{activityId}: {imported.Message}");
+                    Logger.LogWarning(
+                        "Strava merge: could not import activity {ActivityId}: {Error}",
+                        activityId, imported.Message);
+                }
+            }
+
+            if (importedVideoIds.Count < 2)
+            {
+                _mergeError = "Need at least two activities to merge. " +
+                              (failures.Count > 0 ? $"Errors: {string.Join("; ", failures)}" : "");
+                return;
+            }
+
+            _mergeProgress = $"Combining {importedVideoIds.Count} collections into one…";
+            StateHasChanged();
+
+            var merge = await MergeService.MergeAsync(
+                importedVideoIds, _mergeTitle.Trim(), _mergeDescription?.Trim() ?? string.Empty);
+
+            if (!merge.IsSuccess)
+            {
+                _mergeError = $"Merge failed: {merge.Message}";
+                return;
+            }
+
+            _mergeDialogOpen = false;
+            _mergeRunning = false;
+            _selectedActivityIds.Clear();
+            StateHasChanged();
+            Nav.NavigateTo($"/edit-video/{merge.Value}", forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unexpected error while merging Strava activities");
+            _mergeError = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            _mergeRunning = false;
+            _mergeProgress = null;
+            StateHasChanged();
+        }
     }
 }
