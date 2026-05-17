@@ -111,6 +111,11 @@
     }
 
     <footer class="ig-foot">
+        @* Compact workout summary: type / duration / kcal / HR / effort.
+           Renders nothing when the item has no Training attached, so
+           non-workout galleries (mountains, climbing photos) stay clean. *@
+        <TrainingStatsStrip Training="@Item.Training" />
+
         @if (!string.IsNullOrWhiteSpace(Item.Description))
         {
             <p class="ig-desc">@Truncate(Item.Description, 180)</p>

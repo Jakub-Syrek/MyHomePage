@@ -1,0 +1,130 @@
+@namespace MyHomePage.Components
+@using MyHomePage.Models
+
+@*
+    Compact horizontal chips strip summarising a workout: activity type,
+    duration, calories, average heart rate, and Strava "Relative Effort".
+    Designed for the gallery feed cards (CollectionRow) where the full
+    TrainingPanel would be visually overwhelming — the strip is one line,
+    skips empty values, and falls back to nothing when no training is
+    attached.
+*@
+
+@if (Training is not null && HasAnyStat())
+{
+    <ul class="ts-strip" aria-label="Workout stats">
+        <li class="ts-chip ts-type" title="Activity type">
+            <span class="ts-icon">@GetActivityIcon(Training.ActivityType)</span>
+            <span class="ts-label">@(string.IsNullOrWhiteSpace(Training.ActivityType) ? "Workout" : Training.ActivityType)</span>
+        </li>
+        @if (Training.Duration.TotalSeconds > 0)
+        {
+            <li class="ts-chip" title="Moving time">
+                <span class="ts-icon">⏱️</span>
+                <span class="ts-label">@FormatDuration(Training.Duration)</span>
+            </li>
+        }
+        @if (Training.Calories is int kcal && kcal > 0)
+        {
+            <li class="ts-chip" title="Calories burned">
+                <span class="ts-icon">🔥</span>
+                <span class="ts-label">@kcal kcal</span>
+            </li>
+        }
+        @if (Training.AverageHeartRate is int hr && hr > 0)
+        {
+            <li class="ts-chip" title="Average heart rate">
+                <span class="ts-icon">❤️</span>
+                <span class="ts-label">@hr bpm</span>
+            </li>
+        }
+        @if (Training.SufferScore is int effort && effort > 0)
+        {
+            <li class="ts-chip ts-effort @EffortClass(effort)" title="Strava Relative Effort">
+                <span class="ts-icon">⚡</span>
+                <span class="ts-label">@effort effort</span>
+            </li>
+        }
+    </ul>
+}
+
+<style>
+    .ts-strip {
+        list-style: none;
+        margin: 0 0 8px;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-variant-numeric: tabular-nums;
+    }
+    .ts-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(102, 126, 234, 0.18);
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #2d3748;
+        line-height: 1.4;
+    }
+    .ts-icon { font-size: 0.95rem; line-height: 1; }
+    .ts-label { white-space: nowrap; }
+    .ts-type {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.16) 0%, rgba(118, 75, 162, 0.16) 100%);
+        border-color: rgba(102, 126, 234, 0.32);
+        color: #4338ca;
+    }
+    .ts-effort.effort-low    { background: rgba(34, 197, 94, 0.16); border-color: rgba(34, 197, 94, 0.32); color: #166534; }
+    .ts-effort.effort-mid    { background: rgba(250, 204, 21, 0.20); border-color: rgba(250, 204, 21, 0.40); color: #854d0e; }
+    .ts-effort.effort-high   { background: rgba(249, 115, 22, 0.18); border-color: rgba(249, 115, 22, 0.36); color: #9a3412; }
+    .ts-effort.effort-extreme{ background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.36); color: #991b1b; }
+</style>
+
+@code {
+    /// <summary>Training payload to summarise. Renders nothing when null or empty.</summary>
+    [Parameter, EditorRequired] public TrainingData? Training { get; set; }
+
+    private bool HasAnyStat()
+    {
+        if (Training is null) return false;
+        return !string.IsNullOrWhiteSpace(Training.ActivityType)
+            || Training.Duration.TotalSeconds > 0
+            || (Training.Calories ?? 0) > 0
+            || (Training.AverageHeartRate ?? 0) > 0
+            || (Training.SufferScore ?? 0) > 0;
+    }
+
+    private static string GetActivityIcon(string activityType) => activityType.ToLowerInvariant() switch
+    {
+        var t when t.Contains("run") => "🏃",
+        var t when t.Contains("hike") => "🥾",
+        var t when t.Contains("walk") => "🚶",
+        var t when t.Contains("climb") || t.Contains("boulder") => "🧗",
+        var t when t.Contains("ride") || t.Contains("cycle") || t.Contains("bike") => "🚴",
+        var t when t.Contains("swim") => "🏊",
+        var t when t.Contains("weight") || t.Contains("crossfit") => "🏋️",
+        var t when t.Contains("workout") || t.Contains("calisthenics") => "💪",
+        var t when t.Contains("yoga") => "🧘",
+        _ => "📊",
+    };
+
+    private static string FormatDuration(TimeSpan d) =>
+        d.TotalHours >= 1
+            ? $"{(int)d.TotalHours}h {d.Minutes:00}m"
+            : $"{d.Minutes}m {d.Seconds:00}s";
+
+    // NOTE: SDK 8 Razor source generator chokes on relational-pattern
+    // switch arms (`< 50 =>`), see commit 3a30fc0 — keep this as an
+    // if-chain so the page renders.
+    private static string EffortClass(int suffer)
+    {
+        if (suffer < 50) return "effort-low";
+        if (suffer < 100) return "effort-mid";
+        if (suffer < 200) return "effort-high";
+        return "effort-extreme";
+    }
+}
