@@ -162,7 +162,11 @@
                         var thumbUrl = hasMedia
                             ? $"/videos/{v.Id}/{first!.FileName}"
                             : VideoCategories.GetPlaceholderImage(v.Category);
-                        <a class="thumb-rail-item" href="#col-@v.Id" title="@v.Title — @v.UploadedAt.ToString("MMM d, yyyy")">
+                        var videoId = v.Id;
+                        <button type="button"
+                                class="thumb-rail-item @(_activeRailId == v.Id ? "active" : "")"
+                                @onclick="@(() => ScrollToCollectionAsync(videoId))"
+                                title="@v.Title — @v.UploadedAt.ToString("MMM d, yyyy")">
                             @if (!hasMedia)
                             {
                                 <img src="@thumbUrl" alt="" loading="lazy" class="thumb-placeholder" />
@@ -179,7 +183,7 @@
                                 <span class="thumb-play">▶</span>
                             }
                             <span class="thumb-date">@v.UploadedAt.ToString("MMM d")</span>
-                        </a>
+                        </button>
                     }
                 </aside>
 
@@ -562,6 +566,7 @@
         position: relative;
         display: block;
         width: 90px; height: 90px;
+        padding: 0;
         border-radius: 12px;
         overflow: hidden;
         text-decoration: none;
@@ -570,8 +575,17 @@
             0 4px 14px rgba(20, 30, 60, 0.14),
             inset 0 1px 0 rgba(255,255,255,0.45);
         background: #0a0a12;
+        font-family: inherit;
+        color: inherit;
         transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
         cursor: pointer;
+    }
+    .thumb-rail-item.active {
+        border-color: #667eea;
+        box-shadow:
+            0 0 0 3px rgba(102, 126, 234, 0.35),
+            0 8px 22px rgba(102, 126, 234, 0.4);
+        transform: scale(1.04);
     }
     .thumb-rail-item:hover {
         transform: scale(1.06);
@@ -649,6 +663,55 @@
     private Lightbox? _lightbox;
     private int _currentItemId;
     private IReadOnlyList<MediaItem> _currentMedia = Array.Empty<MediaItem>();
+
+    /// <summary>
+    /// Id of the collection row most recently jumped-to from the rail.
+    /// Used to render a highlighted "active" border on the matching
+    /// thumbnail.
+    /// </summary>
+    private int? _activeRailId;
+
+    /// <summary>
+    /// Scrolls the matching <c>#col-{id}</c> anchor into the centre of
+    /// the viewport via JS interop and marks the corresponding rail
+    /// thumbnail as active. The smooth-scroll behaviour is handled by
+    /// the inline helper registered in <see cref="OnAfterRenderAsync"/>.
+    /// </summary>
+    private async Task ScrollToCollectionAsync(int id)
+    {
+        _activeRailId = id;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("myHomePage.scrollToCollection", $"col-{id}");
+        }
+        catch
+        {
+            // JS interop can fail during prerender — the click handler
+            // only fires post-render so this is best-effort defensive.
+        }
+    }
+
+    private bool _scrollHelperRegistered;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _scrollHelperRegistered) return;
+        _scrollHelperRegistered = true;
+        // Register a tiny window-scoped helper once per page lifetime.
+        // Using InvokeVoidAsync("eval", ...) keeps the JS co-located
+        // with the component instead of forcing a separate file.
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval",
+                "window.myHomePage = window.myHomePage || {};" +
+                "window.myHomePage.scrollToCollection = function(anchorId) {" +
+                "  const el = document.getElementById(anchorId);" +
+                "  if (!el) return;" +
+                "  el.scrollIntoView({ behavior: 'smooth', block: 'center' });" +
+                "};");
+        }
+        catch { /* best-effort during teardown */ }
+    }
 
     private bool HasFilter => _dateFrom.HasValue || _dateTo.HasValue;
 
