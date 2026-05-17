@@ -1,7 +1,9 @@
 @namespace MyHomePage.Components
 @inject IVideoService VideoService
+@inject ICollectionMergeService MergeService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject ILogger<CategoryGallery> Logger
 
 @*
     Vertical wall of CollectionRows: each gallery item is its own row with a
@@ -74,6 +76,11 @@
                             <Authorized>
                                 <button class="btn btn-primary btn-upload" @onclick="ToggleUpload">
                                     @if (showUpload) { <span>✕ Close</span> } else { <span>+ Upload Media</span> }
+                                </button>
+                                <button class="btn btn-merge @(_mergeMode ? "active" : "")"
+                                        @onclick="ToggleMergeMode"
+                                        title="Combine several collections into one multi-sport summary">
+                                    @if (_mergeMode) { <span>✕ Cancel merge</span> } else { <span>⇄ Merge collections</span> }
                                 </button>
                             </Authorized>
                         </AuthorizeView>
@@ -190,10 +197,14 @@
                 <div class="rows-wall">
                     @foreach (var v in FilteredVideos)
                     {
+                        var collectionId = v.Id;
                         <div id="col-@v.Id" class="rows-anchor" @key="v.Id">
                             <CollectionRow Item="v"
                                            OnTileOpen="@(idx => OpenLightbox(v, idx))"
-                                           OnDeleted="RefreshVideos" />
+                                           OnDeleted="RefreshVideos"
+                                           MergeMode="_mergeMode"
+                                           Selected="@_selection.Contains(collectionId)"
+                                           SelectionChanged="@(checkedNow => ToggleSelection(collectionId, checkedNow))" />
                         </div>
                     }
                 </div>
@@ -205,6 +216,62 @@
 <Lightbox @ref="_lightbox"
           ItemId="_currentItemId"
           Items="_currentMedia" />
+
+@* ── Floating merge action bar + confirm dialog ──────────────────────
+   Only the authenticated path renders these — the toggle that activates
+   _mergeMode is itself behind <AuthorizeView>, so the bar is doubly
+   protected. *@
+@if (_mergeMode)
+{
+    <div class="merge-action-bar" role="status" aria-live="polite">
+        <div class="merge-action-info">
+            <strong>@_selection.Count</strong> selected — pick at least 2 to combine.
+        </div>
+        <div class="merge-action-buttons">
+            <button type="button" class="filter-btn ghost" @onclick="ClearSelection">Clear</button>
+            <button type="button" class="filter-btn" disabled="@(_selection.Count < 2 || _mergeRunning)"
+                    @onclick="OpenMergeDialog">
+                ⇄ Merge @_selection.Count selected
+            </button>
+        </div>
+    </div>
+}
+
+@if (_mergeDialogOpen)
+{
+    <div class="merge-modal-backdrop" @onclick="CloseMergeDialog">
+        <div class="merge-modal" @onclick:stopPropagation>
+            <h2>Merge @_selection.Count collections</h2>
+            <p class="merge-modal-hint">
+                Files from every selected collection will be combined into a single new one,
+                the originals will be deleted, and a <code>summary.md</code> with totals
+                and per-activity Strava links will be generated.
+            </p>
+            <label class="merge-field">
+                <span>Title</span>
+                <input type="text" @bind="_mergeTitle" maxlength="120" placeholder="Multi-sport day, May 17" />
+            </label>
+            <label class="merge-field">
+                <span>Description (optional)</span>
+                <textarea rows="3" maxlength="600" @bind="_mergeDescription"
+                          placeholder="What ties these sessions together?"></textarea>
+            </label>
+            @if (!string.IsNullOrEmpty(_mergeError))
+            {
+                <div class="merge-modal-error">@_mergeError</div>
+            }
+            <div class="merge-modal-actions">
+                <button type="button" class="filter-btn ghost" @onclick="CloseMergeDialog" disabled="@_mergeRunning">
+                    Cancel
+                </button>
+                <button type="button" class="filter-btn" @onclick="ConfirmMergeAsync"
+                        disabled="@(string.IsNullOrWhiteSpace(_mergeTitle) || _mergeRunning)">
+                    @(_mergeRunning ? "Merging…" : "Merge")
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 <style>
     html { scroll-behavior: smooth; }
@@ -637,6 +704,110 @@
         .filter-bar { gap: 8px; padding: 12px; }
         .filter-stats { margin-left: 0; width: 100%; text-align: center; }
     }
+
+    /* ── Merge UI ───────────────────────────────────────────────────── */
+    .btn-merge {
+        padding: 11px 18px;
+        background: rgba(255,255,255,0.92);
+        color: #4338ca;
+        border: 1px solid rgba(102, 126, 234, 0.35);
+        border-radius: 10px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+        font-family: inherit;
+        margin-left: 8px;
+    }
+    .btn-merge:hover {
+        transform: translateY(-1px);
+        background: white;
+        box-shadow: 0 8px 22px rgba(102, 126, 234, 0.22);
+    }
+    .btn-merge.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: rgba(255,255,255,0.45);
+    }
+
+    .merge-action-bar {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 12px 20px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 100%);
+        backdrop-filter: blur(22px) saturate(160%);
+        -webkit-backdrop-filter: blur(22px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.7);
+        border-radius: 999px;
+        box-shadow:
+            0 24px 60px rgba(20, 30, 60, 0.32),
+            inset 0 1px 0 rgba(255,255,255,0.8);
+        font-size: 0.92rem;
+        color: #2d3748;
+        max-width: calc(100vw - 28px);
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .merge-action-info strong { color: #4338ca; }
+    .merge-action-buttons { display: flex; gap: 8px; }
+
+    .merge-modal-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(15, 20, 40, 0.55);
+        backdrop-filter: blur(6px);
+        z-index: 300;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+    }
+    .merge-modal {
+        max-width: 520px;
+        width: 100%;
+        background: white;
+        border-radius: 16px;
+        padding: 24px 26px;
+        box-shadow: 0 30px 70px rgba(20, 30, 60, 0.4);
+    }
+    .merge-modal h2 { margin: 0 0 6px; color: #2c3e50; font-size: 1.25rem; }
+    .merge-modal-hint { margin: 0 0 18px; color: #475569; font-size: 0.92rem; line-height: 1.45; }
+    .merge-modal-hint code {
+        background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 0.85rem;
+    }
+    .merge-field { display: block; margin-bottom: 14px; }
+    .merge-field > span {
+        display: block;
+        font-size: 0.78rem; font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 4px;
+    }
+    .merge-field input,
+    .merge-field textarea {
+        width: 100%; box-sizing: border-box;
+        padding: 10px 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: inherit;
+        resize: vertical;
+    }
+    .merge-field input:focus,
+    .merge-field textarea:focus {
+        outline: none; border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+    .merge-modal-error {
+        background: #fee2e2; color: #991b1b;
+        border-radius: 8px; padding: 10px 12px;
+        font-size: 0.9rem; margin-bottom: 12px;
+    }
+    .merge-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
 
 @code {
@@ -752,6 +923,98 @@
     {
         _dateFrom = null;
         _dateTo = null;
+    }
+
+    // ── Merge-collections feature ───────────────────────────────────────────
+
+    /// <summary>Whether the gallery is currently in multi-select merge mode.</summary>
+    private bool _mergeMode;
+
+    /// <summary>Ids of the collections currently checked for merge.</summary>
+    private readonly HashSet<int> _selection = new();
+
+    private bool _mergeDialogOpen;
+    private bool _mergeRunning;
+    private string _mergeTitle = string.Empty;
+    private string _mergeDescription = string.Empty;
+    private string? _mergeError;
+
+    private void ToggleMergeMode()
+    {
+        _mergeMode = !_mergeMode;
+        if (!_mergeMode)
+        {
+            _selection.Clear();
+            CloseMergeDialog();
+        }
+    }
+
+    private void ToggleSelection(int id, bool checkedNow)
+    {
+        if (checkedNow) _selection.Add(id);
+        else _selection.Remove(id);
+    }
+
+    private void ClearSelection() => _selection.Clear();
+
+    private void OpenMergeDialog()
+    {
+        if (_selection.Count < 2) return;
+        _mergeTitle = $"Multi-sport — {DateTime.Now:MMM d, yyyy}";
+        _mergeDescription = string.Empty;
+        _mergeError = null;
+        _mergeDialogOpen = true;
+    }
+
+    private void CloseMergeDialog()
+    {
+        if (_mergeRunning) return;
+        _mergeDialogOpen = false;
+    }
+
+    /// <summary>
+    /// Posts the merge through the application service. Refreshes the gallery
+    /// list on success and surfaces a friendly error if the service refused.
+    /// </summary>
+    private async Task ConfirmMergeAsync()
+    {
+        if (_selection.Count < 2 || string.IsNullOrWhiteSpace(_mergeTitle))
+        {
+            return;
+        }
+
+        _mergeRunning = true;
+        _mergeError = null;
+        try
+        {
+            var ids = _selection.ToList();
+            var result = await MergeService.MergeAsync(
+                ids, _mergeTitle.Trim(), _mergeDescription?.Trim() ?? string.Empty);
+
+            if (!result.IsSuccess)
+            {
+                _mergeError = result.Message;
+                return;
+            }
+
+            Logger.LogInformation(
+                "Merged {Count} collections into new id {NewId}",
+                ids.Count, result.Value);
+
+            _mergeDialogOpen = false;
+            _mergeMode = false;
+            _selection.Clear();
+            await RefreshVideos();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unexpected error while merging collections");
+            _mergeError = "Unexpected error — check server logs.";
+        }
+        finally
+        {
+            _mergeRunning = false;
+        }
     }
 
     private async Task OpenLightbox(Video v, int index)

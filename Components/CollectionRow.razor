@@ -12,7 +12,22 @@
       so the parent gallery can refresh after a successful delete.
 *@
 
-<article class="ig-post">
+<article class="ig-post @(MergeMode ? "merge-mode" : "") @(MergeMode && Selected ? "merge-selected" : "")">
+    @* Merge-mode selection overlay — admin-only checkbox shown only when the
+       parent gallery is in merge mode. Clicking anywhere on the card toggles
+       selection (the existing media tile click still opens the lightbox in
+       normal mode). *@
+    @if (MergeMode)
+    {
+        <label class="merge-checkbox" @onclick:stopPropagation @onclick:preventDefault="false">
+            <input type="checkbox"
+                   checked="@Selected"
+                   @onchange="@(async e => await SelectionChanged.InvokeAsync((bool?)e.Value ?? false))" />
+            <span class="merge-checkbox-box" aria-hidden="true">
+                @if (Selected) { <span>✓</span> }
+            </span>
+        </label>
+    }
     <header class="ig-head">
         <div class="ig-title-row">
             <a href="/item/@Item.Id" class="ig-title">@Item.Title</a>
@@ -154,6 +169,47 @@
         z-index: 0;
     }
     .ig-post > * { position: relative; z-index: 1; }
+
+    /* ── Merge-mode visual cues ─────────────────────────────────────── */
+    .ig-post.merge-mode {
+        cursor: pointer;
+        transition: transform 0.18s, box-shadow 0.18s, outline-color 0.18s;
+        outline: 2px solid transparent;
+    }
+    .ig-post.merge-selected {
+        outline-color: #667eea;
+        box-shadow:
+            0 0 0 4px rgba(102, 126, 234, 0.22),
+            0 20px 52px rgba(20, 30, 60, 0.18);
+        transform: translateY(-2px);
+    }
+    .merge-checkbox {
+        position: absolute;
+        top: 14px; right: 14px;
+        z-index: 4;
+        display: inline-flex; align-items: center;
+        cursor: pointer;
+    }
+    .merge-checkbox input[type="checkbox"] {
+        position: absolute; opacity: 0; pointer-events: none;
+    }
+    .merge-checkbox-box {
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.92);
+        border: 2px solid rgba(102, 126, 234, 0.55);
+        box-shadow: 0 4px 14px rgba(20, 30, 60, 0.22);
+        display: inline-flex; align-items: center; justify-content: center;
+        color: #4338ca;
+        font-weight: 700;
+        font-size: 1rem;
+        transition: background 0.18s, transform 0.18s, color 0.18s;
+    }
+    .ig-post.merge-selected .merge-checkbox-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        transform: scale(1.08);
+    }
 
     /* ── Header ───────────────────────────────────────────────── */
     .ig-head { padding: 14px 18px 10px; }
@@ -388,6 +444,15 @@
     [Parameter, EditorRequired] public Video Item { get; set; } = default!;
     [Parameter] public EventCallback<int> OnTileOpen { get; set; }
     [Parameter] public EventCallback OnDeleted { get; set; }
+
+    /// <summary>When true, the parent gallery is in merge-selection mode.</summary>
+    [Parameter] public bool MergeMode { get; set; }
+
+    /// <summary>Whether this item is currently part of the merge selection.</summary>
+    [Parameter] public bool Selected { get; set; }
+
+    /// <summary>Raised when the user toggles the merge checkbox.</summary>
+    [Parameter] public EventCallback<bool> SelectionChanged { get; set; }
 
     private IReadOnlyList<MediaItem> _media = Array.Empty<MediaItem>();
     private int _index = 0;

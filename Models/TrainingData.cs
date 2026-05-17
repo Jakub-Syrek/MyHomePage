@@ -130,7 +130,45 @@ public sealed record TrainingData
 
     /// <summary>Best-effort segments (e.g. 1k / 5k / 10k PRs hit during the session).</summary>
     public IReadOnlyList<TrainingBestEffort> BestEfforts { get; init; } = Array.Empty<TrainingBestEffort>();
+
+    /// <summary>
+    /// Set when this training entry represents the aggregate of several
+    /// merged collections (multi-sport). Each entry preserves the deep link
+    /// to the original Strava activity so the user can still drill down.
+    /// Null for normal single-activity records.
+    /// </summary>
+    public IReadOnlyList<SubActivityLink>? SubActivities { get; init; }
+
+    /// <summary>True when this record was synthesised from a merge of several activities.</summary>
+    public bool IsMultiSport => SubActivities is { Count: > 0 };
 }
+
+/// <summary>
+/// Compact reference to one of the source activities that were rolled up
+/// into a multi-sport <see cref="TrainingData"/>. Carries just enough data
+/// to render a row in the summary table and a clickable Strava link.
+/// </summary>
+/// <param name="Source">Origin platform (mirrors <see cref="TrainingSource"/>).</param>
+/// <param name="ExternalId">Provider-specific activity id.</param>
+/// <param name="ExternalUrl">Deep link back to the activity on the provider's site.</param>
+/// <param name="ActivityType">Activity-type string as reported by the provider.</param>
+/// <param name="StartTimeUtc">Start time of the original activity.</param>
+/// <param name="Duration">Moving time of the original activity.</param>
+/// <param name="DistanceMeters">Distance, if recorded.</param>
+/// <param name="Calories">Calories, if reported.</param>
+/// <param name="AverageHeartRate">Average heart rate, if recorded.</param>
+/// <param name="SufferScore">Strava Relative Effort, if classified.</param>
+public sealed record SubActivityLink(
+    TrainingSource Source,
+    string ExternalId,
+    string? ExternalUrl,
+    string ActivityType,
+    DateTime StartTimeUtc,
+    TimeSpan Duration,
+    double? DistanceMeters,
+    int? Calories,
+    int? AverageHeartRate,
+    int? SufferScore);
 
 /// <summary>
 /// One row of a session's per-distance split breakdown (running / hiking).
