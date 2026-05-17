@@ -112,6 +112,55 @@
             </section>
         }
 
+        @if (Training.IsMultiSport && Training.SubActivities is { Count: > 0 } subs)
+        {
+            <section class="training-multisport">
+                <h3>🔗 Source activities (@subs.Count)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Type</th>
+                            <th>Duration</th>
+                            <th>Calories</th>
+                            <th>HR avg</th>
+                            <th>Effort</th>
+                            <th>Strava</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var sub in subs.OrderBy(s => s.StartTimeUtc))
+                        {
+                            <tr>
+                                <td>@sub.StartTimeUtc.ToLocalTime().ToString("MMM d, HH:mm")</td>
+                                <td>@(string.IsNullOrWhiteSpace(sub.ActivityType) ? "—" : sub.ActivityType)</td>
+                                <td>@FormatDuration(sub.Duration)</td>
+                                <td>@(sub.Calories is int kc && kc > 0 ? $"{kc} kcal" : "—")</td>
+                                <td>@(sub.AverageHeartRate is int sh && sh > 0 ? $"{sh} bpm" : "—")</td>
+                                <td>@(sub.SufferScore is int ss && ss > 0 ? ss.ToString() : "—")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(sub.ExternalUrl))
+                                    {
+                                        <a href="@sub.ExternalUrl"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="strava-link"
+                                           title="Open @sub.ExternalId on Strava">
+                                            ↗ @(string.IsNullOrWhiteSpace(sub.ExternalId) ? "open" : $"#{sub.ExternalId}")
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+
         @if (Training.Splits.Count > 0)
         {
             <details class="training-splits">
@@ -279,6 +328,59 @@
     .training-split-zone-2 { background: rgba(59, 130, 246, 0.06); }
     .training-split-zone-3 { background: rgba(250, 204, 21, 0.08); }
     .training-split-zone-4 { background: rgba(239, 68, 68, 0.08); }
+
+    /* ── Multi-sport breakdown (visible only on merged collections) ───── */
+    .training-multisport {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .training-multisport h3 {
+        margin: 0 0 10px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+    .training-multisport table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .training-multisport th,
+    .training-multisport td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        vertical-align: middle;
+    }
+    .training-multisport th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        font-weight: 600;
+    }
+    .training-multisport tr:last-child td { border-bottom: 0; }
+    .strava-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: rgba(252, 76, 2, 0.12);
+        color: #FC4C02;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.82rem;
+        white-space: nowrap;
+        transition: background 0.15s, transform 0.15s;
+    }
+    .strava-link:hover {
+        background: rgba(252, 76, 2, 0.22);
+        transform: translateY(-1px);
+    }
+    .training-multisport .muted { color: #94a3b8; }
 </style>
 
 @code {

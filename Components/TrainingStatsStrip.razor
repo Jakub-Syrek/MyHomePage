@@ -45,6 +45,13 @@
                 <span class="ts-label">@effort effort</span>
             </li>
         }
+        @if (Training.IsMultiSport && Training.SubActivities is { Count: > 0 } subs)
+        {
+            <li class="ts-chip ts-multisport" title="Click the collection to see the Strava links for each merged activity">
+                <span class="ts-icon">🔗</span>
+                <span class="ts-label">@subs.Count activities</span>
+            </li>
+        }
     </ul>
 }
 
@@ -82,6 +89,11 @@
     .ts-effort.effort-mid    { background: rgba(250, 204, 21, 0.20); border-color: rgba(250, 204, 21, 0.40); color: #854d0e; }
     .ts-effort.effort-high   { background: rgba(249, 115, 22, 0.18); border-color: rgba(249, 115, 22, 0.36); color: #9a3412; }
     .ts-effort.effort-extreme{ background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.36); color: #991b1b; }
+    .ts-multisport {
+        background: rgba(252, 76, 2, 0.12);
+        border-color: rgba(252, 76, 2, 0.30);
+        color: #c2410c;
+    }
 </style>
 
 @code {
