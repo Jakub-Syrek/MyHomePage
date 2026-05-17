@@ -23,6 +23,17 @@
                 </button>
             }
         </div>
+        @if (_stats is not null && _videos is not null)
+        {
+            var allWithTraining = _videos.Count(v => v.Training is not null);
+            <p class="stats-range">
+                Window:
+                <strong>@_stats.FromUtc.ToString("yyyy-MM-dd")</strong> →
+                <strong>@_stats.ToUtc.ToString("yyyy-MM-dd")</strong> ·
+                <strong>@_stats.SessionCount</strong> session@(_stats.SessionCount == 1 ? "" : "s") in window
+                <span class="stats-range-meta">(of @allWithTraining total with training data, @_videos.Count gallery items)</span>
+            </p>
+        }
     </header>
 
     @if (_stats is null)
@@ -232,6 +243,14 @@
         color: white;
         border-color: transparent;
     }
+    .stats-range {
+        margin: 8px 0 22px;
+        color: #4a5568;
+        font-size: 0.9rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-range strong { color: #1f2937; }
+    .stats-range-meta { color: #9ca3af; }
 
     .stats-loading, .stats-empty {
         background: rgba(255,255,255,0.85);
@@ -400,7 +419,7 @@
 @code {
     private TrainingStats? _stats;
     private IReadOnlyList<Video>? _videos;
-    private string _selectedPreset = "90d";
+    private string _selectedPreset = "all";
 
     private readonly IReadOnlyDictionary<string, string> _periodPresets = new Dictionary<string, string>
     {

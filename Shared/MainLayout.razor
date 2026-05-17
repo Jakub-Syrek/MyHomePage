@@ -30,7 +30,7 @@
                     <span class="pinned-globe-orb"></span>
                 </a>
                 <a href="/stats" class="pinned-stats" title="Training stats" aria-label="Stats">
-                    <span class="pinned-stats-icon">📊</span>
+                    <img src="/images/icons/stats-abacus.svg" alt="Stats" class="pinned-stats-icon" />
                 </a>
                 <AuthorizeView>
                     <Authorized>
@@ -282,13 +282,13 @@
         line-height: 0;
     }
     .pinned-stats-icon {
-        font-size: 1.05rem;
-        line-height: 1;
+        width: 22px;
+        height: 22px;
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
         transition: transform 0.18s, filter 0.18s;
     }
     .pinned-stats:hover .pinned-stats-icon {
-        transform: scale(1.12);
+        transform: scale(1.12) rotate(-4deg);
         filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
     }
 
