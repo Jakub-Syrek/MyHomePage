@@ -198,6 +198,7 @@
                     @foreach (var v in FilteredVideos)
                     {
                         var collectionId = v.Id;
+                        var nestedSources = ResolveNestedSources(v);
                         <div id="col-@v.Id" class="rows-anchor" @key="v.Id">
                             <CollectionRow Item="v"
                                            OnTileOpen="@(idx => OpenLightbox(v, idx))"
@@ -205,6 +206,23 @@
                                            MergeMode="_mergeMode"
                                            Selected="@_selection.Contains(collectionId)"
                                            SelectionChanged="@(checkedNow => ToggleSelection(collectionId, checkedNow))" />
+                            @if (nestedSources.Count > 0)
+                            {
+                                <details class="ms-subs">
+                                    <summary>
+                                        🔗 @nestedSources.Count source @(nestedSources.Count == 1 ? "activity" : "activities")
+                                    </summary>
+                                    <div class="ms-subs-list">
+                                        @foreach (var sub in nestedSources)
+                                        {
+                                            var subId = sub.Id;
+                                            <CollectionRow Item="sub"
+                                                           OnTileOpen="@(idx => OpenLightbox(sub, idx))"
+                                                           OnDeleted="RefreshVideos" />
+                                        }
+                                    </div>
+                                </details>
+                            }
                         </div>
                     }
                 </div>
@@ -808,6 +826,52 @@
         font-size: 0.9rem; margin-bottom: 12px;
     }
     .merge-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* ── Multi-sport nested source panel ───────────────────────────── */
+    .ms-subs {
+        width: 100%;
+        max-width: 620px;
+        margin: -18px auto 28px;
+        padding: 6px 14px 4px;
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(14px) saturate(160%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-top: 0;
+        border-radius: 0 0 16px 16px;
+        box-shadow: 0 12px 28px rgba(20, 30, 60, 0.10);
+    }
+    .ms-subs > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 8px 6px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #4338ca;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .ms-subs > summary::-webkit-details-marker { display: none; }
+    .ms-subs > summary::after {
+        content: ' ▾';
+        color: #667eea;
+        font-size: 0.78rem;
+    }
+    .ms-subs[open] > summary::after { content: ' ▴'; }
+    .ms-subs-list {
+        margin-top: 8px;
+        padding: 8px 0 4px;
+        border-top: 1px solid rgba(102, 126, 234, 0.16);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    /* Tighten the nested cards visually so they read as children of the master */
+    .ms-subs-list .ig-post {
+        max-width: 560px;
+        opacity: 0.96;
+    }
 </style>
 
 @code {
@@ -931,18 +995,41 @@
             return await LoadMultisportFeedAsync();
         }
 
+        _multisportSourcesByMasterId = null;
         var byCategory = await VideoService.GetVideosByCategoryAsync(Category);
         return byCategory.ToList().AsReadOnly();
     }
 
     /// <summary>
-    /// Returns every collection relevant to the multi-sport feed:
-    ///   1. Aggregate masters (Training.IsMultiSport == true or Category set
-    ///      to <see cref="VideoCategories.MultiSport"/>).
-    ///   2. Every source stump referenced by those masters via
-    ///      <see cref="SubActivityLink.ExternalId"/>, regardless of the
-    ///      stump's stored Category.
-    /// Sorted newest first.
+    /// Returns the source stumps that should render nested beneath the
+    /// supplied master card on /multisport. Empty list outside of the
+    /// multi-sport view or when the master has no resolvable sources.
+    /// </summary>
+    /// <param name="master">Video being rendered in the feed.</param>
+    /// <returns>Ordered list of source stumps; possibly empty.</returns>
+    private IReadOnlyList<Video> ResolveNestedSources(Video master)
+    {
+        if (_multisportSourcesByMasterId is null) return Array.Empty<Video>();
+        return _multisportSourcesByMasterId.TryGetValue(master.Id, out var sources)
+            ? sources
+            : Array.Empty<Video>();
+    }
+
+    /// <summary>
+    /// Per-master lookup of the source stumps referenced through
+    /// <see cref="SubActivityLink.ExternalId"/>. Populated only while
+    /// <c>Category == VideoCategories.MultiSport</c>; consumers render the
+    /// entries nested beneath each master card so the feed itself stays
+    /// "one row per master".
+    /// </summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<Video>>? _multisportSourcesByMasterId;
+
+    /// <summary>
+    /// Builds the multi-sport feed: the visible list is just the masters
+    /// (so the thumbnail rail on the left lists only merges, not the
+    /// individual source workouts). The matching source stumps for every
+    /// master are stashed in <see cref="_multisportSourcesByMasterId"/> so
+    /// the rendering layer can expand them inline as a nested panel.
     /// </summary>
     private async Task<IReadOnlyList<Video>> LoadMultisportFeedAsync()
     {
@@ -950,28 +1037,32 @@
         var masters = all
             .Where(v => v.Training?.IsMultiSport == true
                         || v.Category == VideoCategories.MultiSport)
-            .ToList();
-
-        var referencedExternalIds = masters
-            .SelectMany(m => m.Training?.SubActivities ?? Enumerable.Empty<SubActivityLink>())
-            .Select(s => s.ExternalId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var sources = all.Where(v =>
-                v.Training is not null
-                && !string.IsNullOrWhiteSpace(v.Training.ExternalId)
-                && referencedExternalIds.Contains(v.Training.ExternalId)
-                && v.Training.IsMultiSport != true)
-            .ToList();
-
-        return masters
-            .Concat(sources)
-            .GroupBy(v => v.Id)
-            .Select(g => g.First())
             .OrderByDescending(v => v.UploadedAt)
-            .ToList()
-            .AsReadOnly();
+            .ToList();
+
+        var stumpsByExternalId = all
+            .Where(v => v.Training is not null
+                        && v.Training.IsMultiSport != true
+                        && !string.IsNullOrWhiteSpace(v.Training.ExternalId))
+            .GroupBy(v => v.Training!.ExternalId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var map = new Dictionary<int, IReadOnlyList<Video>>();
+        foreach (var master in masters)
+        {
+            var subActivities = master.Training?.SubActivities
+                ?? (IReadOnlyList<SubActivityLink>)Array.Empty<SubActivityLink>();
+            var sources = subActivities
+                .Where(s => !string.IsNullOrWhiteSpace(s.ExternalId))
+                .Select(s => stumpsByExternalId.TryGetValue(s.ExternalId, out var stump) ? stump : null)
+                .Where(v => v is not null)
+                .Cast<Video>()
+                .ToList();
+            map[master.Id] = sources;
+        }
+        _multisportSourcesByMasterId = map;
+
+        return masters.AsReadOnly();
     }
 
     private void ToggleUpload() => showUpload = !showUpload;
