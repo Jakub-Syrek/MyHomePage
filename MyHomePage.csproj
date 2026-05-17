@@ -27,4 +27,8 @@
     <Compile Remove="MyHomePage.Tests/**/*.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyHomePage.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -272,17 +272,30 @@ public static class StravaActivityMapper
         return -1;
     }
 
-    private static bool IsGenericStravaTitle(string candidate)
+    /// <summary>
+    /// Cached set of generic Strava auto-titles built from the cross-product
+    /// of {time-of-day} x {activity}. Lookup is O(1) and case-insensitive,
+    /// and the data structure makes it trivial to add a new variant without
+    /// touching control flow.
+    /// </summary>
+    private static readonly HashSet<string> GenericStravaTitles =
+        BuildGenericStravaTitleSet();
+
+    private static HashSet<string> BuildGenericStravaTitleSet()
     {
-        var lower = candidate.ToLowerInvariant();
-        return lower is
-            "morning run" or "afternoon run" or "evening run" or "lunch run" or "night run" or
-            "morning ride" or "afternoon ride" or "evening ride" or "lunch ride" or "night ride" or
-            "morning walk" or "afternoon walk" or "evening walk" or "lunch walk" or "night walk" or
-            "morning hike" or "afternoon hike" or "evening hike" or "night hike" or
-            "morning swim" or "afternoon swim" or "evening swim" or "night swim" or
-            "morning workout" or "afternoon workout" or "evening workout" or "lunch workout" or "night workout" or
-            "morning weight training" or "afternoon weight training" or "evening weight training" or "night weight training" or
-            "morning yoga" or "afternoon yoga" or "evening yoga" or "night yoga";
+        var times = new[] { "morning", "afternoon", "evening", "lunch", "night" };
+        var activities = new[]
+        {
+            "run", "ride", "walk", "hike", "swim",
+            "workout", "weight training", "yoga"
+        };
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in times)
+            foreach (var a in activities)
+                set.Add($"{t} {a}");
+        return set;
     }
+
+    private static bool IsGenericStravaTitle(string candidate) =>
+        GenericStravaTitles.Contains(candidate);
 }

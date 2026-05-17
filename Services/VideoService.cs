@@ -379,7 +379,7 @@ public sealed class VideoService : IVideoService
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private bool IsImage(string fileName) =>
+    private static bool IsImage(string fileName) =>
         MediaItem.DetectType(fileName) == MediaType.Image;
 
     /// <summary>

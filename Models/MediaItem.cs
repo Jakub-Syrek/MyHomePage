@@ -15,6 +15,18 @@ public enum MediaType
 /// </summary>
 public sealed class MediaItem
 {
+    /// <summary>
+    /// Cached set of image extensions. <see cref="HashSet{T}"/> with
+    /// ordinal-ignore-case comparer is O(1) and avoids the per-call
+    /// allocation that <c>ToLowerInvariant</c> would produce in
+    /// <see cref="DetectType"/>.
+    /// </summary>
+    private static readonly HashSet<string> ImageExtensions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif"
+        };
+
     public string FileName { get; set; } = "";
     public MediaType Type { get; set; }
     public long SizeBytes { get; set; }
@@ -30,13 +42,13 @@ public sealed class MediaItem
         Order = order
     };
 
-    public static MediaType DetectType(string fileName)
-    {
-        var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        return ext switch
-        {
-            ".jpg" or ".jpeg" or ".png" or ".webp" or ".heic" or ".gif" => MediaType.Image,
-            _ => MediaType.Video
-        };
-    }
+    /// <summary>
+    /// Maps a file name to its <see cref="MediaType"/>. Unknown / unrecognised
+    /// extensions default to <see cref="MediaType.Video"/> so legacy callers
+    /// that only handled videos continue to round-trip safely.
+    /// </summary>
+    public static MediaType DetectType(string fileName) =>
+        ImageExtensions.Contains(Path.GetExtension(fileName))
+            ? MediaType.Image
+            : MediaType.Video;
 }

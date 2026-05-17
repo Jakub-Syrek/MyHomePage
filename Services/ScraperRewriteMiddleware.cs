@@ -138,9 +138,16 @@ public sealed class ScraperRewriteMiddleware
     public static bool IsScraper(string? userAgent)
     {
         if (string.IsNullOrWhiteSpace(userAgent)) return false;
-        var lower = userAgent.ToLowerInvariant();
+
+        // Use a span-based ordinal-ignore-case Contains so we skip the
+        // ToLowerInvariant allocation on every request — this middleware
+        // runs in front of every page load.
+        var ua = userAgent.AsSpan();
         foreach (var s in ScraperSubstrings)
-            if (lower.Contains(s)) return true;
+        {
+            if (ua.Contains(s.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
         return false;
     }
 }
