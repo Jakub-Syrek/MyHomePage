@@ -699,14 +699,21 @@
     /// the same bands Strava uses on its training-log heat-map. Returns
     /// a short label and a hex colour for the inline hint pill.
     /// </summary>
-    private static (string Band, string Colour) ClassifyEffort(double avgEffort) => avgEffort switch
+    /// <remarks>
+    /// Implemented as an if-chain rather than a relational-pattern switch
+    /// expression because the .NET 8 Razor source generator misparses
+    /// "&lt; N =&gt;" inside <c>@code { }</c> as an HTML start tag and the
+    /// whole file fails to compile under the Railway Docker build (which
+    /// pins SDK 8.0).
+    /// </remarks>
+    private static (string Band, string Colour) ClassifyEffort(double avgEffort)
     {
-        < 50 => ("easy", "#10b981"),
-        < 100 => ("moderate", "#3b82f6"),
-        < 150 => ("hard", "#f59e0b"),
-        < 250 => ("very hard", "#ef4444"),
-        _ => ("extreme", "#7c3aed")
-    };
+        if (avgEffort < 50) return ("easy", "#10b981");
+        if (avgEffort < 100) return ("moderate", "#3b82f6");
+        if (avgEffort < 150) return ("hard", "#f59e0b");
+        if (avgEffort < 250) return ("very hard", "#ef4444");
+        return ("extreme", "#7c3aed");
+    }
 
     private static string EffortTooltip(double avgEffort, int sessionsWithEffort)
     {
