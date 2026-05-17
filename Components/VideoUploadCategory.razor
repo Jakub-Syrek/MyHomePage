@@ -87,7 +87,7 @@
             <label class="dropzone @(selectedFiles.Count > 0 ? "has-files" : "")">
                 <InputFile OnChange="HandleFilesSelected" multiple
                            class="dropzone-input"
-                           accept=".mp4,.webm,.mkv,.avi,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+                           accept="image/*,video/*,.mp4,.webm,.mkv,.avi,.mov,.m4v,.3gp,.3gpp,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.bmp" />
                 <div class="dropzone-inner">
                     @if (selectedFiles.Count == 0)
                     {

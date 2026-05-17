@@ -138,11 +138,14 @@
                 <section class="upload-section">
                     <h3>📦 Add photos / videos</h3>
                     <p class="upload-hint">Drop or browse files. Videos are compressed to H.264 on upload, photos resized to 2560 px long edge. Max 5 GB per file.</p>
+                    <p class="upload-hint" style="margin-top:-6px;color:#92400e;background:rgba(251,191,36,0.12);border-left:3px solid #f59e0b;padding:6px 10px;border-radius:0 6px 6px 0;font-size:0.85rem;">
+                        📱 Adding from a USB-connected phone and don't see your newest photos? Windows caches the phone's gallery folder — disconnect &amp; reconnect the phone, or open this site directly in the phone's browser to pick from the mobile gallery.
+                    </p>
 
                     <label class="dropzone @(selectedFiles.Count > 0 ? "has-files" : "")">
                         <InputFile OnChange="OnFilesSelected" multiple
                                    class="dropzone-input"
-                                   accept=".mp4,.webm,.mkv,.avi,.mov,.m4v,.jpg,.jpeg,.png,.webp,.heic" />
+                                   accept="image/*,video/*,.mp4,.webm,.mkv,.avi,.mov,.m4v,.3gp,.3gpp,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.bmp" />
                         <div class="dropzone-inner">
                             @if (selectedFiles.Count == 0)
                             {
