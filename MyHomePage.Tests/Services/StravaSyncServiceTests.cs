@@ -665,6 +665,56 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task ImportActivityAsync_ExistingStumpWithCorrectCategoryButStaleCover_ReseedsCover()
+    {
+        // Symptom from the field: a Bicycle stump was showing the running
+        // silhouette because the operator manually moved it Running ->
+        // Bicycle in the editor. Category already matched the mapper on
+        // the next sync, so the previous version of MigrateCategoryIfNeeded
+        // skipped before the cover got re-seeded. The fix re-seeds the
+        // cover unconditionally for pure stumps.
+        ArrangeValidTokens();
+
+        var stump = Video.Create(
+            id: 50, title: "Lunch Ride", description: "", fileName: "cover.jpg",
+            location: null, category: VideoCategories.Bicycle, fileSizeBytes: 100);
+        stump.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = "999",
+            ActivityType = "Ride"
+        };
+        stump.Media = new List<MediaItem>
+        {
+            MediaItem.Create("cover.jpg", MediaType.Image, 100, 0)
+        };
+        _videos.GetAllAsync().Returns(new[] { stump });
+
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Any<string>(), 50, "cover.jpg")
+            .Returns(220L);
+
+        _api.GetActivityAsync(Arg.Any<string>(), 999, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 999,
+                Type = "Ride",
+                SportType = "Ride",
+                Visibility = "everyone"
+            }));
+
+        var result = await _sync.ImportActivityAsync(999);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(stump.Category, Is.EqualTo(VideoCategories.Bicycle));
+        // The cover was re-seeded from the Bicycle bg even though the
+        // category did not change this round.
+        await _storage.Received().CopyWwwRootFileToVideoAsync(
+            Arg.Is<string>(p => p.Contains("cycling-bg")), 50, "cover.jpg");
+        Assert.That(stump.FileSizeBytes, Is.EqualTo(220));
+    }
+
+    [Test]
     public async Task ImportActivityAsync_ExistingStumpWithUserMedia_CategoryNotMigrated()
     {
         // If the operator already added real media, leave the category

@@ -113,11 +113,21 @@ public sealed class StravaSyncService : IStravaSyncService
     }
 
     /// <summary>
-    /// Migrates an existing Strava stump to whatever category the current
-    /// mapper resolves to. This is the recovery path for items imported
-    /// before a new mapping shipped — e.g. cycling activities created
-    /// when only Running existed as a cardio bucket. Only fires for pure
-    /// stumps (no user-added media) so operator work is never touched.
+    /// Brings an existing Strava stump back in sync with whatever the
+    /// current mapper + category catalogue think it should look like.
+    /// Two things drift over time:
+    ///
+    ///   1) Category — e.g. cycling activities imported before the
+    ///      Bicycle category existed went into Running.
+    ///   2) Cover image — once the operator (or an earlier migration)
+    ///      moves an item between categories, the seeded cover.jpg
+    ///      still points at the original category's background and
+    ///      becomes visually misleading (a running silhouette on a
+    ///      Bicycle stump is the symptom that drove this method in).
+    ///
+    /// Both are reconciled here. Only pure stumps (no user media
+    /// beyond the cover.jpg seed) are touched — anything the operator
+    /// has worked on is left alone.
     /// </summary>
     private async Task MigrateCategoryIfNeededAsync(
         Video existing,
@@ -125,32 +135,39 @@ public sealed class StravaSyncService : IStravaSyncService
         CancellationToken cancellationToken)
     {
         var freshCategory = StravaActivityMapper.ResolveCategory(activity);
-        if (string.Equals(existing.Category, freshCategory, StringComparison.Ordinal))
-            return;
 
-        // Only migrate items that have nothing but the cover.jpg seed
-        // attached. The moment an operator added a real photo / video,
-        // we leave the category alone — they can move it manually in
-        // the editor if it ended up under the wrong tab.
+        // Only act on pure stumps. The moment an operator added a real
+        // photo / video, leave the item alone — both category and cover.
         var media = existing.Media ?? new List<MediaItem>();
         var userMedia = media.Count(m =>
             !string.Equals(m.FileName, CoverFileName, StringComparison.OrdinalIgnoreCase));
         if (userMedia > 0)
         {
-            _logger.LogInformation(
-                "Skipping category migration for video {VideoId}: {Count} user media file(s) attached",
-                existing.Id, userMedia);
+            if (!string.Equals(existing.Category, freshCategory, StringComparison.Ordinal))
+            {
+                _logger.LogInformation(
+                    "Skipping category migration for video {VideoId}: {Count} user media file(s) attached",
+                    existing.Id, userMedia);
+            }
             return;
         }
 
-        _logger.LogInformation(
-            "Migrating Strava stump {VideoId} from {Old} to {New} (mapper changed)",
-            existing.Id, existing.Category, freshCategory);
-        existing.Category = freshCategory;
+        var categoryChanged = !string.Equals(
+            existing.Category, freshCategory, StringComparison.Ordinal);
+        if (categoryChanged)
+        {
+            _logger.LogInformation(
+                "Migrating Strava stump {VideoId} from {Old} to {New} (mapper changed)",
+                existing.Id, existing.Category, freshCategory);
+            existing.Category = freshCategory;
+        }
 
-        // Re-seed the cover with the new category's background asset.
-        // If the seed fails we drop the stale cover rather than leave a
-        // mismatched image in place.
+        // Always re-seed the cover for a pure stump. Even when the
+        // category did not change this round, the cover.jpg on disk
+        // could be stale from a previous category (manual move in the
+        // editor, mid-migration crash, schema change). The seed is
+        // cheap and idempotent: overwriting the file with the right
+        // category's bg is a no-op if it was already correct.
         var newCoverSize = await SeedCoverAsync(existing.Id, freshCategory);
         if (newCoverSize > 0)
         {
@@ -161,8 +178,11 @@ public sealed class StravaSyncService : IStravaSyncService
             existing.FileName = CoverFileName;
             existing.FileSizeBytes = newCoverSize;
         }
-        else
+        else if (categoryChanged)
         {
+            // Migration was requested but the seed asset is missing.
+            // Drop the stale cover rather than leave it pointing at
+            // the wrong category.
             existing.Media = new List<MediaItem>();
             existing.FileName = string.Empty;
             existing.FileSizeBytes = 0;
