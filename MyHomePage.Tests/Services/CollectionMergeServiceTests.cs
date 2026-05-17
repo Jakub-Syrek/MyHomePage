@@ -159,10 +159,14 @@ public sealed class CollectionMergeServiceTests
     }
 
     [Test]
-    public async Task Merge_FallsBackToFirstSourceCoverWhenNoUserMedia()
+    public async Task Merge_AlwaysWritesMosaicCoverAsPrimary()
     {
-        // Both sources are Strava stumps. Selection order = [2, 1] — the
-        // service must take source 2's cover (the first ticked).
+        // Sources have images (covers and/or user uploads). The merge must
+        // produce a single composite "multisport-cover.jpg" at Order = 0.
+        // Test bytes are not valid JPEGs, so the in-process ImageSharp
+        // compose path throws — the service is expected to catch and fall
+        // back to copying the first selected source's thumbnail into the
+        // mosaic slot, which keeps the primary name stable.
         SeedVideoWithFile(1, CollectionMergeService.StumpCoverFileName);
         SeedVideoWithFile(2, CollectionMergeService.StumpCoverFileName);
 
@@ -171,12 +175,52 @@ public sealed class CollectionMergeServiceTests
 
         var newDir = Path.Combine(_tempRoot, result.Value.ToString());
         var copied = Directory.GetFiles(newDir).Select(Path.GetFileName).ToHashSet();
-        Assert.That(copied, Does.Contain("s2-cover.jpg"));
+        Assert.That(copied, Does.Contain(CollectionMergeService.MosaicCoverFileName));
         Assert.That(copied, Does.Not.Contain("s1-cover.jpg"));
+        Assert.That(copied, Does.Not.Contain("s2-cover.jpg"));
 
         var merged = (await _repo.GetByIdAsync(result.Value))!;
-        Assert.That(merged.FileName, Is.EqualTo("s2-cover.jpg"));
-        Assert.That(merged.Media, Has.Count.EqualTo(1));
+        Assert.That(merged.FileName, Is.EqualTo(CollectionMergeService.MosaicCoverFileName));
+        Assert.That(merged.Media[0].Order, Is.EqualTo(0));
+        Assert.That(merged.Media[0].FileName, Is.EqualTo(CollectionMergeService.MosaicCoverFileName));
+    }
+
+    [Test]
+    public async Task Merge_MosaicCoverSitsAheadOfUserMedia()
+    {
+        // User photo on source 2 must still be copied, but the mosaic
+        // cover takes the primary slot so /multisport cards show the
+        // combined view first.
+        SeedVideoWithFile(1, CollectionMergeService.StumpCoverFileName);
+        SeedVideoWithFile(2, "summit.jpg");
+
+        var result = await _service.MergeAsync(new[] { 1, 2 }, "Hybrid", string.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+
+        var merged = (await _repo.GetByIdAsync(result.Value))!;
+        Assert.That(merged.Media[0].FileName, Is.EqualTo(CollectionMergeService.MosaicCoverFileName));
+        Assert.That(
+            merged.Media.Select(m => m.FileName),
+            Does.Contain("s2-summit.jpg"));
+        Assert.That(merged.FileName, Is.EqualTo(CollectionMergeService.MosaicCoverFileName));
+    }
+
+    [Test]
+    public async Task Merge_NoImagesAtAll_LeavesMasterWithoutCover()
+    {
+        // Pure video sources, no covers, no images → no candidate for the
+        // mosaic. The master still saves but its FileName ends up empty.
+        SeedVideoWithFile(1, "clip.mp4");
+        SeedVideoWithFile(2, "clip.mp4");
+
+        var result = await _service.MergeAsync(new[] { 1, 2 }, "Just videos", string.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+
+        var merged = (await _repo.GetByIdAsync(result.Value))!;
+        Assert.That(merged.Media.Any(m => m.FileName == CollectionMergeService.MosaicCoverFileName), Is.False);
+        Assert.That(
+            merged.Media.Select(m => m.FileName),
+            Is.EquivalentTo(new[] { "s1-clip.mp4", "s2-clip.mp4" }));
     }
 
     [Test]

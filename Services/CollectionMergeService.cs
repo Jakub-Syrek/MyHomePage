@@ -2,6 +2,10 @@ using System.Globalization;
 using System.Text;
 using MyHomePage.Abstractions;
 using MyHomePage.Models;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace MyHomePage.Services;
 
@@ -22,12 +26,23 @@ public sealed class CollectionMergeService : ICollectionMergeService
 
     /// <summary>
     /// File name used by Strava stumps for the auto-seeded category placeholder
-    /// image. Treated as "not user media" — the merge skips it unless every
-    /// source is a pure stump (in which case the first selected source's cover
-    /// is copied across as the master's primary so the new collection still
-    /// has something to render).
+    /// image. Treated as "not user media" — the merge skips it when collecting
+    /// user uploads, but it is still considered a candidate when assembling
+    /// the synthetic multi-sport mosaic cover.
     /// </summary>
     internal const string StumpCoverFileName = "cover.jpg";
+
+    /// <summary>
+    /// File name written into the master's directory as the auto-generated
+    /// mosaic cover (1-9 source thumbnails composed into a single image).
+    /// </summary>
+    internal const string MosaicCoverFileName = "multisport-cover.jpg";
+
+    /// <summary>Maximum number of source thumbnails composed into one mosaic.</summary>
+    private const int MaxMosaicTiles = 9;
+
+    /// <summary>Per-tile pixel size inside the mosaic.</summary>
+    private const int MosaicTileSize = 512;
 
     private readonly IVideoRepository _repository;
     private readonly IFileStorageService _storage;
@@ -135,6 +150,16 @@ public sealed class CollectionMergeService : ICollectionMergeService
         long total = 0;
         var order = 0;
 
+        // Mosaic cover always sits at Order = 0 so the gallery card shows
+        // the combined view first, even when user uploads exist below.
+        var mosaic = BuildMosaicCoverFromSources(sources, destinationDir);
+        if (mosaic is not null)
+        {
+            merged.Add(mosaic);
+            total += mosaic.SizeBytes;
+            order = 1;
+        }
+
         foreach (var source in sources)
         {
             var sourceDir = _storage.GetVideoDirectoryPath(source.Id);
@@ -164,49 +189,113 @@ public sealed class CollectionMergeService : ICollectionMergeService
             }
         }
 
-        // If every source was a pure Strava stump with only cover.jpg, the
-        // merged collection would otherwise have zero media. Seed it with the
-        // FIRST selected source's cover so the gallery card still renders.
-        if (merged.Count == 0)
-        {
-            var fallback = CopyPlaceholderFromFirstSource(sources, destinationDir);
-            if (fallback is not null)
-            {
-                merged.Add(fallback);
-                total += fallback.SizeBytes;
-            }
-        }
-
         return (merged, total);
     }
 
     private static bool IsStumpPlaceholder(MediaItem media) =>
         string.Equals(media.FileName, StumpCoverFileName, StringComparison.OrdinalIgnoreCase);
 
-    private MediaItem? CopyPlaceholderFromFirstSource(
+    /// <summary>
+    /// Picks one representative thumbnail per source (the stump cover if
+    /// present, otherwise the source's first image) and composes them into a
+    /// single square-ish mosaic image written as
+    /// <see cref="MosaicCoverFileName"/> in the master directory.
+    /// </summary>
+    /// <returns>The new <see cref="MediaItem"/> referencing the mosaic, or
+    /// <c>null</c> when no source supplied a usable thumbnail.</returns>
+    private MediaItem? BuildMosaicCoverFromSources(
         IReadOnlyList<Video> sources,
         string destinationDir)
     {
+        var tiles = new List<string>();
         foreach (var source in sources)
         {
-            var sourceDir = _storage.GetVideoDirectoryPath(source.Id);
-            var coverPath = Path.Combine(sourceDir, StumpCoverFileName);
-            if (!File.Exists(coverPath))
+            var dir = _storage.GetVideoDirectoryPath(source.Id);
+            var cover = ResolveCoverCandidate(source, dir);
+            if (cover is not null)
+            {
+                tiles.Add(cover);
+            }
+        }
+
+        if (tiles.Count == 0)
+        {
+            return null;
+        }
+
+        var targetPath = Path.Combine(destinationDir, MosaicCoverFileName);
+        try
+        {
+            ComposeMosaic(tiles, targetPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Mosaic composition failed for new collection — copying first source thumbnail instead");
+            File.Copy(tiles[0], targetPath, overwrite: true);
+        }
+
+        var size = new FileInfo(targetPath).Length;
+        _logger.LogInformation(
+            "Generated multi-sport mosaic cover from {TileCount} source thumbnail(s)",
+            Math.Min(tiles.Count, MaxMosaicTiles));
+        return MediaItem.Create(MosaicCoverFileName, MediaType.Image, size, 0);
+    }
+
+    private static string? ResolveCoverCandidate(Video source, string sourceDir)
+    {
+        var cover = Path.Combine(sourceDir, StumpCoverFileName);
+        if (File.Exists(cover))
+        {
+            return cover;
+        }
+
+        foreach (var media in source.GetAllMedia())
+        {
+            if (media.Type != MediaType.Image || string.IsNullOrWhiteSpace(media.FileName))
             {
                 continue;
             }
+            var path = Path.Combine(sourceDir, media.FileName);
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+        return null;
+    }
 
-            var targetName = $"s{source.Id}-{StumpCoverFileName}";
-            var targetPath = Path.Combine(destinationDir, targetName);
-            File.Copy(coverPath, targetPath, overwrite: true);
-            var size = new FileInfo(targetPath).Length;
-            _logger.LogInformation(
-                "No user media in merge sources — seeded fallback cover from source {SourceId}",
-                source.Id);
-            return MediaItem.Create(targetName, MediaType.Image, size, 0);
+    /// <summary>
+    /// Lays the supplied thumbnails out in a square-ish grid
+    /// (cols = ceil(sqrt(n))) and writes the composite as JPEG to
+    /// <paramref name="outputPath"/>. Sources beyond
+    /// <see cref="MaxMosaicTiles"/> are ignored to keep the file size sane.
+    /// </summary>
+    private static void ComposeMosaic(IReadOnlyList<string> imagePaths, string outputPath)
+    {
+        var count = Math.Min(imagePaths.Count, MaxMosaicTiles);
+        var cols = (int)Math.Ceiling(Math.Sqrt(count));
+        var rows = (int)Math.Ceiling((double)count / cols);
+        var canvasWidth = cols * MosaicTileSize;
+        var canvasHeight = rows * MosaicTileSize;
+
+        using var canvas = new Image<Rgba32>(canvasWidth, canvasHeight, Color.Black);
+        for (var i = 0; i < count; i++)
+        {
+            using var tile = Image.Load<Rgba32>(imagePaths[i]);
+            tile.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Mode = ResizeMode.Crop,
+                Size = new Size(MosaicTileSize, MosaicTileSize),
+            }));
+            var col = i % cols;
+            var row = i / cols;
+            var origin = new Point(col * MosaicTileSize, row * MosaicTileSize);
+            canvas.Mutate(c => c.DrawImage(tile, origin, 1f));
         }
 
-        return null;
+        var encoder = new JpegEncoder { Quality = 85 };
+        canvas.SaveAsJpeg(outputPath, encoder);
     }
 
     private static TrainingData? AggregateTraining(IReadOnlyList<Video> sources)
