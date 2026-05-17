@@ -919,30 +919,57 @@
 
     /// <summary>
     /// Loads the list of collections to render. For the regular per-sport
-    /// galleries this is just a category filter; for the synthetic
-    /// /multisport subview we instead pick every collection whose Training
-    /// is the aggregate produced by the merge service, regardless of its
-    /// stored <c>Category</c>. That keeps masters created before the
-    /// "always file under Multi-sport" rule visible too.
+    /// galleries this is a straight category-string match. For the synthetic
+    /// /multisport subview we surface both the aggregate masters AND the
+    /// per-activity source collections referenced by any master, so the page
+    /// shows the whole "multi-sport context" in one feed.
     /// </summary>
     private async Task<IReadOnlyList<Video>> LoadVideosAsync()
     {
         if (Category == VideoCategories.MultiSport)
         {
-            var all = await VideoService.GetAllVideosAsync();
-            return all
-                .Where(v => v.Training?.IsMultiSport == true
-                            || v.Category == VideoCategories.MultiSport)
-                .ToList()
-                .AsReadOnly();
+            return await LoadMultisportFeedAsync();
         }
 
-        // Regular per-sport gallery: hide the multi-sport masters so they
-        // do not appear twice (once on /multisport, once on their stored
-        // category page when that category is e.g. Calisthenics).
         var byCategory = await VideoService.GetVideosByCategoryAsync(Category);
-        return byCategory
-            .Where(v => v.Training?.IsMultiSport != true)
+        return byCategory.ToList().AsReadOnly();
+    }
+
+    /// <summary>
+    /// Returns every collection relevant to the multi-sport feed:
+    ///   1. Aggregate masters (Training.IsMultiSport == true or Category set
+    ///      to <see cref="VideoCategories.MultiSport"/>).
+    ///   2. Every source stump referenced by those masters via
+    ///      <see cref="SubActivityLink.ExternalId"/>, regardless of the
+    ///      stump's stored Category.
+    /// Sorted newest first.
+    /// </summary>
+    private async Task<IReadOnlyList<Video>> LoadMultisportFeedAsync()
+    {
+        var all = await VideoService.GetAllVideosAsync();
+        var masters = all
+            .Where(v => v.Training?.IsMultiSport == true
+                        || v.Category == VideoCategories.MultiSport)
+            .ToList();
+
+        var referencedExternalIds = masters
+            .SelectMany(m => m.Training?.SubActivities ?? Enumerable.Empty<SubActivityLink>())
+            .Select(s => s.ExternalId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sources = all.Where(v =>
+                v.Training is not null
+                && !string.IsNullOrWhiteSpace(v.Training.ExternalId)
+                && referencedExternalIds.Contains(v.Training.ExternalId)
+                && v.Training.IsMultiSport != true)
+            .ToList();
+
+        return masters
+            .Concat(sources)
+            .GroupBy(v => v.Id)
+            .Select(g => g.First())
+            .OrderByDescending(v => v.UploadedAt)
             .ToList()
             .AsReadOnly();
     }
