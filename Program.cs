@@ -130,6 +130,7 @@ try
     builder.Services.AddScoped<IVideoService, VideoService>();
     builder.Services.AddScoped<ICredentialRepository, CredentialService>();
     builder.Services.AddScoped<ILogReaderService, LogReaderService>();
+    builder.Services.AddSingleton<ITrainingStatsService, TrainingStatsService>();
 
     // Strava integration — typed HttpClient + scoped collaborators
     builder.Services.AddHttpClient<IStravaApiClient, StravaApiClient>();

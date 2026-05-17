@@ -29,6 +29,9 @@
                 <a href="/map" class="pinned-globe" title="Adventures map" aria-label="Map">
                     <span class="pinned-globe-orb"></span>
                 </a>
+                <a href="/stats" class="pinned-stats" title="Training stats" aria-label="Stats">
+                    <span class="pinned-stats-icon">📊</span>
+                </a>
                 <AuthorizeView>
                     <Authorized>
                         <a href="/admin/strava" class="admin-strava" title="Strava integration" aria-label="Strava">
@@ -270,6 +273,22 @@
         box-shadow:
             0 4px 12px rgba(29, 78, 216, 0.55),
             inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .pinned-stats {
+        display: inline-flex;
+        align-items: center;
+        line-height: 0;
+    }
+    .pinned-stats-icon {
+        font-size: 1.05rem;
+        line-height: 1;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+        transition: transform 0.18s, filter 0.18s;
+    }
+    .pinned-stats:hover .pinned-stats-icon {
+        transform: scale(1.12);
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
     }
 
     .admin-strava {

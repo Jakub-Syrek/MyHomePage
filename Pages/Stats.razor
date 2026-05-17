@@ -1,0 +1,460 @@
+@page "/stats"
+@layout MainLayout
+@using MyHomePage.Abstractions
+@using MyHomePage.Models
+@inject IVideoService VideoService
+@inject ITrainingStatsService StatsService
+
+<PageTitle>Training stats - My Mountain Adventures</PageTitle>
+
+<div class="stats-page">
+    <header class="stats-hero">
+        <h1>📊 Training stats</h1>
+        <p>Aggregated metrics from every Strava-imported session in the gallery.</p>
+        <div class="stats-period-bar">
+            @foreach (var preset in _periodPresets)
+            {
+                var key = preset.Key;
+                var label = preset.Value;
+                <button type="button"
+                        class="stats-period @(key == _selectedPreset ? "active" : "")"
+                        @onclick="@(() => SelectPreset(key))">
+                    @label
+                </button>
+            }
+        </div>
+    </header>
+
+    @if (_stats is null)
+    {
+        <div class="stats-loading">
+            <div class="stats-spinner"></div>
+            <p>Crunching numbers…</p>
+        </div>
+    }
+    else if (_stats.SessionCount == 0)
+    {
+        <div class="stats-empty">
+            <p>No training sessions in this window. Try a longer period or import a Strava activity from <a href="/admin/strava">the admin page</a>.</p>
+        </div>
+    }
+    else
+    {
+        <section class="stats-cards">
+            <article class="stats-card">
+                <span class="stats-card-icon">🏃</span>
+                <div>
+                    <strong>@_stats.SessionCount</strong>
+                    <span>session@(_stats.SessionCount == 1 ? "" : "s")</span>
+                </div>
+            </article>
+            <article class="stats-card">
+                <span class="stats-card-icon">📏</span>
+                <div>
+                    <strong>@FormatDistance(_stats.TotalDistanceMeters)</strong>
+                    <span>distance</span>
+                </div>
+            </article>
+            <article class="stats-card">
+                <span class="stats-card-icon">⏱</span>
+                <div>
+                    <strong>@FormatDuration(_stats.TotalDuration)</strong>
+                    <span>moving time</span>
+                </div>
+            </article>
+            <article class="stats-card">
+                <span class="stats-card-icon">↑</span>
+                <div>
+                    <strong>@($"{_stats.TotalElevationGainMeters:F0}") m</strong>
+                    <span>elevation gain</span>
+                </div>
+            </article>
+            @if (_stats.TotalCalories > 0)
+            {
+                <article class="stats-card">
+                    <span class="stats-card-icon">🔥</span>
+                    <div>
+                        <strong>@_stats.TotalCalories</strong>
+                        <span>kcal</span>
+                    </div>
+                </article>
+            }
+            @if (_stats.TotalSufferScore > 0)
+            {
+                <article class="stats-card">
+                    <span class="stats-card-icon">💪</span>
+                    <div>
+                        <strong>@_stats.TotalSufferScore</strong>
+                        <span>effort score</span>
+                    </div>
+                </article>
+            }
+            @if (_stats.TotalPersonalRecords > 0)
+            {
+                <article class="stats-card">
+                    <span class="stats-card-icon">🏆</span>
+                    <div>
+                        <strong>@_stats.TotalPersonalRecords</strong>
+                        <span>personal records</span>
+                    </div>
+                </article>
+            }
+        </section>
+
+        <section class="stats-streaks">
+            <div class="stats-streak">
+                <strong>@_stats.CurrentStreakDays</strong>
+                <span>day streak (current)</span>
+            </div>
+            <div class="stats-streak">
+                <strong>@_stats.LongestStreakDays</strong>
+                <span>day streak (longest)</span>
+            </div>
+        </section>
+
+        @if (_stats.WeeklyBuckets.Count > 0)
+        {
+            <section class="stats-section">
+                <h2>Weekly mileage</h2>
+                @{
+                    var maxDistanceKm = Math.Max(1.0, _stats.WeeklyBuckets.Max(b => b.DistanceMeters) / 1000.0);
+                    var barWidth = 100.0 / _stats.WeeklyBuckets.Count;
+                }
+                <div class="stats-chart">
+                    @foreach (var bucket in _stats.WeeklyBuckets)
+                    {
+                        var km = bucket.DistanceMeters / 1000.0;
+                        var heightPct = (km / maxDistanceKm) * 100.0;
+                        <div class="stats-bar-wrap"
+                             style="width: @($"calc({barWidth:F2}% - 6px)")"
+                             title="@($"{bucket.Label}: {km:F1} km · {bucket.SessionCount} session(s)")">
+                            <div class="stats-bar" style="height: @($"{heightPct:F1}%")"></div>
+                            <span class="stats-bar-value">@($"{km:F0}")</span>
+                            <span class="stats-bar-label">@bucket.WeekStartUtc.ToString("dd MMM")</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (_stats.SessionsByCategory.Count > 0)
+        {
+            <section class="stats-section">
+                <h2>Category breakdown</h2>
+                @{
+                    var totalSessions = _stats.SessionsByCategory.Values.Sum();
+                }
+                <ul class="stats-category-list">
+                    @foreach (var entry in _stats.SessionsByCategory.OrderByDescending(e => e.Value))
+                    {
+                        var count = entry.Value;
+                        var distance = _stats.DistanceByCategory.TryGetValue(entry.Key, out var d) ? d : 0;
+                        var sessionPct = totalSessions == 0 ? 0 : (count * 100.0 / totalSessions);
+                        <li>
+                            <div class="stats-cat-head">
+                                <a class="stats-cat-name" href="@VideoCategories.GetUrl(entry.Key)">
+                                    @entry.Key
+                                </a>
+                                <span class="stats-cat-meta">
+                                    @count session@(count == 1 ? "" : "s") ·
+                                    @FormatDistance(distance)
+                                </span>
+                            </div>
+                            <div class="stats-cat-bar">
+                                <div class="stats-cat-fill" style="width: @($"{sessionPct:F1}%")"></div>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        @if (_stats.RecentRecords.Count > 0)
+        {
+            <section class="stats-section">
+                <h2>🏆 Recent personal records</h2>
+                <table class="stats-records">
+                    <thead>
+                        <tr>
+                            <th>Distance</th>
+                            <th>Time</th>
+                            <th>Date</th>
+                            <th>Session</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var record in _stats.RecentRecords)
+                        {
+                            <tr>
+                                <td><strong>@record.Name</strong></td>
+                                <td class="stats-records-time">@FormatDuration(record.Duration)</td>
+                                <td>@record.AchievedAtUtc.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <a href="/item/@record.VideoId">@record.SessionTitle</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+    }
+</div>
+
+<style>
+    .stats-page { max-width: 1200px; margin: 30px auto; padding: 0 24px 60px; }
+    .stats-hero h1 { margin: 0 0 6px; color: #1f2937; font-size: 2rem; }
+    .stats-hero p { margin: 0 0 16px; color: #6b7280; }
+    .stats-period-bar {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        padding: 10px 12px;
+        background: rgba(255,255,255,0.65);
+        border: 1px solid rgba(255,255,255,0.5);
+        backdrop-filter: blur(16px);
+        border-radius: 12px;
+        margin-bottom: 24px;
+    }
+    .stats-period {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(102,126,234,0.25);
+        background: white;
+        color: #4a5568;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+        font-family: inherit;
+    }
+    .stats-period:hover { transform: translateY(-1px); }
+    .stats-period.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+    }
+
+    .stats-loading, .stats-empty {
+        background: rgba(255,255,255,0.85);
+        border-radius: 14px;
+        padding: 40px;
+        text-align: center;
+        color: #4a5568;
+    }
+    .stats-spinner {
+        width: 36px; height: 36px;
+        margin: 0 auto 12px;
+        border: 4px solid rgba(102,126,234,0.2);
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: stats-spin 0.8s linear infinite;
+    }
+    @@keyframes stats-spin { to { transform: rotate(360deg); } }
+
+    .stats-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .stats-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.84) 100%);
+        border: 1px solid rgba(255,255,255,0.6);
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 10px 30px rgba(20,30,60,0.10);
+    }
+    .stats-card-icon {
+        font-size: 1.6rem;
+        line-height: 1;
+    }
+    .stats-card strong {
+        display: block;
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: #1f2937;
+    }
+    .stats-card span { color: #6b7280; font-size: 0.85rem; }
+
+    .stats-streaks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 22px;
+    }
+    .stats-streak {
+        flex: 1 1 200px;
+        padding: 16px 22px;
+        background: linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%);
+        color: white;
+        border-radius: 14px;
+        text-align: center;
+        box-shadow: 0 12px 28px rgba(102, 126, 234, 0.32);
+    }
+    .stats-streak strong {
+        display: block;
+        font-size: 2.2rem;
+        font-weight: 800;
+    }
+    .stats-streak span { opacity: 0.9; font-size: 0.9rem; }
+
+    .stats-section {
+        background: rgba(255,255,255,0.92);
+        border-radius: 16px;
+        padding: 22px 24px;
+        margin-bottom: 22px;
+        box-shadow: 0 10px 26px rgba(20,30,60,0.08);
+    }
+    .stats-section h2 {
+        margin: 0 0 14px;
+        font-size: 1.15rem;
+        color: #1f2937;
+    }
+
+    .stats-chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 6px;
+        height: 220px;
+        padding-top: 8px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+    .stats-bar-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 28px;
+        height: 100%;
+    }
+    .stats-bar {
+        width: 100%;
+        background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+        border-radius: 6px 6px 0 0;
+        min-height: 2px;
+        transition: height 0.3s ease;
+    }
+    .stats-bar-value {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-bar-label {
+        font-size: 0.65rem;
+        color: #6b7280;
+        margin-top: 2px;
+        white-space: nowrap;
+        transform: rotate(-30deg);
+        transform-origin: top left;
+    }
+
+    .stats-category-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+    .stats-cat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .stats-cat-name {
+        font-weight: 700;
+        color: #2c3e50;
+        text-decoration: none;
+    }
+    .stats-cat-name:hover { text-decoration: underline; }
+    .stats-cat-meta { color: #6b7280; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+    .stats-cat-bar {
+        height: 8px;
+        background: rgba(0,0,0,0.05);
+        border-radius: 999px;
+        margin-top: 4px;
+        overflow: hidden;
+    }
+    .stats-cat-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        transition: width 0.3s ease;
+    }
+
+    .stats-records {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-records th, .stats-records td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        font-size: 0.92rem;
+    }
+    .stats-records th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+    }
+    .stats-records-time { font-weight: 700; color: #1f2937; }
+    .stats-records a { color: #4338ca; text-decoration: none; }
+    .stats-records a:hover { text-decoration: underline; }
+</style>
+
+@code {
+    private TrainingStats? _stats;
+    private IReadOnlyList<Video>? _videos;
+    private string _selectedPreset = "90d";
+
+    private readonly IReadOnlyDictionary<string, string> _periodPresets = new Dictionary<string, string>
+    {
+        ["7d"] = "Last 7 days",
+        ["30d"] = "Last 30 days",
+        ["90d"] = "Last 90 days",
+        ["365d"] = "Last 12 months",
+        ["all"] = "All time"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _videos = await VideoService.GetAllVideosAsync();
+        RecomputeStats();
+    }
+
+    private void SelectPreset(string key)
+    {
+        if (_selectedPreset == key) return;
+        _selectedPreset = key;
+        RecomputeStats();
+    }
+
+    private void RecomputeStats()
+    {
+        if (_videos is null) return;
+        var (from, to) = ResolveWindow(_selectedPreset);
+        _stats = StatsService.Compute(_videos, from, to);
+    }
+
+    private static (DateTime From, DateTime To) ResolveWindow(string preset)
+    {
+        var now = DateTime.UtcNow;
+        return preset switch
+        {
+            "7d" => (now.AddDays(-7), now),
+            "30d" => (now.AddDays(-30), now),
+            "90d" => (now.AddDays(-90), now),
+            "365d" => (now.AddDays(-365), now),
+            _ => (DateTime.SpecifyKind(DateTime.MinValue.AddDays(1), DateTimeKind.Utc), now)
+        };
+    }
+
+    private static string FormatDistance(double meters) =>
+        meters >= 1000
+            ? $"{meters / 1000:F1} km"
+            : $"{meters:F0} m";
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 24)
+            return $"{(int)duration.TotalDays}d {duration.Hours:00}h";
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes:00}m";
+        return $"{duration.Minutes}m {duration.Seconds:00}s";
+    }
+}
