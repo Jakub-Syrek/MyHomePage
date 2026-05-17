@@ -16,6 +16,18 @@ public sealed class StravaSyncService : IStravaSyncService
 {
     private const string CoverFileName = "cover.jpg";
 
+    /// <summary>
+    /// Process-wide gate that serialises every import path
+    /// (<see cref="ImportActivityAsync"/>, <see cref="SyncRecentAsync"/>,
+    /// <see cref="AttachActivityToVideoAsync"/>). Without this, a Blazor
+    /// Server prerender-then-client double init or a webhook firing in
+    /// parallel with the page auto-sync would let two threads read the
+    /// repository, miss the same external id and then both create their
+    /// own gallery item — duplicating the activity. Single-user app, so
+    /// a global lock is the right cost / safety trade-off.
+    /// </summary>
+    private static readonly SemaphoreSlim ImportLock = new(1, 1);
+
     private readonly IStravaApiClient _api;
     private readonly StravaTokenService _tokens;
     private readonly IVideoRepository _videos;
@@ -71,20 +83,32 @@ public sealed class StravaSyncService : IStravaSyncService
             return OperationResult<Video>.Failure(
                 $"Activity {activity.Id} is not public — skipping per ImportPublicOnly.");
 
-        var existing = await FindExistingAsync(activity.Id, cancellationToken);
-        if (existing is not null)
+        // Serialised against every other import path: re-checking
+        // FindExistingAsync inside the lock makes the dedup atomic so
+        // concurrent callers (page auto-sync + webhook, prerender +
+        // client init, etc.) never both miss the same external id.
+        await ImportLock.WaitAsync(cancellationToken);
+        try
         {
-            var gear = await TryFetchGearAsync(activity, cancellationToken);
-            existing.Training = StravaActivityMapper.ToTrainingData(activity, gear);
-            await _videos.SaveAsync(existing);
-            _logger.LogInformation(
-                "Updated existing video {VideoId} with Strava activity {ActivityId}",
-                existing.Id, activity.Id);
-            return OperationResult<Video>.Success(existing);
-        }
+            var existing = await FindExistingAsync(activity.Id, cancellationToken);
+            if (existing is not null)
+            {
+                var gear = await TryFetchGearAsync(activity, cancellationToken);
+                existing.Training = StravaActivityMapper.ToTrainingData(activity, gear);
+                await _videos.SaveAsync(existing);
+                _logger.LogInformation(
+                    "Updated existing video {VideoId} with Strava activity {ActivityId}",
+                    existing.Id, activity.Id);
+                return OperationResult<Video>.Success(existing);
+            }
 
-        var created = await CreatePlaceholderAsync(activity, cancellationToken);
-        return OperationResult<Video>.Success(created);
+            var created = await CreatePlaceholderAsync(activity, cancellationToken);
+            return OperationResult<Video>.Success(created);
+        }
+        finally
+        {
+            ImportLock.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -132,22 +156,28 @@ public sealed class StravaSyncService : IStravaSyncService
         if (!list.IsSuccess || list.Value is null)
             return OperationResult<StravaSyncSummary>.Failure(list.Message);
 
-        var allVideos = await _videos.GetAllAsync();
-        var existingExternalIds = allVideos
-            .Where(v => v.Training is { Source: TrainingSource.Strava })
-            .Select(v => v.Training!.ExternalId)
-            .ToHashSet(StringComparer.Ordinal);
-
         var inspected = list.Value.Count;
         var imported = 0;
         var skipped = 0;
         var failed = 0;
         var failures = new List<string>();
 
+        // Per-activity dedup is fresh inside ImportActivityAsync's lock,
+        // so we no longer pre-build a hashset out here. That stale-snapshot
+        // approach lost the race when two SyncRecentAsync calls overlapped
+        // (Blazor Server prerender + client init both fire OnInitializedAsync)
+        // and produced duplicate stumps. ImportActivityAsync.FindExistingAsync
+        // now runs under ImportLock and is the single source of truth.
         foreach (var activity in list.Value)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (existingExternalIds.Contains(activity.Id.ToString()))
+
+            // Cheap pre-filter against a fresh GetAllAsync snapshot so we
+            // skip the activity-detail fetch + ImportLock dance for items
+            // we already have. This snapshot can be stale relative to a
+            // concurrent caller, but ImportActivityAsync re-checks inside
+            // the lock so any miss here is caught by the atomic recheck.
+            if (await IsAlreadyImportedAsync(activity.Id, cancellationToken))
             {
                 skipped++;
                 continue;
@@ -174,6 +204,22 @@ public sealed class StravaSyncService : IStravaSyncService
         return OperationResult<StravaSyncSummary>.Success(
             new StravaSyncSummary(inspected, imported, skipped, failed, failures),
             $"Inspected {inspected}, imported {imported}, skipped {skipped}, failed {failed}.");
+    }
+
+    /// <summary>
+    /// Fresh per-activity dedup check. Re-reads <see cref="IVideoRepository"/>
+    /// for every activity so the snapshot reflects writes made by a
+    /// concurrent caller earlier in the same sync sweep.
+    /// </summary>
+    private async Task<bool> IsAlreadyImportedAsync(
+        long activityId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var external = activityId.ToString();
+        var existing = await FindExistingAsync(activityId, cancellationToken);
+        return existing is not null
+            && string.Equals(existing.Training!.ExternalId, external, StringComparison.Ordinal);
     }
 
     private async Task<OperationResult<StravaActivity>> FetchActivityAsync(

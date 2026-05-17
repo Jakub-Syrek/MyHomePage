@@ -455,6 +455,52 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task ImportActivityAsync_ConcurrentCalls_OnlyOneSavesNewVideo()
+    {
+        // Two callers racing on the same activity must produce exactly one
+        // gallery item — the ImportLock serialises them and FindExistingAsync
+        // is re-checked inside the lock so the second call sees the first
+        // call's save and updates the same video instead of creating a dupe.
+        ArrangeValidTokens();
+        _api.GetActivityAsync(Arg.Any<string>(), 555, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 555,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone",
+                StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 1800,
+                DistanceMeters = 5000
+            }));
+
+        // GetAllAsync returns whatever was last saved — the substitute
+        // tracks the saved video so the second concurrent caller sees it.
+        var savedVideos = new List<Video>();
+        _videos.GetAllAsync().Returns(_ => savedVideos.AsReadOnly());
+        _videos.GenerateNextId().Returns(70);
+        _videos.SaveAsync(Arg.Do<Video>(v =>
+        {
+            // Track first save so subsequent GetAllAsync calls reflect it.
+            if (savedVideos.All(s => s.Id != v.Id))
+                savedVideos.Add(v);
+        })).Returns(Task.CompletedTask);
+
+        var taskA = _sync.ImportActivityAsync(555, enforcePrivacyFilter: false);
+        var taskB = _sync.ImportActivityAsync(555, enforcePrivacyFilter: false);
+        var results = await Task.WhenAll(taskA, taskB);
+
+        Assert.That(results[0].IsSuccess, Is.True);
+        Assert.That(results[1].IsSuccess, Is.True);
+        // Both calls return success but only one new gallery item exists.
+        Assert.That(savedVideos.Select(v => v.Id).Distinct().ToArray(),
+            Is.EqualTo(new[] { 70 }));
+        // GenerateNextId must have been called exactly once — the second
+        // caller short-circuited via FindExistingAsync.
+        _videos.Received(1).GenerateNextId();
+    }
+
+    [Test]
     public async Task SyncRecentAsync_PrivacyFilterEnforced_PrivateActivitiesCountedAsFailures()
     {
         ArrangeValidTokens();

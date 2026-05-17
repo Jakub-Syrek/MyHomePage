@@ -185,20 +185,34 @@
     private bool _isSyncing;
     private string? _syncSummary;
     private bool _syncError;
+    private bool _autoSyncFired;
 
     protected override async Task OnInitializedAsync()
     {
+        // Token load is light + idempotent — safe to run during the
+        // prerender pass. The heavy auto-sync is deferred to
+        // OnAfterRenderAsync(firstRender=true) so it fires exactly once
+        // per page lifetime instead of twice (prerender + client init).
         _tokens = await TokenStore.LoadAsync();
-        if (_tokens is not null)
-        {
-            // Auto-import on entry: every visit to /admin/strava sweeps the
-            // 30 most-recent activities into the gallery as stumps. New
-            // ones get a category-cover placeholder; the operator adds
-            // real photos / videos later via the editor. SyncRecentAsync
-            // dedupes by external id so re-running is cheap.
-            await SyncRecentAsync(autoTriggered: true);
-        }
         _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (_autoSyncFired) return;
+        if (_tokens is null) return;
+
+        _autoSyncFired = true;
+
+        // Auto-import on entry: every visit to /admin/strava sweeps the
+        // 30 most-recent activities into the gallery as stumps. New
+        // ones get a category-cover placeholder; the operator adds
+        // real photos / videos later via the editor. Dedup happens
+        // inside StravaSyncService under an ImportLock so concurrent
+        // callers (webhook, fast re-render) can never duplicate an
+        // activity even if their snapshots overlap.
+        await SyncRecentAsync(autoTriggered: true);
     }
 
     private async Task LoadActivitiesAsync()
