@@ -150,53 +150,61 @@ else
 
             <TrainingPanel Training="@_item.Training" />
 
-            <div class="share-bar">
-                <button type="button" class="link-btn primary" @onclick="CopyPageLink">
-                    @if (_pageCopied) { <span>✓ Page link copied</span> } else { <span>🔗 Copy page link</span> }
-                </button>
-                <a href="@($"https://www.facebook.com/sharer/sharer.php?u={Uri.EscapeDataString(_pageUrl)}")"
-                   target="_blank" rel="noopener noreferrer"
-                   class="link-btn share-fb"
-                   title="Share on Facebook">
-                    <span class="share-icon">f</span> Share on Facebook
-                </a>
-                <a href="@($"https://wa.me/?text={Uri.EscapeDataString($"{_item.Title} — {_pageUrl}")}")"
-                   target="_blank" rel="noopener noreferrer"
-                   class="link-btn share-wa"
-                   title="Share on WhatsApp">
-                    <span class="share-icon">📱</span> WhatsApp
-                </a>
-                <a href="@($"https://twitter.com/intent/tweet?text={Uri.EscapeDataString(_item.Title)}&url={Uri.EscapeDataString(_pageUrl)}")"
-                   target="_blank" rel="noopener noreferrer"
-                   class="link-btn share-x"
-                   title="Share on X / Twitter">
-                    <span class="share-icon">𝕏</span> Share on X
-                </a>
-                @if (_nativeShareSupported)
-                {
-                    <button type="button" class="link-btn share-native" @onclick="NativeShare" title="Open device share menu">
-                        <span class="share-icon">↗</span> Share…
-                    </button>
-                }
-                @{
-                    var primary = _media.FirstOrDefault();
-                }
-                @if (primary is not null)
-                {
-                    var dlUrl = $"/videos/{Id}/{primary.FileName}";
-                    var dlLabel = primary.Type == MediaType.Video ? "Download video" : "Download photo";
-                    <a href="@dlUrl"
-                       download="@primary.FileName"
-                       class="link-btn share-dl"
-                       title="Download the media file so you can upload it as a native photo/video post on Facebook">
-                        <span class="share-icon">⬇</span> @dlLabel
-                    </a>
-                }
-                <AdminItemActions Item="@_item"
-                                  Variant="labeled"
-                                  ExtraClass="item-actions"
-                                  RedirectOnDelete="true" />
-            </div>
+            @* Share + post + download + edit/delete are admin actions and must
+               never be visible to anonymous visitors. The whole share-bar is
+               wrapped in AuthorizeView so anon users still see the media,
+               title, description, coordinates and training panel above. *@
+            <AuthorizeView>
+                <Authorized>
+                    <div class="share-bar">
+                        <button type="button" class="link-btn primary" @onclick="CopyPageLink">
+                            @if (_pageCopied) { <span>✓ Page link copied</span> } else { <span>🔗 Copy page link</span> }
+                        </button>
+                        <a href="@($"https://www.facebook.com/sharer/sharer.php?u={Uri.EscapeDataString(_pageUrl)}")"
+                           target="_blank" rel="noopener noreferrer"
+                           class="link-btn share-fb"
+                           title="Share on Facebook">
+                            <span class="share-icon">f</span> Share on Facebook
+                        </a>
+                        <a href="@($"https://wa.me/?text={Uri.EscapeDataString($"{_item.Title} — {_pageUrl}")}")"
+                           target="_blank" rel="noopener noreferrer"
+                           class="link-btn share-wa"
+                           title="Share on WhatsApp">
+                            <span class="share-icon">📱</span> WhatsApp
+                        </a>
+                        <a href="@($"https://twitter.com/intent/tweet?text={Uri.EscapeDataString(_item.Title)}&url={Uri.EscapeDataString(_pageUrl)}")"
+                           target="_blank" rel="noopener noreferrer"
+                           class="link-btn share-x"
+                           title="Share on X / Twitter">
+                            <span class="share-icon">𝕏</span> Share on X
+                        </a>
+                        @if (_nativeShareSupported)
+                        {
+                            <button type="button" class="link-btn share-native" @onclick="NativeShare" title="Open device share menu">
+                                <span class="share-icon">↗</span> Share…
+                            </button>
+                        }
+                        @{
+                            var primary = _media.FirstOrDefault();
+                        }
+                        @if (primary is not null)
+                        {
+                            var dlUrl = $"/videos/{Id}/{primary.FileName}";
+                            var dlLabel = primary.Type == MediaType.Video ? "Download video" : "Download photo";
+                            <a href="@dlUrl"
+                               download="@primary.FileName"
+                               class="link-btn share-dl"
+                               title="Download the media file so you can upload it as a native photo/video post on Facebook">
+                                <span class="share-icon">⬇</span> @dlLabel
+                            </a>
+                        }
+                        <AdminItemActions Item="@_item"
+                                          Variant="labeled"
+                                          ExtraClass="item-actions"
+                                          RedirectOnDelete="true" />
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         </div>
     </article>
 

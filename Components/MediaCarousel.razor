@@ -23,11 +23,17 @@ else
                 <a class="mc-btn" href="/item/@Item.Id#m-@_index" title="Open detail page">
                     ↗
                 </a>
-                <button type="button" class="mc-btn @(_copiedIndex == _index ? "copied" : "")"
-                        @onclick="() => CopyLink(_index)"
-                        title="Copy direct link">
-                    @if (_copiedIndex == _index) { <span>✓</span> } else { <span>🔗</span> }
-                </button>
+                @* Copy-link is a sharing action — hidden from anonymous
+                   visitors. The Open-detail anchor stays public. *@
+                <AuthorizeView>
+                    <Authorized>
+                        <button type="button" class="mc-btn @(_copiedIndex == _index ? "copied" : "")"
+                                @onclick="() => CopyLink(_index)"
+                                title="Copy direct link">
+                            @if (_copiedIndex == _index) { <span>✓</span> } else { <span>🔗</span> }
+                        </button>
+                    </Authorized>
+                </AuthorizeView>
             </div>
         </div>
 

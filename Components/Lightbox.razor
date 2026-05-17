@@ -44,9 +44,16 @@
             <div class="lb-actions">
                 <a class="lb-btn" href="@url" target="_blank" rel="noopener" title="Open original in new tab">↗ Open</a>
                 <a class="lb-btn" href="@url" download title="Download">⬇ Download</a>
-                <button class="lb-btn" @onclick="CopyDeepLink" title="Copy link to this media">
-                    @if (_copied) { <span>✓ Copied</span> } else { <span>🔗 Copy link</span> }
-                </button>
+                @* Copy-link copies the deep URL to clipboard, which is a "share"
+                   action and is hidden from anonymous visitors. Open/Download
+                   stay public because the file URL is publicly served anyway. *@
+                <AuthorizeView>
+                    <Authorized>
+                        <button class="lb-btn" @onclick="CopyDeepLink" title="Copy link to this media">
+                            @if (_copied) { <span>✓ Copied</span> } else { <span>🔗 Copy link</span> }
+                        </button>
+                    </Authorized>
+                </AuthorizeView>
             </div>
         </div>
     </div>
