@@ -101,6 +101,14 @@ public static class VideoCategories
     public const string Running = "Running";
     public const string Bicycle = "Bicycle";
 
+    /// <summary>
+    /// Synthetic category used by collections produced via
+    /// <c>ICollectionMergeService</c>. Surfaces under its own /multisport
+    /// subview rather than mixing into the per-sport galleries; kept out of
+    /// <see cref="All"/> so the home grid still only lists raw sports.
+    /// </summary>
+    public const string MultiSport = "Multi-sport";
+
     public static IReadOnlyList<string> All =>
         [Gory, WspinaczkaSkalowa, Bouldering, ProwadzieniHala, Calisthenics, Running, Bicycle];
 
@@ -114,6 +122,7 @@ public static class VideoCategories
         Calisthenics => "/calisthenics",
         Running => "/running",
         Bicycle => "/bicycle",
+        MultiSport => "/multisport",
         _ => "/"
     };
 
@@ -132,6 +141,7 @@ public static class VideoCategories
         Calisthenics => "/images/calisthenics-bg.jpg",
         Running => "/images/running-bg.jpg",
         Bicycle => "/images/cycling-bg.jpg",
+        MultiSport => "/images/mountains-bg.jpg",
         _ => "/images/mountains-bg.jpg"
     };
 }

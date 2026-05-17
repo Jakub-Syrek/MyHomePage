@@ -20,6 +20,15 @@ public sealed class CollectionMergeService : ICollectionMergeService
     /// <summary>Name of the synthesised Markdown summary written into the merged folder.</summary>
     internal const string SummaryFileName = "summary.md";
 
+    /// <summary>
+    /// File name used by Strava stumps for the auto-seeded category placeholder
+    /// image. Treated as "not user media" — the merge skips it unless every
+    /// source is a pure stump (in which case the first selected source's cover
+    /// is copied across as the master's primary so the new collection still
+    /// has something to render).
+    /// </summary>
+    internal const string StumpCoverFileName = "cover.jpg";
+
     private readonly IVideoRepository _repository;
     private readonly IFileStorageService _storage;
     private readonly ILogger<CollectionMergeService> _logger;
@@ -68,11 +77,9 @@ public sealed class CollectionMergeService : ICollectionMergeService
                 newId, title, description, sources, mergedMedia, totalSize, trainingAggregate);
             await _repository.SaveAsync(merged);
 
-            await DeleteSourcesAsync(sources);
-
             _logger.LogInformation(
-                "Merged {SourceCount} collections [{SourceIds}] into new collection {NewId}",
-                sources.Count, string.Join(",", sources.Select(s => s.Id)), newId);
+                "Created multi-sport collection {NewId} aggregating {SourceCount} sources [{SourceIds}] — sources retained",
+                newId, sources.Count, string.Join(",", sources.Select(s => s.Id)));
             return OperationResult<int>.Success(newId);
         }
         catch (Exception ex)
@@ -104,6 +111,9 @@ public sealed class CollectionMergeService : ICollectionMergeService
 
     private async Task<List<Video>> LoadSourcesAsync(IReadOnlyList<int> sourceIds)
     {
+        // Selection order from the UI is meaningful (the user's "first chosen"
+        // wins the placeholder fallback below) so the original sequence is
+        // preserved here instead of re-sorting by upload date.
         var loaded = new List<Video>(sourceIds.Count);
         foreach (var id in sourceIds)
         {
@@ -113,7 +123,7 @@ public sealed class CollectionMergeService : ICollectionMergeService
                 loaded.Add(v);
             }
         }
-        return loaded.OrderBy(v => v.UploadedAt).ToList();
+        return loaded;
     }
 
     private (List<MediaItem> media, long totalSize) CopyMediaFromSources(
@@ -130,7 +140,7 @@ public sealed class CollectionMergeService : ICollectionMergeService
             var sourceDir = _storage.GetVideoDirectoryPath(source.Id);
             foreach (var media in source.GetAllMedia())
             {
-                if (string.IsNullOrWhiteSpace(media.FileName))
+                if (string.IsNullOrWhiteSpace(media.FileName) || IsStumpPlaceholder(media))
                 {
                     continue;
                 }
@@ -154,7 +164,49 @@ public sealed class CollectionMergeService : ICollectionMergeService
             }
         }
 
+        // If every source was a pure Strava stump with only cover.jpg, the
+        // merged collection would otherwise have zero media. Seed it with the
+        // FIRST selected source's cover so the gallery card still renders.
+        if (merged.Count == 0)
+        {
+            var fallback = CopyPlaceholderFromFirstSource(sources, destinationDir);
+            if (fallback is not null)
+            {
+                merged.Add(fallback);
+                total += fallback.SizeBytes;
+            }
+        }
+
         return (merged, total);
+    }
+
+    private static bool IsStumpPlaceholder(MediaItem media) =>
+        string.Equals(media.FileName, StumpCoverFileName, StringComparison.OrdinalIgnoreCase);
+
+    private MediaItem? CopyPlaceholderFromFirstSource(
+        IReadOnlyList<Video> sources,
+        string destinationDir)
+    {
+        foreach (var source in sources)
+        {
+            var sourceDir = _storage.GetVideoDirectoryPath(source.Id);
+            var coverPath = Path.Combine(sourceDir, StumpCoverFileName);
+            if (!File.Exists(coverPath))
+            {
+                continue;
+            }
+
+            var targetName = $"s{source.Id}-{StumpCoverFileName}";
+            var targetPath = Path.Combine(destinationDir, targetName);
+            File.Copy(coverPath, targetPath, overwrite: true);
+            var size = new FileInfo(targetPath).Length;
+            _logger.LogInformation(
+                "No user media in merge sources — seeded fallback cover from source {SourceId}",
+                source.Id);
+            return MediaItem.Create(targetName, MediaType.Image, size, 0);
+        }
+
+        return null;
     }
 
     private static TrainingData? AggregateTraining(IReadOnlyList<Video> sources)
@@ -271,24 +323,11 @@ public sealed class CollectionMergeService : ICollectionMergeService
         };
     }
 
-    private static string PickCategory(IReadOnlyList<Video> sources)
-    {
-        var categories = sources
-            .Select(s => s.Category)
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Distinct()
-            .ToList();
-        return categories.Count == 1 ? categories[0] : "Multi-sport";
-    }
-
-    private async Task DeleteSourcesAsync(IReadOnlyList<Video> sources)
-    {
-        foreach (var source in sources)
-        {
-            await _storage.DeleteVideoDirectoryAsync(source.Id);
-            await _repository.DeleteAsync(source.Id);
-        }
-    }
+    // Every merged collection lives in the dedicated "Multi-sport" bucket,
+    // surfaced under its own /multisport subview. Sources are unchanged and
+    // keep showing up on their original category pages.
+    private static string PickCategory(IReadOnlyList<Video> sources) =>
+        VideoCategories.MultiSport;
 }
 
 /// <summary>Renders the human-readable Markdown summary for a merged collection.</summary>

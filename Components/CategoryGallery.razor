@@ -930,8 +930,13 @@
     /// <summary>Whether the gallery is currently in multi-select merge mode.</summary>
     private bool _mergeMode;
 
-    /// <summary>Ids of the collections currently checked for merge.</summary>
-    private readonly HashSet<int> _selection = new();
+    /// <summary>
+    /// Ids of the collections currently checked for merge, in selection
+    /// order. The order matters: the merge service uses the first entry
+    /// as the source of the fallback cover when no user media exists
+    /// across all sources.
+    /// </summary>
+    private readonly List<int> _selection = new();
 
     private bool _mergeDialogOpen;
     private bool _mergeRunning;
@@ -951,8 +956,14 @@
 
     private void ToggleSelection(int id, bool checkedNow)
     {
-        if (checkedNow) _selection.Add(id);
-        else _selection.Remove(id);
+        if (checkedNow)
+        {
+            if (!_selection.Contains(id)) _selection.Add(id);
+        }
+        else
+        {
+            _selection.Remove(id);
+        }
     }
 
     private void ClearSelection() => _selection.Clear();
@@ -987,6 +998,9 @@
         _mergeError = null;
         try
         {
+            // Pass selection order through unchanged — the merge service
+            // honours the first entry when picking a fallback placeholder
+            // image (when no source carries user media).
             var ids = _selection.ToList();
             var result = await MergeService.MergeAsync(
                 ids, _mergeTitle.Trim(), _mergeDescription?.Trim() ?? string.Empty);
@@ -1004,7 +1018,9 @@
             _mergeDialogOpen = false;
             _mergeMode = false;
             _selection.Clear();
-            await RefreshVideos();
+            // The new multi-sport collection lives under /multisport, not this
+            // category page, so navigate there instead of refreshing in place.
+            Navigation.NavigateTo("/multisport", forceLoad: false);
         }
         catch (Exception ex)
         {

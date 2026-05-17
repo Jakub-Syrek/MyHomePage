@@ -1,0 +1,21 @@
+@page "/multisport"
+@layout MainLayout
+
+<PageTitle>Multi-sport — My Mountain Adventures</PageTitle>
+
+@*
+    Subview dedicated to aggregate "multi-sport" collections produced by
+    the merge feature. Each card pulls together several Strava workouts
+    (Running + WeightTraining + Ride etc.) under one title with summed
+    totals; the per-activity Strava links live on the detail page
+    (Item.razor → TrainingPanel → "Source activities" table).
+
+    Re-uses the standard CategoryGallery so filtering, the thumbnail
+    rail and the upload affordance behave identically to the regular
+    sport pages — the only difference is the data source (every
+    collection whose Category == VideoCategories.MultiSport).
+*@
+<CategoryGallery
+    Category="@VideoCategories.MultiSport"
+    BackgroundImage="/images/mountains-bg.jpg"
+    EmptyMessage="No multi-sport collections yet. Merge two or more workouts from any category to create one." />

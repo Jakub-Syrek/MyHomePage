@@ -98,22 +98,23 @@ public sealed class CollectionMergeServiceTests
     }
 
     [Test]
-    public async Task Merge_DeletesSourceCollectionsAndDirectories()
+    public async Task Merge_RetainsSourceCollectionsAndDirectories()
     {
+        // Sources are now snapshots of an aggregate view, not consumed by it.
         SeedVideoWithFile(1, "original.mp4");
         SeedVideoWithFile(2, "original.mp4");
 
         var result = await _service.MergeAsync(new[] { 1, 2 }, "Combined", string.Empty);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(await _repo.GetByIdAsync(1), Is.Null);
-        Assert.That(await _repo.GetByIdAsync(2), Is.Null);
-        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "1")), Is.False);
-        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "2")), Is.False);
+        Assert.That(await _repo.GetByIdAsync(1), Is.Not.Null);
+        Assert.That(await _repo.GetByIdAsync(2), Is.Not.Null);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "1")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "2")), Is.True);
     }
 
     [Test]
-    public async Task Merge_CopiesMediaWithSourceIdPrefix()
+    public async Task Merge_CopiesUserMediaWithSourceIdPrefix()
     {
         SeedVideoWithFile(1, "original.mp4");
         SeedVideoWithFile(2, "original.mp4");
@@ -125,6 +126,57 @@ public sealed class CollectionMergeServiceTests
         var copied = Directory.GetFiles(newDir).Select(Path.GetFileName).ToHashSet();
         Assert.That(copied, Does.Contain("s1-original.mp4"));
         Assert.That(copied, Does.Contain("s2-original.mp4"));
+    }
+
+    [Test]
+    public async Task Merge_AlwaysLandsInMultiSportCategory()
+    {
+        SeedVideoWithFile(1, "user.jpg", category: VideoCategories.Calisthenics);
+        SeedVideoWithFile(2, "user.jpg", category: VideoCategories.Calisthenics);
+
+        var result = await _service.MergeAsync(new[] { 1, 2 }, "Hybrid", string.Empty);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var merged = (await _repo.GetByIdAsync(result.Value))!;
+        Assert.That(merged.Category, Is.EqualTo(VideoCategories.MultiSport));
+    }
+
+    [Test]
+    public async Task Merge_SkipsStumpCoverWhenUserMediaIsPresent()
+    {
+        // Source 1 is a Strava stump (cover.jpg only), source 2 has a real
+        // user photo. The merge keeps the user photo and skips the cover.
+        SeedVideoWithFile(1, CollectionMergeService.StumpCoverFileName);
+        SeedVideoWithFile(2, "summit.jpg");
+
+        var result = await _service.MergeAsync(new[] { 1, 2 }, "Mixed", string.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+
+        var newDir = Path.Combine(_tempRoot, result.Value.ToString());
+        var copied = Directory.GetFiles(newDir).Select(Path.GetFileName).ToHashSet();
+        Assert.That(copied, Does.Contain("s2-summit.jpg"));
+        Assert.That(copied, Does.Not.Contain("s1-cover.jpg"));
+    }
+
+    [Test]
+    public async Task Merge_FallsBackToFirstSourceCoverWhenNoUserMedia()
+    {
+        // Both sources are Strava stumps. Selection order = [2, 1] — the
+        // service must take source 2's cover (the first ticked).
+        SeedVideoWithFile(1, CollectionMergeService.StumpCoverFileName);
+        SeedVideoWithFile(2, CollectionMergeService.StumpCoverFileName);
+
+        var result = await _service.MergeAsync(new[] { 2, 1 }, "Stumps only", string.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+
+        var newDir = Path.Combine(_tempRoot, result.Value.ToString());
+        var copied = Directory.GetFiles(newDir).Select(Path.GetFileName).ToHashSet();
+        Assert.That(copied, Does.Contain("s2-cover.jpg"));
+        Assert.That(copied, Does.Not.Contain("s1-cover.jpg"));
+
+        var merged = (await _repo.GetByIdAsync(result.Value))!;
+        Assert.That(merged.FileName, Is.EqualTo("s2-cover.jpg"));
+        Assert.That(merged.Media, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -183,7 +235,7 @@ public sealed class CollectionMergeServiceTests
         _repo.Seed(v);
     }
 
-    private void SeedVideoWithFile(int id, string fileName)
+    private void SeedVideoWithFile(int id, string fileName, string category = "Calisthenics")
     {
         Directory.CreateDirectory(Path.Combine(_tempRoot, id.ToString()));
         File.WriteAllBytes(Path.Combine(_tempRoot, id.ToString(), fileName), new byte[128]);
@@ -194,9 +246,9 @@ public sealed class CollectionMergeServiceTests
             Title = $"Source {id}",
             Description = "src",
             FileName = fileName,
-            Category = "Calisthenics",
+            Category = category,
             UploadedAt = new DateTime(2026, 5, 17, 10 + id, 0, 0, DateTimeKind.Utc),
-            Media = { MediaItem.Create(fileName, MediaType.Video, 128, 0) },
+            Media = { MediaItem.Create(fileName, MediaItem.DetectType(fileName), 128, 0) },
         };
         _repo.Seed(v);
     }

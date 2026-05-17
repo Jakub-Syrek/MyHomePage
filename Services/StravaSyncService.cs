@@ -93,6 +93,20 @@ public sealed class StravaSyncService : IStravaSyncService
             var existing = await FindExistingAsync(activity.Id, cancellationToken);
             if (existing is not null)
             {
+                // Multi-sport masters own their constituent activities — never
+                // overwrite their aggregate Training with single-activity data,
+                // and never re-categorise a merged collection on the basis of
+                // one of its sub-activities. Just return the master as-is so
+                // the caller (sync loop / merge from /admin/strava) treats it
+                // like a successful no-op import.
+                if (existing.Training?.IsMultiSport == true)
+                {
+                    _logger.LogInformation(
+                        "Activity {ActivityId} already owned by multi-sport collection {VideoId} — skipping refresh",
+                        activity.Id, existing.Id);
+                    return OperationResult<Video>.Success(existing);
+                }
+
                 var gear = await TryFetchGearAsync(activity, cancellationToken);
                 existing.Training = StravaActivityMapper.ToTrainingData(activity, gear);
                 await MigrateCategoryIfNeededAsync(existing, activity, cancellationToken);
@@ -347,8 +361,22 @@ public sealed class StravaSyncService : IStravaSyncService
         cancellationToken.ThrowIfCancellationRequested();
         var external = activityId.ToString();
         var existing = await FindExistingAsync(activityId, cancellationToken);
-        return existing is not null
-            && string.Equals(existing.Training!.ExternalId, external, StringComparison.Ordinal);
+        if (existing?.Training is null)
+        {
+            return false;
+        }
+
+        // Two ways the gallery can already own this activity:
+        //   1. A regular stump whose Training.ExternalId points at it.
+        //   2. A multi-sport master collection that swallowed it during
+        //      a merge — the id then lives in Training.SubActivities[].
+        // Both should count as "skipped" by the sync loop.
+        if (string.Equals(existing.Training.ExternalId, external, StringComparison.Ordinal))
+        {
+            return true;
+        }
+        return existing.Training.SubActivities is { Count: > 0 } subs
+            && subs.Any(s => string.Equals(s.ExternalId, external, StringComparison.Ordinal));
     }
 
     private async Task<OperationResult<StravaActivity>> FetchActivityAsync(
@@ -390,13 +418,28 @@ public sealed class StravaSyncService : IStravaSyncService
         cancellationToken.ThrowIfCancellationRequested();
         var external = activityId.ToString();
         var all = await _videos.GetAllAsync();
+
         var matches = all.Where(v =>
                 v.Training is not null &&
                 v.Training.Source == TrainingSource.Strava &&
                 v.Training.ExternalId == external)
             .ToList();
 
-        if (matches.Count <= 1) return matches.FirstOrDefault();
+        if (matches.Count == 0)
+        {
+            // No per-activity stump survives. Fall back to the multi-sport
+            // master that claims the activity through its SubActivities[],
+            // if one exists; this stops the sync from creating a duplicate
+            // stump for an id the master already represents (e.g. the user
+            // manually deleted the original stump after a merge).
+            var multiSportOwner = all.FirstOrDefault(v =>
+                v.Training is not null
+                && v.Training.SubActivities is { Count: > 0 } subs
+                && subs.Any(s => s.ExternalId == external));
+            return multiSportOwner;
+        }
+
+        if (matches.Count == 1) return matches[0];
 
         // Pre-existing duplicates (created before the ImportLock was in
         // place) get cleaned up lazily on the next sync. Keep the item

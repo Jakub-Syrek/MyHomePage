@@ -545,8 +545,13 @@
 
     // ── Merge-from-Strava-list feature ──────────────────────────────────────
 
-    /// <summary>Strava activity ids ticked for the multi-sport merge.</summary>
-    private readonly HashSet<long> _selectedActivityIds = new();
+    /// <summary>
+    /// Strava activity ids ticked for the multi-sport merge, in selection
+    /// order. Order matters — the first entry's cover is used as the
+    /// fallback placeholder for the new master collection when no source
+    /// carries user-added media.
+    /// </summary>
+    private readonly List<long> _selectedActivityIds = new();
 
     private bool _mergeDialogOpen;
     private bool _mergeRunning;
@@ -557,8 +562,17 @@
 
     private void ToggleActivitySelection(long activityId, bool checkedNow)
     {
-        if (checkedNow) _selectedActivityIds.Add(activityId);
-        else _selectedActivityIds.Remove(activityId);
+        if (checkedNow)
+        {
+            if (!_selectedActivityIds.Contains(activityId))
+            {
+                _selectedActivityIds.Add(activityId);
+            }
+        }
+        else
+        {
+            _selectedActivityIds.Remove(activityId);
+        }
     }
 
     private void ClearSelection() => _selectedActivityIds.Clear();

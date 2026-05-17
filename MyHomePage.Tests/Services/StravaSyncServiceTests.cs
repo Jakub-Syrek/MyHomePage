@@ -156,6 +156,80 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task ImportActivityAsync_ActivityOwnedByMultiSportMaster_ReturnsMasterWithoutOverwrite()
+    {
+        // A previous merge swallowed Strava activity #7 into a multi-sport
+        // master collection. The next sync round must NOT recreate a stump
+        // for #7 nor overwrite the master's aggregate Training payload.
+        ArrangeValidTokens();
+        var master = Video.Create(
+            id: 42, title: "Hybrid Sunday", description: "merged",
+            fileName: "cover.jpg", location: null,
+            category: "Multi-sport", fileSizeBytes: 0);
+        master.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ActivityType = "Multi-sport",
+            ExternalId = string.Empty,
+            Duration = TimeSpan.FromMinutes(75),
+            Calories = 450,
+            AverageHeartRate = 140,
+            SubActivities = new List<SubActivityLink>
+            {
+                new(
+                    Source: TrainingSource.Strava,
+                    ExternalId: "7",
+                    ExternalUrl: "https://www.strava.com/activities/7",
+                    ActivityType: "Run",
+                    StartTimeUtc: new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                    Duration: TimeSpan.FromMinutes(30),
+                    DistanceMeters: 5000,
+                    Calories: 200,
+                    AverageHeartRate: 150,
+                    SufferScore: 50),
+                new(
+                    Source: TrainingSource.Strava,
+                    ExternalId: "8",
+                    ExternalUrl: "https://www.strava.com/activities/8",
+                    ActivityType: "WeightTraining",
+                    StartTimeUtc: new DateTime(2026, 5, 15, 13, 0, 0, DateTimeKind.Utc),
+                    Duration: TimeSpan.FromMinutes(45),
+                    DistanceMeters: null,
+                    Calories: 250,
+                    AverageHeartRate: 130,
+                    SufferScore: 40),
+            },
+        };
+        _videos.GetAllAsync().Returns(new[] { master });
+
+        _api.GetActivityAsync(Arg.Any<string>(), 7, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(
+                new StravaActivity
+                {
+                    Id = 7,
+                    Visibility = "everyone",
+                    Type = "Run",
+                    SportType = "Run",
+                    StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                    MovingTimeSeconds = 1800,
+                    DistanceMeters = 5000,
+                }));
+
+        var result = await _sync.ImportActivityAsync(7);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value, Is.SameAs(master));
+
+        // The aggregate must be untouched — ActivityType still "Multi-sport",
+        // Duration still 75 minutes, SubActivities[] still intact.
+        Assert.That(master.Training!.ActivityType, Is.EqualTo("Multi-sport"));
+        Assert.That(master.Training.Duration, Is.EqualTo(TimeSpan.FromMinutes(75)));
+        Assert.That(master.Training.SubActivities!.Count, Is.EqualTo(2));
+        await _videos.DidNotReceive().SaveAsync(master);
+        _videos.DidNotReceive().GenerateNextId();
+    }
+
+    [Test]
     public async Task ImportActivityAsync_PublicActivityNew_PrefillsLocationAndGps()
     {
         ArrangeValidTokens();
