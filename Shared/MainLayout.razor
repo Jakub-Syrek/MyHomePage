@@ -387,6 +387,9 @@
                interaction quirk on iOS Safari. */
             -webkit-transform: translateZ(0);
             transform: translateZ(0);
+            /* Hard floor so the scrollable list always has a touch surface
+               even when the pinned + auth controls eat most of the row. */
+            min-width: 120px;
             /* Subtle edge fade to hint scrollability */
             -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
                     mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 14px), transparent 100%);
@@ -400,9 +403,42 @@
             display: inline-flex;
             align-items: center;
         }
+        /* Tighter pinned-controls so they don't crowd the scrollable nav. */
+        .pinned-controls {
+            gap: 10px;
+            margin-left: 10px;
+        }
+        .auth-controls {
+            margin-left: 10px;
+        }
     }
+
+    /* Phone-sized viewports: keep the scrollable nav as the primary
+       interaction and reduce the right-side icon stack so it gets room. */
+    @@media (max-width: 700px) {
+        .pinned-controls { gap: 8px; margin-left: 6px; }
+        /* Coach / Logs are admin-only AND not navigation — hide on phones
+           to give the gallery links the horizontal scroll surface back. */
+        .pinned-controls a[href="/coach"],
+        .pinned-controls a[href="/admin/logs"] {
+            display: none;
+        }
+        .pinned-globe-orb,
+        .pinned-stats-icon,
+        .admin-strava-icon {
+            width: 20px;
+            height: 20px;
+        }
+        .auth-controls { margin-left: 6px; }
+        .auth-btn { padding: 6px 10px; font-size: 0.85rem; }
+    }
+
     @@media (max-width: 500px) {
         .logo span { display: none; } /* keep only the icon to save space */
+        .header-content { padding: 12px 10px; gap: 10px; }
+        /* On the very narrowest viewports, drop the Strava admin chevron
+           too — admin uses /admin/strava deep-link or desktop. */
+        .pinned-controls a[href="/admin/strava"] { display: none; }
     }
 
     .app-main {
