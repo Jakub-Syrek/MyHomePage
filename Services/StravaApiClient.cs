@@ -99,6 +99,37 @@ public sealed class StravaApiClient : IStravaApiClient
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<StravaGear>> GetGearAsync(
+        string accessToken,
+        string gearId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(gearId))
+            return OperationResult<StravaGear>.Failure("Gear id was not supplied.");
+
+        try
+        {
+            using var request = BuildAuthorizedGet(
+                accessToken,
+                $"{ActivitiesBase}/gear/{Uri.EscapeDataString(gearId)}");
+            using var response = await _http.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return await FailFromHttpAsync<StravaGear>(response, cancellationToken);
+
+            var gear = await response.Content.ReadFromJsonAsync<StravaGear>(
+                JsonOptions, cancellationToken);
+            return gear is null
+                ? OperationResult<StravaGear>.Failure("Strava returned an empty gear body.")
+                : OperationResult<StravaGear>.Success(gear);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Strava gear {Id} fetch failed", gearId);
+            return OperationResult<StravaGear>.Failure(ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<StravaActivity>>> ListAthleteActivitiesAsync(
         string accessToken,
         int page = 1,

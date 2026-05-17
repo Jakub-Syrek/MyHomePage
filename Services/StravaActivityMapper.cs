@@ -28,10 +28,13 @@ public static class StravaActivityMapper
 
     /// <summary>
     /// Converts a Strava activity payload into the durable training record
-    /// stored alongside a gallery item.
+    /// stored alongside a gallery item. Optionally accepts gear metadata so
+    /// the caller can fetch <c>GET /api/v3/gear/{id}</c> when an activity
+    /// references gear without inlining it in the activity body.
     /// </summary>
     /// <param name="activity">Activity returned by the Strava API.</param>
-    public static TrainingData ToTrainingData(StravaActivity activity)
+    /// <param name="gear">Resolved gear payload (or null when not fetched).</param>
+    public static TrainingData ToTrainingData(StravaActivity activity, StravaGear? gear = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
         var duration = TimeSpan.FromSeconds(activity.MovingTimeSeconds);
@@ -49,8 +52,102 @@ public static class StravaActivityMapper
             MaxHeartRate = ToNullableInt(activity.MaxHeartRate),
             Calories = ToNullableInt(activity.Calories),
             RoutePolyline = activity.Map?.SummaryPolyline ?? activity.Map?.Polyline,
-            ExternalUrl = $"https://www.strava.com/activities/{activity.Id}"
+            ExternalUrl = $"https://www.strava.com/activities/{activity.Id}",
+
+            // Extended metrics
+            MaxSpeedMetersPerSecond = activity.MaxSpeedMps,
+            AverageCadence = activity.AverageCadence,
+            AverageTempCelsius = activity.AverageTempCelsius,
+            SufferScore = ToNullableInt(activity.SufferScore),
+            AchievementCount = activity.AchievementCount,
+            PersonalRecordCount = activity.PrCount,
+            KudosCount = activity.KudosCount,
+            IsTrainer = activity.Trainer,
+            IsCommute = activity.Commute,
+            IsManual = activity.Manual,
+            DeviceName = activity.DeviceName,
+            GearName = ComposeGearLabel(gear),
+            AverageWatts = activity.AverageWatts,
+            MaxWatts = activity.MaxWatts,
+            WeightedAverageWatts = activity.WeightedAverageWatts,
+            Kilojoules = activity.Kilojoules,
+            Splits = MapSplits(activity.SplitsMetric),
+            Laps = MapLaps(activity.Laps),
+            BestEfforts = MapBestEfforts(activity.BestEfforts)
         };
+    }
+
+    private static string? ComposeGearLabel(StravaGear? gear)
+    {
+        if (gear is null) return null;
+        var nickname = gear.Nickname;
+        var name = gear.Name;
+        var primary = !string.IsNullOrWhiteSpace(nickname)
+            ? nickname
+            : !string.IsNullOrWhiteSpace(name)
+                ? name
+                : Combine(gear.BrandName, gear.ModelName);
+        return string.IsNullOrWhiteSpace(primary) ? null : primary;
+    }
+
+    private static string? Combine(string? brand, string? model)
+    {
+        if (string.IsNullOrWhiteSpace(brand) && string.IsNullOrWhiteSpace(model)) return null;
+        return string.Join(' ', new[] { brand, model }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+    }
+
+    private static IReadOnlyList<TrainingSplit> MapSplits(List<StravaSplit>? splits)
+    {
+        if (splits is null || splits.Count == 0) return Array.Empty<TrainingSplit>();
+        return splits
+            .Select(s =>
+            {
+                var duration = TimeSpan.FromSeconds(s.MovingTimeSeconds);
+                return new TrainingSplit
+                {
+                    Index = s.SplitNumber,
+                    DistanceMeters = s.DistanceMeters,
+                    Duration = duration,
+                    PaceSecondsPerKm = ComputePaceSecondsPerKm(s.DistanceMeters, duration),
+                    AverageHeartRate = ToNullableInt(s.AverageHeartRate),
+                    ElevationChangeMeters = s.ElevationDifferenceMeters,
+                    PaceZone = s.PaceZone
+                };
+            })
+            .ToList();
+    }
+
+    private static IReadOnlyList<TrainingLap> MapLaps(List<StravaLap>? laps)
+    {
+        if (laps is null || laps.Count == 0) return Array.Empty<TrainingLap>();
+        return laps
+            .Select(l => new TrainingLap
+            {
+                Index = l.LapIndex,
+                Name = l.Name,
+                DistanceMeters = l.DistanceMeters,
+                Duration = TimeSpan.FromSeconds(l.MovingTimeSeconds),
+                AverageHeartRate = ToNullableInt(l.AverageHeartRate),
+                MaxHeartRate = ToNullableInt(l.MaxHeartRate),
+                AverageCadence = l.AverageCadence,
+                ElevationGainMeters = l.ElevationGainMeters
+            })
+            .ToList();
+    }
+
+    private static IReadOnlyList<TrainingBestEffort> MapBestEfforts(List<StravaBestEffort>? efforts)
+    {
+        if (efforts is null || efforts.Count == 0) return Array.Empty<TrainingBestEffort>();
+        return efforts
+            .Select(b => new TrainingBestEffort
+            {
+                Name = b.Name ?? string.Empty,
+                DistanceMeters = b.DistanceMeters,
+                Duration = TimeSpan.FromSeconds(b.MovingTimeSeconds),
+                PersonalRecordRank = b.PrRank
+            })
+            .ToList();
     }
 
     private static string MapTypeToCategory(string sportType) => sportType.ToLowerInvariant() switch

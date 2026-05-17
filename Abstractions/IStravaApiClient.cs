@@ -53,4 +53,17 @@ public interface IStravaApiClient
         int page = 1,
         int perPage = 30,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches gear metadata (shoes / bike) by Strava gear id. Activity
+    /// payloads carry only <c>gear_id</c>, not the full gear record — this
+    /// is the second call needed to display "Hoka Mach 6" next to a run.
+    /// </summary>
+    /// <param name="accessToken">Bearer access token to authorize the call.</param>
+    /// <param name="gearId">Strava gear identifier (e.g. "g123456").</param>
+    /// <param name="cancellationToken">Token used to cancel the HTTP call.</param>
+    Task<OperationResult<StravaGear>> GetGearAsync(
+        string accessToken,
+        string gearId,
+        CancellationToken cancellationToken = default);
 }

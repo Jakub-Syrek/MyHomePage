@@ -46,6 +46,24 @@ public sealed class StravaActivity
     [JsonPropertyName("max_heartrate")] public double? MaxHeartRate { get; set; }
     [JsonPropertyName("calories")] public double? Calories { get; set; }
     [JsonPropertyName("average_speed")] public double? AverageSpeedMps { get; set; }
+    [JsonPropertyName("max_speed")] public double? MaxSpeedMps { get; set; }
+    [JsonPropertyName("average_cadence")] public double? AverageCadence { get; set; }
+    [JsonPropertyName("average_temp")] public double? AverageTempCelsius { get; set; }
+    [JsonPropertyName("suffer_score")] public double? SufferScore { get; set; }
+    [JsonPropertyName("achievement_count")] public int? AchievementCount { get; set; }
+    [JsonPropertyName("pr_count")] public int? PrCount { get; set; }
+    [JsonPropertyName("kudos_count")] public int? KudosCount { get; set; }
+    [JsonPropertyName("athlete_count")] public int? AthleteCount { get; set; }
+    [JsonPropertyName("trainer")] public bool? Trainer { get; set; }
+    [JsonPropertyName("commute")] public bool? Commute { get; set; }
+    [JsonPropertyName("manual")] public bool? Manual { get; set; }
+    [JsonPropertyName("device_name")] public string? DeviceName { get; set; }
+    [JsonPropertyName("gear_id")] public string? GearId { get; set; }
+    [JsonPropertyName("average_watts")] public double? AverageWatts { get; set; }
+    [JsonPropertyName("max_watts")] public double? MaxWatts { get; set; }
+    [JsonPropertyName("weighted_average_watts")] public double? WeightedAverageWatts { get; set; }
+    [JsonPropertyName("kilojoules")] public double? Kilojoules { get; set; }
+    [JsonPropertyName("device_watts")] public bool? DeviceWatts { get; set; }
     [JsonPropertyName("visibility")] public string? Visibility { get; set; }
     [JsonPropertyName("map")] public StravaActivityMap? Map { get; set; }
     [JsonPropertyName("start_latlng")] public double[]? StartLatLng { get; set; }
@@ -53,6 +71,64 @@ public sealed class StravaActivity
     [JsonPropertyName("location_city")] public string? LocationCity { get; set; }
     [JsonPropertyName("location_state")] public string? LocationState { get; set; }
     [JsonPropertyName("location_country")] public string? LocationCountry { get; set; }
+    [JsonPropertyName("splits_metric")] public List<StravaSplit>? SplitsMetric { get; set; }
+    [JsonPropertyName("laps")] public List<StravaLap>? Laps { get; set; }
+    [JsonPropertyName("best_efforts")] public List<StravaBestEffort>? BestEfforts { get; set; }
+}
+
+/// <summary>Per-kilometer split exposed by Strava's <c>splits_metric</c> array.</summary>
+public sealed class StravaSplit
+{
+    [JsonPropertyName("split")] public int SplitNumber { get; set; }
+    [JsonPropertyName("distance")] public double DistanceMeters { get; set; }
+    [JsonPropertyName("moving_time")] public int MovingTimeSeconds { get; set; }
+    [JsonPropertyName("elapsed_time")] public int ElapsedTimeSeconds { get; set; }
+    [JsonPropertyName("elevation_difference")] public double? ElevationDifferenceMeters { get; set; }
+    [JsonPropertyName("average_speed")] public double? AverageSpeedMps { get; set; }
+    [JsonPropertyName("average_heartrate")] public double? AverageHeartRate { get; set; }
+    [JsonPropertyName("pace_zone")] public int? PaceZone { get; set; }
+}
+
+/// <summary>Manually-marked lap exposed by Strava's <c>laps</c> array.</summary>
+public sealed class StravaLap
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("lap_index")] public int LapIndex { get; set; }
+    [JsonPropertyName("distance")] public double DistanceMeters { get; set; }
+    [JsonPropertyName("moving_time")] public int MovingTimeSeconds { get; set; }
+    [JsonPropertyName("elapsed_time")] public int ElapsedTimeSeconds { get; set; }
+    [JsonPropertyName("total_elevation_gain")] public double? ElevationGainMeters { get; set; }
+    [JsonPropertyName("average_speed")] public double? AverageSpeedMps { get; set; }
+    [JsonPropertyName("max_speed")] public double? MaxSpeedMps { get; set; }
+    [JsonPropertyName("average_heartrate")] public double? AverageHeartRate { get; set; }
+    [JsonPropertyName("max_heartrate")] public double? MaxHeartRate { get; set; }
+    [JsonPropertyName("average_cadence")] public double? AverageCadence { get; set; }
+    [JsonPropertyName("average_watts")] public double? AverageWatts { get; set; }
+}
+
+/// <summary>Best-effort segment recorded inside an activity (e.g. 1k / 5k / 10k PRs).</summary>
+public sealed class StravaBestEffort
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("distance")] public double DistanceMeters { get; set; }
+    [JsonPropertyName("moving_time")] public int MovingTimeSeconds { get; set; }
+    [JsonPropertyName("elapsed_time")] public int ElapsedTimeSeconds { get; set; }
+    [JsonPropertyName("pr_rank")] public int? PrRank { get; set; }
+}
+
+/// <summary>Athlete gear (shoes / bike) returned by <c>GET /api/v3/gear/{id}</c>.</summary>
+public sealed class StravaGear
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("brand_name")] public string? BrandName { get; set; }
+    [JsonPropertyName("model_name")] public string? ModelName { get; set; }
+    [JsonPropertyName("distance")] public double? DistanceMeters { get; set; }
+    [JsonPropertyName("primary")] public bool? Primary { get; set; }
+    [JsonPropertyName("nickname")] public string? Nickname { get; set; }
+    [JsonPropertyName("resource_state")] public int? ResourceState { get; set; }
 }
 
 /// <summary>Encoded polyline payload nested inside an activity response.</summary>

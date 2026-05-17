@@ -68,7 +68,8 @@ public sealed class StravaSyncService : IStravaSyncService
         var existing = await FindExistingAsync(activity.Id, cancellationToken);
         if (existing is not null)
         {
-            existing.Training = StravaActivityMapper.ToTrainingData(activity);
+            var gear = await TryFetchGearAsync(activity, cancellationToken);
+            existing.Training = StravaActivityMapper.ToTrainingData(activity, gear);
             await _videos.SaveAsync(existing);
             _logger.LogInformation(
                 "Updated existing video {VideoId} with Strava activity {ActivityId}",
@@ -94,7 +95,8 @@ public sealed class StravaSyncService : IStravaSyncService
         if (!fetched.IsSuccess || fetched.Value is null)
             return OperationResult<Video>.Failure(fetched.Message);
 
-        video.Training = StravaActivityMapper.ToTrainingData(fetched.Value);
+        var gear = await TryFetchGearAsync(fetched.Value, cancellationToken);
+        video.Training = StravaActivityMapper.ToTrainingData(fetched.Value, gear);
         await _videos.SaveAsync(video);
         _logger.LogInformation(
             "Attached Strava activity {ActivityId} to existing video {VideoId}",
@@ -124,6 +126,30 @@ public sealed class StravaSyncService : IStravaSyncService
             : await _api.GetActivityAsync(token.Value, activityId, cancellationToken);
     }
 
+    /// <summary>
+    /// Best-effort gear lookup: activities carry only <c>gear_id</c>, the
+    /// human-readable name lives behind a separate API call. We never let
+    /// a failed gear lookup block the import — null is returned and the
+    /// mapper writes a null gear label.
+    /// </summary>
+    private async Task<StravaGear?> TryFetchGearAsync(
+        StravaActivity activity,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(activity.GearId)) return null;
+
+        var token = await _tokens.GetValidAccessTokenAsync(cancellationToken);
+        if (!token.IsSuccess || token.Value is null) return null;
+
+        var result = await _api.GetGearAsync(token.Value, activity.GearId, cancellationToken);
+        if (result.IsSuccess && result.Value is not null) return result.Value;
+
+        _logger.LogDebug(
+            "Strava gear {GearId} lookup failed: {Reason}",
+            activity.GearId, result.Message);
+        return null;
+    }
+
     private async Task<Video?> FindExistingAsync(long activityId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -140,7 +166,8 @@ public sealed class StravaSyncService : IStravaSyncService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var training = StravaActivityMapper.ToTrainingData(activity);
+        var gear = await TryFetchGearAsync(activity, cancellationToken);
+        var training = StravaActivityMapper.ToTrainingData(activity, gear);
         var category = StravaActivityMapper.ResolveCategory(activity);
         var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
         var location = await ResolveLocationAsync(activity, cancellationToken);

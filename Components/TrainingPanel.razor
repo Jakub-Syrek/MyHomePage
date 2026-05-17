@@ -46,7 +46,94 @@
             {
                 <div><dt>Calories</dt><dd>@kcal kcal</dd></div>
             }
+            @if (Training.AverageCadence is double cadence && cadence > 0)
+            {
+                <div><dt>Cadence</dt><dd>@($"{cadence:F0}") spm</dd></div>
+            }
+            @if (Training.SufferScore is int suffer)
+            {
+                <div><dt>Effort</dt><dd>@suffer / 300</dd></div>
+            }
+            @if (Training.AverageTempCelsius is double temp)
+            {
+                <div><dt>Temp</dt><dd>@($"{temp:F0} °C")</dd></div>
+            }
+            @if (Training.MaxSpeedMetersPerSecond is double maxSpeed && maxSpeed > 0)
+            {
+                <div><dt>Max speed</dt><dd>@($"{maxSpeed * 3.6:F1}") km/h</dd></div>
+            }
+            @if (Training.AverageWatts is double watts && watts > 0)
+            {
+                <div><dt>Avg power</dt><dd>@($"{watts:F0}") W</dd></div>
+            }
+            @if (Training.MaxWatts is double wattsMax && wattsMax > 0)
+            {
+                <div><dt>Max power</dt><dd>@($"{wattsMax:F0}") W</dd></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Training.GearName))
+            {
+                <div><dt>Gear</dt><dd>@Training.GearName</dd></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Training.DeviceName))
+            {
+                <div><dt>Device</dt><dd>@Training.DeviceName</dd></div>
+            }
+            @if (Training.PersonalRecordCount is int prs && prs > 0)
+            {
+                <div><dt>Records</dt><dd>🏆 @prs PR@(prs == 1 ? "" : "s")</dd></div>
+            }
+            @if (Training.AchievementCount is int achievements && achievements > 0)
+            {
+                <div><dt>Achievements</dt><dd>⭐ @achievements</dd></div>
+            }
         </dl>
+
+        @if (Training.BestEfforts.Any(b => b.PersonalRecordRank.HasValue))
+        {
+            <section class="training-best">
+                <h3>🏆 Best efforts</h3>
+                <ul>
+                    @foreach (var effort in Training.BestEfforts.Where(b => b.PersonalRecordRank.HasValue))
+                    {
+                        <li>
+                            <strong>@effort.Name</strong>
+                            <span class="training-best-time">@FormatDuration(effort.Duration)</span>
+                            @if (effort.PersonalRecordRank == 1)
+                            {
+                                <span class="training-best-rank gold">PR</span>
+                            }
+                            else
+                            {
+                                <span class="training-best-rank">#@effort.PersonalRecordRank</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        @if (Training.Splits.Count > 0)
+        {
+            <details class="training-splits">
+                <summary>📊 @Training.Splits.Count km splits</summary>
+                <table>
+                    <thead>
+                        <tr><th>Km</th><th>Pace</th><th>HR</th><th>Δ Elev</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var split in Training.Splits)
+                        {
+                            <tr class="training-split-zone-@(split.PaceZone ?? 0)">
+                                <td>@split.Index</td>
+                                <td>@(split.PaceSecondsPerKm is double p ? FormatPace(p) : "—")</td>
+                                <td>@(split.AverageHeartRate is int h ? $"{h}" : "—")</td>
+                                <td>@(split.ElevationChangeMeters is double e ? $"{e:F0} m" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        }
     </aside>
 }
 
@@ -107,6 +194,91 @@
         font-weight: 700;
         color: #1f2937;
     }
+
+    .training-best {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .training-best h3 {
+        margin: 0 0 8px;
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+    .training-best ul {
+        list-style: none; margin: 0; padding: 0;
+        display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .training-best li {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 12px;
+        background: rgba(102, 126, 234, 0.08);
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 999px;
+        font-size: 0.88rem;
+    }
+    .training-best-time {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: #1f2937;
+    }
+    .training-best-rank {
+        padding: 1px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: rgba(0, 0, 0, 0.08);
+        color: #4a5568;
+    }
+    .training-best-rank.gold {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: #78350f;
+    }
+
+    .training-splits {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .training-splits summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: #2c3e50;
+        list-style: none;
+        padding: 4px 0;
+    }
+    .training-splits summary::-webkit-details-marker { display: none; }
+    .training-splits summary::after {
+        content: ' ▾';
+        color: #6b7280;
+        font-size: 0.8rem;
+    }
+    .training-splits[open] summary::after { content: ' ▴'; }
+    .training-splits table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 0.88rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .training-splits th, .training-splits td {
+        padding: 6px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    }
+    .training-splits th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        font-weight: 600;
+    }
+    .training-split-zone-1 { background: rgba(34, 197, 94, 0.06); }
+    .training-split-zone-2 { background: rgba(59, 130, 246, 0.06); }
+    .training-split-zone-3 { background: rgba(250, 204, 21, 0.08); }
+    .training-split-zone-4 { background: rgba(239, 68, 68, 0.08); }
 </style>
 
 @code {
