@@ -285,6 +285,56 @@ public sealed class StravaSyncService : IStravaSyncService
             $"Inspected {inspected}, imported {imported}, skipped {skipped}, failed {failed}.");
     }
 
+    /// <inheritdoc />
+    public async Task<int> RefreshStumpCoversAsync(CancellationToken cancellationToken = default)
+    {
+        await ImportLock.WaitAsync(cancellationToken);
+        try
+        {
+            var all = await _videos.GetAllAsync();
+            var stumps = all.Where(IsStravaStump).ToList();
+
+            var refreshed = 0;
+            foreach (var stump in stumps)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var coverSize = await SeedCoverAsync(stump.Id, stump.Category);
+                if (coverSize <= 0) continue;
+
+                stump.Media = new List<MediaItem>
+                {
+                    MediaItem.Create(CoverFileName, MediaType.Image, coverSize, 0)
+                };
+                stump.FileName = CoverFileName;
+                stump.FileSizeBytes = coverSize;
+                await _videos.SaveAsync(stump);
+                refreshed++;
+            }
+
+            _logger.LogInformation(
+                "Strava stump-cover sweep: {Refreshed} of {Total} stumps re-seeded",
+                refreshed, stumps.Count);
+            return refreshed;
+        }
+        finally
+        {
+            ImportLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// A "stump" is a Strava-imported gallery item that the operator has
+    /// not yet attached real photos / videos to — its media list is
+    /// either empty or contains nothing but the seeded cover.jpg.
+    /// </summary>
+    private static bool IsStravaStump(Video v)
+    {
+        if (v.Training is null || v.Training.Source != TrainingSource.Strava) return false;
+        var media = v.Media ?? new List<MediaItem>();
+        return media.All(m =>
+            string.Equals(m.FileName, CoverFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// Fresh per-activity dedup check. Re-reads <see cref="IVideoRepository"/>
     /// for every activity so the snapshot reflects writes made by a

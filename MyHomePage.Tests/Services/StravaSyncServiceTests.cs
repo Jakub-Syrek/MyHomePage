@@ -754,6 +754,61 @@ public sealed class StravaSyncServiceTests
             Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
     }
 
+    [Test]
+    public async Task RefreshStumpCoversAsync_ReseedsCoverForEveryStumpUsingItsCategory()
+    {
+        // Each stored item picks its own bg asset based on its Category,
+        // independent of the most-recent Strava activity payload.
+        var bicycleStump = MakeStravaStump(id: 60, externalId: "111");
+        bicycleStump.Category = VideoCategories.Bicycle;
+
+        var runningStump = MakeStravaStump(id: 61, externalId: "222");
+        runningStump.Category = VideoCategories.Running;
+
+        var touched = MakeStravaStump(id: 62, externalId: "333");
+        touched.Category = VideoCategories.Bicycle;
+        touched.Media = new List<MediaItem>
+        {
+            MediaItem.Create("cover.jpg", MediaType.Image, 100, 0),
+            MediaItem.Create("photo-01.jpg", MediaType.Image, 500, 1)
+        };
+
+        var nonStrava = Video.Create(
+            id: 63, title: "Manual", description: "", fileName: "v.mp4",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+
+        _videos.GetAllAsync().Returns(new[] { bicycleStump, runningStump, touched, nonStrava });
+        // Override the SetUp's default-zero so the seed actually counts.
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Is<string>(p => p.Contains("cycling-bg")),
+                Arg.Any<int>(),
+                Arg.Any<string>())
+            .Returns(220L);
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Is<string>(p => p.Contains("running-bg")),
+                Arg.Any<int>(),
+                Arg.Any<string>())
+            .Returns(180L);
+
+        var refreshed = await _sync.RefreshStumpCoversAsync();
+
+        Assert.That(refreshed, Is.EqualTo(2),
+            "Only the two pure stumps should be re-seeded");
+
+        await _storage.Received().CopyWwwRootFileToVideoAsync(
+            Arg.Is<string>(p => p.Contains("cycling-bg")), 60, "cover.jpg");
+        await _storage.Received().CopyWwwRootFileToVideoAsync(
+            Arg.Is<string>(p => p.Contains("running-bg")), 61, "cover.jpg");
+        // Touched item and non-Strava item must not be touched.
+        await _storage.DidNotReceive().CopyWwwRootFileToVideoAsync(
+            Arg.Any<string>(), 62, Arg.Any<string>());
+        await _storage.DidNotReceive().CopyWwwRootFileToVideoAsync(
+            Arg.Any<string>(), 63, Arg.Any<string>());
+
+        Assert.That(bicycleStump.FileSizeBytes, Is.EqualTo(220));
+        Assert.That(runningStump.FileSizeBytes, Is.EqualTo(180));
+    }
+
     private static Video MakeStravaStump(int id, string externalId)
     {
         var v = Video.Create(

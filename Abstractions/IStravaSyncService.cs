@@ -70,6 +70,18 @@ public interface IStravaSyncService
         int perPage = 30,
         bool enforcePrivacyFilter = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sweeps every Strava-sourced gallery item that is still a "stump"
+    /// (no user-added media beyond the cover.jpg seed) and re-copies the
+    /// category background asset into cover.jpg. Heals items whose
+    /// covers drifted out of sync with their category — typically after
+    /// a mapper change, a manual category move in the editor, or a
+    /// half-finished migration.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the sweep.</param>
+    /// <returns>Number of stumps refreshed.</returns>
+    Task<int> RefreshStumpCoversAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome counters returned by <see cref="IStravaSyncService.SyncRecentAsync"/>.</summary>

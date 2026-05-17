@@ -83,6 +83,10 @@
                     @if (_isSyncing) { <span>Syncing…</span> }
                     else { <span>📥 Re-import recent (last 30)</span> }
                 </button>
+                <button class="btn secondary" @onclick="RefreshCoversAsync" disabled="@_busy">
+                    @if (_isRefreshingCovers) { <span>Refreshing…</span> }
+                    else { <span>🖼️ Refresh stump covers</span> }
+                </button>
             </div>
             @if (!string.IsNullOrEmpty(_syncSummary))
             {
@@ -183,6 +187,7 @@
     private bool _busy;
 
     private bool _isSyncing;
+    private bool _isRefreshingCovers;
     private string? _syncSummary;
     private bool _syncError;
     private bool _autoSyncFired;
@@ -213,6 +218,44 @@
         // callers (webhook, fast re-render) can never duplicate an
         // activity even if their snapshots overlap.
         await SyncRecentAsync(autoTriggered: true);
+
+        // Heal any stump whose cover.jpg got out of sync with its
+        // current category (typically when an activity was imported
+        // before a new category mapping shipped). Cheap idempotent
+        // file copy per stump — no-op when the cover already matches.
+        try
+        {
+            await Sync.RefreshStumpCoversAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Cover refresh failed: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task RefreshCoversAsync()
+    {
+        if (_isRefreshingCovers) return;
+        _isRefreshingCovers = true;
+        _busy = true;
+        _status = "Refreshing stump covers…";
+        StateHasChanged();
+        try
+        {
+            var refreshed = await Sync.RefreshStumpCoversAsync();
+            _status = $"✅ Re-seeded covers for {refreshed} stump(s).";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Cover refresh failed: {ex.Message}";
+        }
+        finally
+        {
+            _isRefreshingCovers = false;
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LoadActivitiesAsync()
