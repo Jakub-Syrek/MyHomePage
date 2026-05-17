@@ -612,6 +612,98 @@ public sealed class StravaSyncServiceTests
         await _videos.DidNotReceive().DeleteAsync(Arg.Any<int>());
     }
 
+    [Test]
+    public async Task ImportActivityAsync_ExistingStumpWithStaleCategory_IsMigrated()
+    {
+        // Old Strava ride imported before the Bicycle category existed
+        // would carry Category=Running. Re-running the import should
+        // migrate it to Bicycle, since the mapper now routes Ride there
+        // and the stump has no user media to preserve.
+        ArrangeValidTokens();
+
+        var stale = Video.Create(
+            id: 30, title: "Morning Ride", description: "", fileName: "cover.jpg",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 100);
+        stale.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = "888",
+            ActivityType = "Ride"
+        };
+        stale.Media = new List<MediaItem>
+        {
+            MediaItem.Create("cover.jpg", MediaType.Image, 100, 0)
+        };
+        _videos.GetAllAsync().Returns(new[] { stale });
+
+        // The cover-seeding helper returns a non-zero byte count so the
+        // stump still has a primary file after the migration.
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Any<string>(), 30, "cover.jpg")
+            .Returns(200L);
+
+        _api.GetActivityAsync(Arg.Any<string>(), 888, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 888,
+                Type = "Ride",
+                SportType = "Ride",
+                Visibility = "everyone"
+            }));
+
+        var result = await _sync.ImportActivityAsync(888);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(stale.Category, Is.EqualTo(VideoCategories.Bicycle));
+        Assert.That(stale.Media, Has.Count.EqualTo(1));
+        Assert.That(stale.Media[0].FileName, Is.EqualTo("cover.jpg"));
+        Assert.That(stale.Media[0].SizeBytes, Is.EqualTo(200));
+        Assert.That(stale.FileSizeBytes, Is.EqualTo(200));
+        // Cover was re-seeded from the Bicycle bg asset.
+        await _storage.Received().CopyWwwRootFileToVideoAsync(
+            Arg.Is<string>(p => p.Contains("cycling-bg")), 30, "cover.jpg");
+    }
+
+    [Test]
+    public async Task ImportActivityAsync_ExistingStumpWithUserMedia_CategoryNotMigrated()
+    {
+        // If the operator already added real media, leave the category
+        // alone — moving it would invalidate whatever they curated.
+        ArrangeValidTokens();
+
+        var touched = Video.Create(
+            id: 31, title: "Morning Ride", description: "", fileName: "photo-01.jpg",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 500);
+        touched.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = "888",
+            ActivityType = "Ride"
+        };
+        touched.Media = new List<MediaItem>
+        {
+            MediaItem.Create("photo-01.jpg", MediaType.Image, 500, 0)
+        };
+        _videos.GetAllAsync().Returns(new[] { touched });
+
+        _api.GetActivityAsync(Arg.Any<string>(), 888, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 888,
+                Type = "Ride",
+                SportType = "Ride",
+                Visibility = "everyone"
+            }));
+
+        var result = await _sync.ImportActivityAsync(888);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(touched.Category, Is.EqualTo(VideoCategories.Running),
+            "Touched items must keep their existing category");
+        await _storage.DidNotReceive().CopyWwwRootFileToVideoAsync(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
     private static Video MakeStravaStump(int id, string externalId)
     {
         var v = Video.Create(

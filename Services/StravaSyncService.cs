@@ -95,6 +95,7 @@ public sealed class StravaSyncService : IStravaSyncService
             {
                 var gear = await TryFetchGearAsync(activity, cancellationToken);
                 existing.Training = StravaActivityMapper.ToTrainingData(activity, gear);
+                await MigrateCategoryIfNeededAsync(existing, activity, cancellationToken);
                 await _videos.SaveAsync(existing);
                 _logger.LogInformation(
                     "Updated existing video {VideoId} with Strava activity {ActivityId}",
@@ -109,6 +110,64 @@ public sealed class StravaSyncService : IStravaSyncService
         {
             ImportLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Migrates an existing Strava stump to whatever category the current
+    /// mapper resolves to. This is the recovery path for items imported
+    /// before a new mapping shipped — e.g. cycling activities created
+    /// when only Running existed as a cardio bucket. Only fires for pure
+    /// stumps (no user-added media) so operator work is never touched.
+    /// </summary>
+    private async Task MigrateCategoryIfNeededAsync(
+        Video existing,
+        StravaActivity activity,
+        CancellationToken cancellationToken)
+    {
+        var freshCategory = StravaActivityMapper.ResolveCategory(activity);
+        if (string.Equals(existing.Category, freshCategory, StringComparison.Ordinal))
+            return;
+
+        // Only migrate items that have nothing but the cover.jpg seed
+        // attached. The moment an operator added a real photo / video,
+        // we leave the category alone — they can move it manually in
+        // the editor if it ended up under the wrong tab.
+        var media = existing.Media ?? new List<MediaItem>();
+        var userMedia = media.Count(m =>
+            !string.Equals(m.FileName, CoverFileName, StringComparison.OrdinalIgnoreCase));
+        if (userMedia > 0)
+        {
+            _logger.LogInformation(
+                "Skipping category migration for video {VideoId}: {Count} user media file(s) attached",
+                existing.Id, userMedia);
+            return;
+        }
+
+        _logger.LogInformation(
+            "Migrating Strava stump {VideoId} from {Old} to {New} (mapper changed)",
+            existing.Id, existing.Category, freshCategory);
+        existing.Category = freshCategory;
+
+        // Re-seed the cover with the new category's background asset.
+        // If the seed fails we drop the stale cover rather than leave a
+        // mismatched image in place.
+        var newCoverSize = await SeedCoverAsync(existing.Id, freshCategory);
+        if (newCoverSize > 0)
+        {
+            existing.Media = new List<MediaItem>
+            {
+                MediaItem.Create(CoverFileName, MediaType.Image, newCoverSize, 0)
+            };
+            existing.FileName = CoverFileName;
+            existing.FileSizeBytes = newCoverSize;
+        }
+        else
+        {
+            existing.Media = new List<MediaItem>();
+            existing.FileName = string.Empty;
+            existing.FileSizeBytes = 0;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <inheritdoc />
