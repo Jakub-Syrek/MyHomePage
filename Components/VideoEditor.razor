@@ -1,5 +1,6 @@
 @namespace MyHomePage.Components
 @page "/edit-video/{VideoId:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using Microsoft.AspNetCore.Components.Forms
 @inject IVideoService VideoService
 @inject IAiAssistantService Ai

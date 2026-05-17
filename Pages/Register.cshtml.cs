@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -5,6 +6,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MyHomePage.Pages;
 
+[Authorize]
 public class RegisterModel : PageModel
 {
     private readonly UserManager<IdentityUser> _userManager;
