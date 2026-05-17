@@ -147,9 +147,16 @@ public sealed class FileStorageService : IFileStorageService
         EnsureVideoDirectoryExists(videoId);
         var destinationPath = Path.Combine(GetVideoDirectoryPath(videoId), targetFileName);
 
-        await using var source = File.OpenRead(sourcePath);
-        await using var destination = File.Create(destinationPath);
-        await source.CopyToAsync(destination);
+        await using (var source = File.OpenRead(sourcePath))
+        await using (var destination = File.Create(destinationPath))
+        {
+            await source.CopyToAsync(destination);
+            await destination.FlushAsync();
+        }
+
+        // FileInfo.Length is read AFTER the streams are disposed so the
+        // OS has committed the buffered bytes — otherwise Windows still
+        // reports 0 for the freshly-created handle.
         var size = new FileInfo(destinationPath).Length;
         _logger.LogInformation(
             "Seeded item {Id} with {File} ({KB} KB) from {Source}",
