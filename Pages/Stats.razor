@@ -219,6 +219,55 @@
                 </table>
             </section>
         }
+
+        @if (_videos is not null)
+        {
+            var sessionsInWindow = _videos
+                .Where(v => v.Training is not null
+                            && v.Training.StartTimeUtc >= _stats.FromUtc
+                            && v.Training.StartTimeUtc <= _stats.ToUtc)
+                .OrderByDescending(v => v.Training!.StartTimeUtc)
+                .ToList();
+            if (sessionsInWindow.Count > 0)
+            {
+            <section class="stats-section">
+                <h2>📋 Sessions in this window (@sessionsInWindow.Count)</h2>
+                <table class="stats-sessions">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th class="num">Distance</th>
+                            <th class="num">Time</th>
+                            <th class="num">HR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var session in sessionsInWindow)
+                        {
+                            var training = session.Training!;
+                            <tr>
+                                <td class="num">@training.StartTimeUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td><a href="/item/@session.Id">@session.Title</a></td>
+                                <td>
+                                    <a class="stats-sessions-cat"
+                                       href="@VideoCategories.GetUrl(session.Category)">
+                                        @session.Category
+                                    </a>
+                                </td>
+                                <td class="muted">@training.ActivityType</td>
+                                <td class="num">@FormatDistanceOrDash(training.DistanceMeters)</td>
+                                <td class="num">@FormatDuration(training.Duration)</td>
+                                <td class="num">@(training.AverageHeartRate?.ToString() ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+            }
+        }
     }
 </div>
 
@@ -424,6 +473,51 @@
     .stats-records-time { font-weight: 700; color: #1f2937; }
     .stats-records a { color: #4338ca; text-decoration: none; }
     .stats-records a:hover { text-decoration: underline; }
+
+    .stats-sessions {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-sessions th, .stats-sessions td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        font-size: 0.9rem;
+    }
+    .stats-sessions th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        position: sticky;
+        top: 0;
+        background: rgba(255,255,255,0.96);
+    }
+    .stats-sessions tr:hover td { background: rgba(102,126,234,0.06); }
+    .stats-sessions .num { text-align: right; white-space: nowrap; }
+    .stats-sessions th.num { text-align: right; }
+    .stats-sessions .muted { color: #6b7280; }
+    .stats-sessions a {
+        color: #4338ca;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .stats-sessions a:hover { text-decoration: underline; }
+    .stats-sessions-cat {
+        font-weight: 500 !important;
+        color: #4a5568 !important;
+        font-size: 0.85rem;
+    }
+
+    @@media (max-width: 700px) {
+        .stats-sessions th:nth-child(4),
+        .stats-sessions td:nth-child(4),
+        .stats-sessions th:nth-child(7),
+        .stats-sessions td:nth-child(7) {
+            display: none;
+        }
+    }
 </style>
 
 @code {
@@ -481,6 +575,9 @@
         meters >= 1000
             ? $"{meters / 1000:F1} km"
             : $"{meters:F0} m";
+
+    private static string FormatDistanceOrDash(double? meters) =>
+        meters is null || meters <= 0 ? "—" : FormatDistance(meters.Value);
 
     private static string FormatDuration(TimeSpan duration)
     {
