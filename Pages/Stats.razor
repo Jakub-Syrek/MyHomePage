@@ -14,24 +14,34 @@
         <div class="stats-period-bar">
             @foreach (var preset in _periodPresets)
             {
-                var key = preset.Key;
-                var label = preset.Value;
                 <button type="button"
-                        class="stats-period @(key == _selectedPreset ? "active" : "")"
-                        @onclick="@(() => SelectPreset(key))">
-                    @label
+                        class="stats-period @(preset.Key == _selectedPreset ? "active" : "")"
+                        @onclick="() => SelectPreset(preset.Key)"
+                        @onclick:preventDefault
+                        @onclick:stopPropagation>
+                    @preset.Value
                 </button>
             }
         </div>
         @if (_stats is not null && _videos is not null)
         {
             var allWithTraining = _videos.Count(v => v.Training is not null);
+            var outsideWindow = allWithTraining - _stats.SessionCount;
             <p class="stats-range">
-                Window:
-                <strong>@_stats.FromUtc.ToString("yyyy-MM-dd")</strong> →
+                <strong>@_periodPresets[_selectedPreset]</strong> ·
+                window <strong>@_stats.FromUtc.ToString("yyyy-MM-dd")</strong> →
                 <strong>@_stats.ToUtc.ToString("yyyy-MM-dd")</strong> ·
                 <strong>@_stats.SessionCount</strong> session@(_stats.SessionCount == 1 ? "" : "s") in window
-                <span class="stats-range-meta">(of @allWithTraining total with training data, @_videos.Count gallery items)</span>
+                <span class="stats-range-meta">
+                    @if (outsideWindow > 0)
+                    {
+                        <span>(@outsideWindow excluded, @allWithTraining total)</span>
+                    }
+                    else
+                    {
+                        <span>(@allWithTraining total with training data)</span>
+                    }
+                </span>
             </p>
         }
     </header>
@@ -421,7 +431,7 @@
     private IReadOnlyList<Video>? _videos;
     private string _selectedPreset = "all";
 
-    private readonly IReadOnlyDictionary<string, string> _periodPresets = new Dictionary<string, string>
+    private readonly Dictionary<string, string> _periodPresets = new()
     {
         ["7d"] = "Last 7 days",
         ["30d"] = "Last 30 days",
@@ -438,9 +448,13 @@
 
     private void SelectPreset(string key)
     {
+        if (!_periodPresets.ContainsKey(key)) return;
         if (_selectedPreset == key) return;
         _selectedPreset = key;
         RecomputeStats();
+        // Force a re-render explicitly — defensive belt-and-braces in case
+        // the @onclick auto-rerender drops the update on a slow connection.
+        StateHasChanged();
     }
 
     private void RecomputeStats()
