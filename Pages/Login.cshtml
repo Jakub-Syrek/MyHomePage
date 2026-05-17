@@ -56,6 +56,26 @@
         margin-top: 4px;
     }
     .login-card .submit:hover { filter: brightness(1.08); }
+    .divider {
+        display: flex; align-items: center; gap: 10px;
+        margin: 18px 0 12px; color: #94a3b8; font-size: 0.85rem;
+    }
+    .divider::before, .divider::after {
+        content: ""; flex: 1; height: 1px; background: #e2e8f0;
+    }
+    .passkey-btn {
+        width: 100%; padding: 12px; border: 2px solid #667eea; border-radius: 8px;
+        background: white; color: #4338ca; font-weight: 600; font-size: 0.98rem;
+        cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        font-family: inherit; transition: background 0.18s, box-shadow 0.18s;
+    }
+    .passkey-btn:hover:not([disabled]) {
+        background: #eef2ff; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+    .passkey-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .passkey-error {
+        margin-top: 10px; color: #b91c1c; font-size: 0.9rem; text-align: center;
+    }
     @@media (max-width: 600px) {
         body { padding-top: 3vh; }
         .login-card { padding: 18px; }
@@ -88,7 +108,43 @@
 
             <button type="submit" class="submit">Sign in</button>
         </form>
+
+        <div class="divider" role="separator" aria-hidden="true">
+            <span>or</span>
+        </div>
+
+        <button type="button" id="passkey-login-btn" class="passkey-btn" hidden>
+            <span aria-hidden="true">🔑</span>
+            <span>Sign in with passkey / fingerprint</span>
+        </button>
+        <p id="passkey-error" class="passkey-error" role="alert" hidden></p>
     </div>
+
+    <script src="/js/webauthn.js"></script>
+    <script>
+        (function () {
+            const button = document.getElementById("passkey-login-btn");
+            const error = document.getElementById("passkey-error");
+            const emailInput = document.getElementById("email");
+            if (!button || !window.aisgWebAuthn || !window.aisgWebAuthn.isSupported()) {
+                return;
+            }
+            button.hidden = false;
+            button.addEventListener("click", async () => {
+                error.hidden = true;
+                error.textContent = "";
+                button.disabled = true;
+                try {
+                    await window.aisgWebAuthn.loginWithPasskey(emailInput?.value || null);
+                    window.location.assign("/?loginSuccess=true");
+                } catch (ex) {
+                    error.textContent = ex?.message || "Passkey sign-in failed.";
+                    error.hidden = false;
+                    button.disabled = false;
+                }
+            });
+        })();
+    </script>
 </body>
 </html>
 

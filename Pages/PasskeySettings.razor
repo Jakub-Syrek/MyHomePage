@@ -1,0 +1,208 @@
+@namespace MyHomePage.Pages
+@page "/settings/passkeys"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IJSRuntime Js
+
+<PageTitle>Passkeys — My Mountain Adventures</PageTitle>
+
+<HeadContent>
+    <script src="/js/webauthn.js"></script>
+</HeadContent>
+
+<div class="passkey-page">
+    <h1>🔐 Passkeys</h1>
+    <p class="lead">
+        Register this device with Windows Hello, Touch ID or a hardware security key to sign in
+        without typing your password.
+    </p>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-error">@errorMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    <section class="card">
+        <h2>Register a new passkey</h2>
+        <p class="muted">Give the credential a label so you can recognise it later (e.g. "Work laptop").</p>
+        <div class="register-row">
+            <input @bind="newNickname" placeholder="Nickname" maxlength="80" class="nickname-input" />
+            <button class="btn-primary" @onclick="RegisterAsync" disabled="@isBusy">
+                @(isBusy ? "Waiting for authenticator…" : "+ Add this device")
+            </button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Registered passkeys</h2>
+        @if (loading)
+        {
+            <p class="muted">Loading…</p>
+        }
+        else if (passkeys is null || passkeys.Count == 0)
+        {
+            <p class="muted">No passkeys registered yet.</p>
+        }
+        else
+        {
+            <table class="passkey-table">
+                <thead>
+                    <tr>
+                        <th>Nickname</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pk in passkeys)
+                    {
+                        <tr>
+                            <td>@pk.Nickname</td>
+                            <td>@pk.CreatedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@(pk.LastUsedAtUtc?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            <td>
+                                <button class="btn-danger"
+                                        @onclick="() => DeleteAsync(pk.CredentialId)"
+                                        disabled="@isBusy">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
+
+<style>
+    .passkey-page { max-width: 760px; margin: 40px auto; padding: 0 16px; }
+    .passkey-page h1 { color: #2d3748; }
+    .passkey-page .lead { color: #475569; }
+    .card {
+        background: white; border-radius: 12px; padding: 20px 24px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.08); margin-top: 24px;
+    }
+    .card h2 { margin-top: 0; color: #2c3e50; font-size: 1.15rem; }
+    .muted { color: #64748b; }
+    .register-row { display: flex; gap: 10px; align-items: center; }
+    .nickname-input {
+        flex: 1; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;
+        font-size: 1rem; font-family: inherit;
+    }
+    .nickname-input:focus { outline: none; border-color: #667eea; }
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; border: 0; border-radius: 8px; padding: 10px 18px;
+        font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .btn-primary:disabled { opacity: 0.6; cursor: progress; }
+    .btn-danger {
+        background: white; color: #b91c1c; border: 1px solid #fca5a5;
+        border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: inherit;
+    }
+    .btn-danger:hover:not([disabled]) { background: #fef2f2; }
+    .passkey-table { width: 100%; border-collapse: collapse; }
+    .passkey-table th, .passkey-table td {
+        text-align: left; padding: 10px 8px; border-bottom: 1px solid #f1f5f9;
+        font-size: 0.95rem;
+    }
+    .passkey-table th { color: #64748b; font-weight: 600; }
+    .alert { padding: 12px 16px; border-radius: 8px; margin-top: 16px; }
+    .alert-error { background: #fee2e2; color: #991b1b; }
+    .alert-success { background: #d1fae5; color: #065f46; }
+</style>
+
+@code {
+    private string newNickname = string.Empty;
+    private bool isBusy;
+    private bool loading = true;
+    private string? errorMessage;
+    private string? successMessage;
+    private List<PasskeyDescriptor>? passkeys;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        loading = true;
+        try
+        {
+            passkeys = await Js.InvokeAsync<List<PasskeyDescriptor>>("aisgWebAuthn.listPasskeys");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load passkeys: {ex.Message}";
+            passkeys = new List<PasskeyDescriptor>();
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RegisterAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isBusy = true;
+        try
+        {
+            var nickname = string.IsNullOrWhiteSpace(newNickname) ? "Passkey" : newNickname.Trim();
+            var result = await Js.InvokeAsync<PasskeyDescriptor>("aisgWebAuthn.registerPasskey", nickname);
+            successMessage = $"Registered \"{result.Nickname}\".";
+            newNickname = string.Empty;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAsync(string credentialId)
+    {
+        errorMessage = null;
+        successMessage = null;
+        isBusy = true;
+        try
+        {
+            await Js.InvokeVoidAsync("aisgWebAuthn.deletePasskey", credentialId);
+            successMessage = "Passkey removed.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private sealed record PasskeyDescriptor(
+        string CredentialId,
+        string Nickname,
+        DateTimeOffset CreatedAtUtc,
+        DateTimeOffset? LastUsedAtUtc);
+}
