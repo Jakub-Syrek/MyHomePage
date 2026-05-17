@@ -237,7 +237,7 @@ public static class StravaActivityMapper
         if (string.IsNullOrWhiteSpace(activityName)) return null;
         var name = activityName.Trim();
 
-        var idx = name.IndexOfAny(VenueDelimiters);
+        var idx = FindVenueDelimiterIndex(name);
         var candidate = idx > 0 ? name[..idx].Trim() : name;
 
         if (candidate.Length < 4) return null;
@@ -247,17 +247,42 @@ public static class StravaActivityMapper
         return candidate;
     }
 
+    /// <summary>
+    /// Locates the first character that should split a venue from the rest
+    /// of the title. Hyphens / en-dashes / em-dashes only count when they
+    /// are flanked by spaces, otherwise hyphenated compound words like
+    /// "Hala 100-lecia" are sliced in the middle.
+    /// </summary>
+    private static int FindVenueDelimiterIndex(string name)
+    {
+        for (var i = 0; i < name.Length; i++)
+        {
+            var ch = name[i];
+            if (ch is '|' or '/' or ':')
+                return i;
+
+            if (ch is '-' or '–' or '—')
+            {
+                var hasSpaceBefore = i > 0 && char.IsWhiteSpace(name[i - 1]);
+                var hasSpaceAfter = i + 1 < name.Length && char.IsWhiteSpace(name[i + 1]);
+                if (hasSpaceBefore && hasSpaceAfter)
+                    return i;
+            }
+        }
+        return -1;
+    }
+
     private static bool IsGenericStravaTitle(string candidate)
     {
         var lower = candidate.ToLowerInvariant();
         return lower is
             "morning run" or "afternoon run" or "evening run" or "lunch run" or "night run" or
             "morning ride" or "afternoon ride" or "evening ride" or "lunch ride" or "night ride" or
-            "morning walk" or "evening walk" or "lunch walk" or
-            "morning hike" or "afternoon hike" or "evening hike" or
-            "morning swim" or "evening swim" or
-            "morning workout" or "afternoon workout" or "evening workout" or "lunch workout" or
-            "morning weight training" or "afternoon weight training" or "evening weight training" or
-            "morning yoga" or "evening yoga";
+            "morning walk" or "afternoon walk" or "evening walk" or "lunch walk" or "night walk" or
+            "morning hike" or "afternoon hike" or "evening hike" or "night hike" or
+            "morning swim" or "afternoon swim" or "evening swim" or "night swim" or
+            "morning workout" or "afternoon workout" or "evening workout" or "lunch workout" or "night workout" or
+            "morning weight training" or "afternoon weight training" or "evening weight training" or "night weight training" or
+            "morning yoga" or "afternoon yoga" or "evening yoga" or "night yoga";
     }
 }

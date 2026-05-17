@@ -187,6 +187,191 @@ public sealed class StravaSyncServiceTests
         Assert.That(result.Value.HasCoordinates, Is.True);
     }
 
+    [Test]
+    public async Task AttachActivityToVideoAsync_VideoMissing_ReturnsFailure()
+    {
+        ArrangeValidTokens();
+        _videos.GetByIdAsync(404).Returns((Video?)null);
+
+        var result = await _sync.AttachActivityToVideoAsync(videoId: 404, activityId: 7);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.Message, Does.Contain("not found"));
+        await _api.DidNotReceive().GetActivityAsync(
+            Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AttachActivityToVideoAsync_FetchFails_LeavesVideoUntouched()
+    {
+        ArrangeValidTokens();
+        var video = Video.Create(
+            id: 12, title: "Existing", description: "", fileName: "v.mp4",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+        _videos.GetByIdAsync(12).Returns(video);
+        _api.GetActivityAsync(Arg.Any<string>(), 9, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Failure("404 Not Found"));
+
+        var result = await _sync.AttachActivityToVideoAsync(videoId: 12, activityId: 9);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.Message, Does.Contain("404"));
+        Assert.That(video.Training, Is.Null);
+        await _videos.DidNotReceive().SaveAsync(Arg.Any<Video>());
+    }
+
+    [Test]
+    public async Task AttachActivityToVideoAsync_Success_AttachesTrainingDataAndSaves()
+    {
+        ArrangeValidTokens();
+        var video = Video.Create(
+            id: 33, title: "Solo run", description: "", fileName: "run.mp4",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+        _videos.GetByIdAsync(33).Returns(video);
+
+        _api.GetActivityAsync(Arg.Any<string>(), 88, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 88,
+                Type = "Run",
+                SportType = "Run",
+                StartDate = new DateTime(2026, 4, 2, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 2400,
+                DistanceMeters = 8000
+            }));
+
+        var result = await _sync.AttachActivityToVideoAsync(videoId: 33, activityId: 88);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value, Is.SameAs(video));
+        Assert.That(video.Training, Is.Not.Null);
+        Assert.That(video.Training!.Source, Is.EqualTo(TrainingSource.Strava));
+        Assert.That(video.Training.ExternalId, Is.EqualTo("88"));
+        Assert.That(video.Training.DistanceMeters, Is.EqualTo(8000));
+        await _videos.Received(1).SaveAsync(video);
+    }
+
+    [Test]
+    public async Task SyncRecentAsync_TokenMissing_PropagatesFailure()
+    {
+        _store.LoadAsync(Arg.Any<CancellationToken>()).Returns((StravaTokenSet?)null);
+
+        var result = await _sync.SyncRecentAsync();
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.Message, Does.Contain("not been connected"));
+    }
+
+    [Test]
+    public async Task SyncRecentAsync_DedupesByExternalIdAndCountsCategories()
+    {
+        ArrangeValidTokens();
+
+        // One activity is already imported, one is brand-new.
+        var existingVideo = Video.Create(
+            id: 1, title: "Old", description: "", fileName: "old.mp4",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+        existingVideo.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = "100"
+        };
+        _videos.GetAllAsync().Returns(new[] { existingVideo });
+        _videos.GenerateNextId().Returns(200);
+
+        _api.ListAthleteActivitiesAsync(
+                Arg.Any<string>(), 1, 30, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<IReadOnlyList<StravaActivity>>.Success(new List<StravaActivity>
+            {
+                new() { Id = 100, Type = "Run", SportType = "Run", Visibility = "everyone" },
+                new() { Id = 200, Type = "Run", SportType = "Run", Visibility = "everyone",
+                    StartDate = new DateTime(2026, 5, 14, 6, 0, 0, DateTimeKind.Utc),
+                    MovingTimeSeconds = 1800, DistanceMeters = 5000 }
+            }));
+
+        // Detail fetch for activity 200 succeeds.
+        _api.GetActivityAsync(Arg.Any<string>(), 200, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 200,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone",
+                StartDate = new DateTime(2026, 5, 14, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 1800,
+                DistanceMeters = 5000
+            }));
+
+        var result = await _sync.SyncRecentAsync();
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Inspected, Is.EqualTo(2));
+        Assert.That(result.Value.Imported, Is.EqualTo(1));
+        Assert.That(result.Value.Skipped, Is.EqualTo(1));
+        Assert.That(result.Value.Failed, Is.EqualTo(0));
+        // Existing activity 100 must not be re-imported.
+        await _api.DidNotReceive().GetActivityAsync(
+            Arg.Any<string>(), 100, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SyncRecentAsync_PerActivityFailure_AccumulatesFailureMessages()
+    {
+        ArrangeValidTokens();
+        _videos.GetAllAsync().Returns(Array.Empty<Video>());
+
+        _api.ListAthleteActivitiesAsync(
+                Arg.Any<string>(), 1, 30, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<IReadOnlyList<StravaActivity>>.Success(new List<StravaActivity>
+            {
+                new() { Id = 7, Type = "Run", SportType = "Run", Visibility = "everyone" }
+            }));
+
+        _api.GetActivityAsync(Arg.Any<string>(), 7, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Failure("Strava API returned 500."));
+
+        var result = await _sync.SyncRecentAsync();
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Inspected, Is.EqualTo(1));
+        Assert.That(result.Value.Imported, Is.EqualTo(0));
+        Assert.That(result.Value.Failed, Is.EqualTo(1));
+        Assert.That(result.Value.FailureMessages, Has.Count.EqualTo(1));
+        Assert.That(result.Value.FailureMessages[0], Does.Contain("7"));
+        Assert.That(result.Value.FailureMessages[0], Does.Contain("500"));
+    }
+
+    [Test]
+    public async Task SyncRecentAsync_PrivacyFilterEnforced_PrivateActivitiesCountedAsFailures()
+    {
+        ArrangeValidTokens();
+        _options.ImportPublicOnly = true;
+        _videos.GetAllAsync().Returns(Array.Empty<Video>());
+
+        _api.ListAthleteActivitiesAsync(
+                Arg.Any<string>(), 1, 30, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<IReadOnlyList<StravaActivity>>.Success(new List<StravaActivity>
+            {
+                new() { Id = 11, Type = "Run", SportType = "Run", Visibility = "only_me" }
+            }));
+
+        _api.GetActivityAsync(Arg.Any<string>(), 11, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 11,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "only_me"
+            }));
+
+        var result = await _sync.SyncRecentAsync(perPage: 30, enforcePrivacyFilter: true);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Imported, Is.EqualTo(0));
+        Assert.That(result.Value.Failed, Is.EqualTo(1));
+        Assert.That(result.Value.FailureMessages[0], Does.Contain("not public"));
+    }
+
     private void ArrangeValidTokens()
     {
         _store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StravaTokenSet

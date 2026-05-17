@@ -201,4 +201,268 @@ public sealed class StravaActivityMapperTests
 
         Assert.That(venue, Is.Null);
     }
+
+    [Test]
+    public void ToTrainingData_WithSplitsMetric_MapsToOrderedTrainingSplits()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 100,
+            Type = "Run",
+            SportType = "Run",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 1500,
+            DistanceMeters = 5000,
+            SplitsMetric = new List<StravaSplit>
+            {
+                new()
+                {
+                    SplitNumber = 1, DistanceMeters = 1000,
+                    MovingTimeSeconds = 290, ElapsedTimeSeconds = 290,
+                    AverageHeartRate = 148, PaceZone = 2,
+                    ElevationDifferenceMeters = 4
+                },
+                new()
+                {
+                    SplitNumber = 2, DistanceMeters = 1000,
+                    MovingTimeSeconds = 300, ElapsedTimeSeconds = 300,
+                    AverageHeartRate = 155, PaceZone = 3,
+                    ElevationDifferenceMeters = -2
+                }
+            }
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity);
+
+        Assert.That(training.Splits, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(training.Splits[0].Index, Is.EqualTo(1));
+            Assert.That(training.Splits[0].DistanceMeters, Is.EqualTo(1000));
+            Assert.That(training.Splits[0].Duration, Is.EqualTo(TimeSpan.FromSeconds(290)));
+            Assert.That(training.Splits[0].PaceSecondsPerKm, Is.EqualTo(290).Within(0.5));
+            Assert.That(training.Splits[0].AverageHeartRate, Is.EqualTo(148));
+            Assert.That(training.Splits[0].PaceZone, Is.EqualTo(2));
+            Assert.That(training.Splits[0].ElevationChangeMeters, Is.EqualTo(4));
+            Assert.That(training.Splits[1].PaceSecondsPerKm, Is.EqualTo(300).Within(0.5));
+        });
+    }
+
+    [Test]
+    public void ToTrainingData_WithLaps_MapsEveryLap()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 101,
+            Type = "Run",
+            SportType = "Run",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 2400,
+            DistanceMeters = 8000,
+            Laps = new List<StravaLap>
+            {
+                new()
+                {
+                    Id = 1, Name = "Warm up", LapIndex = 1,
+                    DistanceMeters = 1500, MovingTimeSeconds = 540,
+                    ElapsedTimeSeconds = 540, AverageHeartRate = 132,
+                    MaxHeartRate = 145, AverageCadence = 84.5,
+                    ElevationGainMeters = 12
+                },
+                new()
+                {
+                    Id = 2, Name = "Tempo", LapIndex = 2,
+                    DistanceMeters = 5000, MovingTimeSeconds = 1500,
+                    ElapsedTimeSeconds = 1500, AverageHeartRate = 168,
+                    MaxHeartRate = 178, AverageCadence = 88.0,
+                    ElevationGainMeters = 8
+                }
+            }
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity);
+
+        Assert.That(training.Laps, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(training.Laps[0].Index, Is.EqualTo(1));
+            Assert.That(training.Laps[0].Name, Is.EqualTo("Warm up"));
+            Assert.That(training.Laps[0].Duration, Is.EqualTo(TimeSpan.FromSeconds(540)));
+            Assert.That(training.Laps[0].AverageHeartRate, Is.EqualTo(132));
+            Assert.That(training.Laps[0].MaxHeartRate, Is.EqualTo(145));
+            Assert.That(training.Laps[1].Name, Is.EqualTo("Tempo"));
+            Assert.That(training.Laps[1].AverageCadence, Is.EqualTo(88.0));
+        });
+    }
+
+    [Test]
+    public void ToTrainingData_WithBestEfforts_RetainsPrRank()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 102,
+            Type = "Run",
+            SportType = "Run",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 1800,
+            DistanceMeters = 5000,
+            BestEfforts = new List<StravaBestEffort>
+            {
+                new()
+                {
+                    Id = 1, Name = "1k",
+                    DistanceMeters = 1000, MovingTimeSeconds = 240,
+                    ElapsedTimeSeconds = 240, PrRank = 1
+                },
+                new()
+                {
+                    Id = 2, Name = "5k",
+                    DistanceMeters = 5000, MovingTimeSeconds = 1450,
+                    ElapsedTimeSeconds = 1450, PrRank = null
+                }
+            }
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity);
+
+        Assert.That(training.BestEfforts, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(training.BestEfforts[0].Name, Is.EqualTo("1k"));
+            Assert.That(training.BestEfforts[0].PersonalRecordRank, Is.EqualTo(1));
+            Assert.That(training.BestEfforts[1].PersonalRecordRank, Is.Null);
+        });
+    }
+
+    [Test]
+    public void ToTrainingData_WithExtendedMetrics_PopulatesEveryField()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 103,
+            Type = "Ride",
+            SportType = "Ride",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 3600,
+            DistanceMeters = 30000,
+            MaxSpeedMps = 14.5,
+            AverageCadence = 82.4,
+            AverageTempCelsius = 18.5,
+            SufferScore = 165,
+            AchievementCount = 2,
+            PrCount = 1,
+            KudosCount = 7,
+            Trainer = false,
+            Commute = true,
+            Manual = false,
+            DeviceName = "Garmin Edge 540",
+            AverageWatts = 178,
+            MaxWatts = 412,
+            WeightedAverageWatts = 195,
+            Kilojoules = 650
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(training.MaxSpeedMetersPerSecond, Is.EqualTo(14.5));
+            Assert.That(training.AverageCadence, Is.EqualTo(82.4));
+            Assert.That(training.AverageTempCelsius, Is.EqualTo(18.5));
+            Assert.That(training.SufferScore, Is.EqualTo(165));
+            Assert.That(training.AchievementCount, Is.EqualTo(2));
+            Assert.That(training.PersonalRecordCount, Is.EqualTo(1));
+            Assert.That(training.KudosCount, Is.EqualTo(7));
+            Assert.That(training.IsTrainer, Is.False);
+            Assert.That(training.IsCommute, Is.True);
+            Assert.That(training.IsManual, Is.False);
+            Assert.That(training.DeviceName, Is.EqualTo("Garmin Edge 540"));
+            Assert.That(training.AverageWatts, Is.EqualTo(178));
+            Assert.That(training.MaxWatts, Is.EqualTo(412));
+            Assert.That(training.WeightedAverageWatts, Is.EqualTo(195));
+            Assert.That(training.Kilojoules, Is.EqualTo(650));
+        });
+    }
+
+    [Test]
+    public void ToTrainingData_GearWithNickname_PrefersNicknameOverName()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 104, Type = "Run", SportType = "Run",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 1800, DistanceMeters = 5000
+        };
+        var gear = new StravaGear
+        {
+            Id = "g1",
+            Nickname = "Hokas",
+            Name = "Hoka Mach 6",
+            BrandName = "Hoka",
+            ModelName = "Mach 6"
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity, gear);
+
+        Assert.That(training.GearName, Is.EqualTo("Hokas"));
+    }
+
+    [Test]
+    public void ToTrainingData_GearWithoutNickname_FallsBackToFullName()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 105, Type = "Ride", SportType = "Ride",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 3600, DistanceMeters = 30000
+        };
+        var gear = new StravaGear
+        {
+            Id = "b1",
+            Nickname = null,
+            Name = "Bike",
+            BrandName = "Specialized",
+            ModelName = "Allez Sprint"
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity, gear);
+
+        Assert.That(training.GearName, Is.EqualTo("Bike"));
+    }
+
+    [Test]
+    public void ToTrainingData_GearWithoutNicknameOrName_BuildsBrandModel()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 106, Type = "Ride", SportType = "Ride",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 3600, DistanceMeters = 30000
+        };
+        var gear = new StravaGear
+        {
+            Id = "b2",
+            BrandName = "Trek",
+            ModelName = "Domane SL"
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity, gear);
+
+        Assert.That(training.GearName, Is.EqualTo("Trek Domane SL"));
+    }
+
+    [Test]
+    public void ToTrainingData_WithoutGear_LeavesGearNameNull()
+    {
+        var activity = new StravaActivity
+        {
+            Id = 107, Type = "Run", SportType = "Run",
+            StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+            MovingTimeSeconds = 1800, DistanceMeters = 5000
+        };
+
+        var training = StravaActivityMapper.ToTrainingData(activity, gear: null);
+
+        Assert.That(training.GearName, Is.Null);
+    }
 }
