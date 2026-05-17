@@ -131,6 +131,8 @@ try
     builder.Services.AddScoped<ICredentialRepository, CredentialService>();
     builder.Services.AddScoped<ILogReaderService, LogReaderService>();
     builder.Services.AddSingleton<ITrainingStatsService, TrainingStatsService>();
+    builder.Services.AddScoped<ICoachReportRepository, JsonCoachReportRepository>();
+    builder.Services.AddScoped<ICoachReportService, CoachReportService>();
 
     // Strava integration — typed HttpClient + scoped collaborators
     builder.Services.AddHttpClient<IStravaApiClient, StravaApiClient>();

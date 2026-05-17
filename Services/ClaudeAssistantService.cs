@@ -324,6 +324,159 @@ public sealed class ClaudeAssistantService : IAiAssistantService
 
         Reply ONLY by calling the extract_location tool.
         """;
+
+    /// <inheritdoc />
+    public async Task<CoachReportPayload?> GenerateCoachReportAsync(
+        string context,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled) return null;
+        if (string.IsNullOrWhiteSpace(context)) return null;
+
+        var payload = BuildCoachReportPayload(context);
+        using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
+        request.Headers.Add("x-api-key", _apiKey);
+        request.Headers.Add("anthropic-version", AnthropicVersion);
+        request.Content = JsonContent.Create(payload, options: JsonOpts);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, cancellationToken);
+        }
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Anthropic coach-report request failed");
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Anthropic coach-report returned {Status}: {Body}",
+                response.StatusCode, errorBody);
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(cancellationToken));
+            if (!doc.RootElement.TryGetProperty("content", out var content)) return null;
+
+            foreach (var block in content.EnumerateArray())
+            {
+                if (block.TryGetProperty("type", out var t)
+                    && t.GetString() == "tool_use"
+                    && block.TryGetProperty("input", out var input))
+                {
+                    return new CoachReportPayload
+                    {
+                        Headline = input.GetPropOrEmpty("headline"),
+                        Narrative = input.GetPropOrEmpty("narrative"),
+                        Highlights = input.GetStringList("highlights"),
+                        Concerns = input.GetStringList("concerns"),
+                        NextWeekFocus = input.GetStringList("next_week_focus")
+                    };
+                }
+            }
+            _logger.LogWarning("Anthropic coach-report did not contain a tool_use block");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse Anthropic coach-report response");
+            return null;
+        }
+    }
+
+    private object BuildCoachReportPayload(string context) => new
+    {
+        model = _model,
+        max_tokens = 1400,
+        system = new object[]
+        {
+            new
+            {
+                type = "text",
+                text = CoachReportPrompt,
+                cache_control = new { type = "ephemeral" }
+            }
+        },
+        tools = new object[]
+        {
+            new
+            {
+                name = "weekly_coach_report",
+                description = "Return the structured weekly coach report for the supplied training context.",
+                input_schema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        headline = new { type = "string", description = "One-sentence summary of the week." },
+                        narrative = new { type = "string", description = "Two or three paragraphs of plain-text analysis." },
+                        highlights = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Bullet-point highlights worth calling out."
+                        },
+                        concerns = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Bullet-point concerns or warnings."
+                        },
+                        next_week_focus = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Bullet-point focus areas for the upcoming week."
+                        }
+                    },
+                    required = new[] { "headline", "narrative" }
+                }
+            }
+        },
+        tool_choice = new { type = "tool", name = "weekly_coach_report" },
+        messages = new object[]
+        {
+            new { role = "user", content = context }
+        }
+    };
+
+    private const string CoachReportPrompt = """
+        You are a calm, evidence-based coach for an amateur multi-sport
+        athlete (running, hiking, rock climbing, bouldering, calisthenics).
+        Read the supplied weekly training context — already aggregated for
+        you into totals, weekly buckets and a list of recent sessions —
+        and write a short report the athlete can read in under a minute.
+
+        Tone:
+          - Friendly, direct, grounded in the numbers. Avoid platitudes.
+          - Use the second person ("you"), present tense.
+          - Cite specific sessions or numbers when relevant.
+
+        Headline: one sentence under ~20 words. Mention the dominant pattern.
+
+        Narrative: two short paragraphs (or three if there's a clear arc).
+          - First paragraph summarises the volume / intensity / type mix.
+          - Second paragraph compares to the prior weeks if visible in the
+            context, or notes recovery / load signals.
+          - Plain text. No Markdown, no headers, no bullet points here.
+
+        Highlights, Concerns, NextWeekFocus: short bullet items, max 4 each.
+          - Concrete and actionable. Skip the category entirely if you have
+            nothing meaningful to add (empty array is fine).
+
+        Reply ONLY by calling the weekly_coach_report tool.
+        """;
 }
 
 internal static class JsonElementExtensions
@@ -342,5 +495,19 @@ internal static class JsonElementExtensions
     {
         if (!el.TryGetProperty(name, out var v)) return null;
         return v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) ? d : null;
+    }
+
+    public static IReadOnlyList<string> GetStringList(this JsonElement el, string name)
+    {
+        if (!el.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array)
+            return Array.Empty<string>();
+        var result = new List<string>();
+        foreach (var item in v.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String) continue;
+            var s = item.GetString();
+            if (!string.IsNullOrWhiteSpace(s)) result.Add(s);
+        }
+        return result;
     }
 }

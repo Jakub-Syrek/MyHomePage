@@ -1,0 +1,394 @@
+@page "/coach"
+@layout MainLayout
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MyHomePage.Abstractions
+@using MyHomePage.Models
+@inject ICoachReportService CoachReports
+
+<PageTitle>Coach reports - My Mountain Adventures</PageTitle>
+
+<div class="coach-page">
+    <header class="coach-hero">
+        <h1>🧠 Weekly coach</h1>
+        <p>AI-written recap of the last seven days based on every imported training session.</p>
+        <div class="coach-actions">
+            <button type="button" class="coach-btn primary"
+                    @onclick="GenerateThisWeek"
+                    disabled="@_isGenerating">
+                @if (_isGenerating) { <span>Generating…</span> }
+                else { <span>✨ Generate this week</span> }
+            </button>
+            @if (!string.IsNullOrEmpty(_status))
+            {
+                <span class="coach-status @(_statusError ? "err" : "ok")">@_status</span>
+            }
+        </div>
+    </header>
+
+    @if (_loading)
+    {
+        <div class="coach-loading">
+            <div class="coach-spinner"></div>
+            <p>Loading reports…</p>
+        </div>
+    }
+    else if (_reports.Count == 0)
+    {
+        <div class="coach-empty">
+            <p>No reports yet. Generate one for this week to get started.</p>
+        </div>
+    }
+    else
+    {
+        <div class="coach-layout">
+            <aside class="coach-list">
+                @foreach (var report in _reports)
+                {
+                    var isSelected = report.IsoWeek == _selected?.IsoWeek;
+                    <button type="button"
+                            class="coach-list-item @(isSelected ? "active" : "")"
+                            @onclick="@(() => Select(report))">
+                        <strong>@report.IsoWeek</strong>
+                        <span class="coach-list-range">
+                            @report.WeekStartUtc.ToString("dd MMM") –
+                            @report.WeekEndUtc.ToString("dd MMM")
+                        </span>
+                        <span class="coach-list-headline">@TruncateHeadline(report.Headline)</span>
+                    </button>
+                }
+            </aside>
+
+            <article class="coach-body">
+                @if (_selected is null)
+                {
+                    <p class="coach-empty">Pick a report from the list.</p>
+                }
+                else
+                {
+                    <header class="coach-body-head">
+                        <div>
+                            <h2>@_selected.IsoWeek</h2>
+                            <p class="coach-body-range">
+                                @_selected.WeekStartUtc.ToString("dddd, MMM d") —
+                                @_selected.WeekEndUtc.ToString("dddd, MMM d, yyyy")
+                            </p>
+                        </div>
+                        <span class="coach-body-meta">
+                            Generated @_selected.GeneratedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ·
+                            <code>@_selected.Model</code>
+                        </span>
+                    </header>
+
+                    @if (!string.IsNullOrWhiteSpace(_selected.Headline))
+                    {
+                        <p class="coach-headline">@_selected.Headline</p>
+                    }
+
+                    @if (_selected.KeyMetrics.Count > 0)
+                    {
+                        <dl class="coach-metrics">
+                            @foreach (var metric in _selected.KeyMetrics)
+                            {
+                                <div>
+                                    <dt>@metric.Label</dt>
+                                    <dd>@metric.Value</dd>
+                                </div>
+                            }
+                        </dl>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_selected.Narrative))
+                    {
+                        <div class="coach-narrative">
+                            @foreach (var paragraph in SplitParagraphs(_selected.Narrative))
+                            {
+                                <p>@paragraph</p>
+                            }
+                        </div>
+                    }
+
+                    @if (_selected.Highlights.Count > 0)
+                    {
+                        <section class="coach-block ok">
+                            <h3>✅ Highlights</h3>
+                            <ul>
+                                @foreach (var item in _selected.Highlights)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        </section>
+                    }
+
+                    @if (_selected.Concerns.Count > 0)
+                    {
+                        <section class="coach-block warn">
+                            <h3>⚠️ Watch out</h3>
+                            <ul>
+                                @foreach (var item in _selected.Concerns)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        </section>
+                    }
+
+                    @if (_selected.NextWeekFocus.Count > 0)
+                    {
+                        <section class="coach-block focus">
+                            <h3>🎯 Next week focus</h3>
+                            <ul>
+                                @foreach (var item in _selected.NextWeekFocus)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        </section>
+                    }
+                }
+            </article>
+        </div>
+    }
+</div>
+
+<style>
+    .coach-page { max-width: 1280px; margin: 30px auto 60px; padding: 0 24px; }
+    .coach-hero h1 { margin: 0 0 6px; color: #1f2937; font-size: 2rem; }
+    .coach-hero p { margin: 0 0 14px; color: #6b7280; }
+    .coach-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+    .coach-btn {
+        padding: 10px 20px;
+        border-radius: 12px;
+        border: none;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+        font-family: inherit;
+        transition: transform 0.18s, box-shadow 0.18s, filter 0.18s;
+    }
+    .coach-btn.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 10px 24px rgba(102, 126, 234, 0.32);
+    }
+    .coach-btn.primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        filter: brightness(1.06);
+    }
+    .coach-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .coach-status { font-size: 0.9rem; }
+    .coach-status.ok { color: #047857; }
+    .coach-status.err { color: #b91c1c; }
+
+    .coach-loading, .coach-empty {
+        background: rgba(255,255,255,0.85);
+        border-radius: 14px;
+        padding: 40px;
+        text-align: center;
+        color: #4a5568;
+    }
+    .coach-spinner {
+        width: 36px; height: 36px;
+        margin: 0 auto 12px;
+        border: 4px solid rgba(102,126,234,0.2);
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: coach-spin 0.8s linear infinite;
+    }
+    @@keyframes coach-spin { to { transform: rotate(360deg); } }
+
+    .coach-layout {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 22px;
+        align-items: start;
+    }
+    @@media (max-width: 900px) {
+        .coach-layout { grid-template-columns: 1fr; }
+    }
+
+    .coach-list {
+        display: flex; flex-direction: column; gap: 8px;
+        position: sticky; top: 90px;
+        max-height: calc(100vh - 110px);
+        overflow-y: auto;
+    }
+    .coach-list-item {
+        display: flex; flex-direction: column; gap: 2px;
+        text-align: left;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(0,0,0,0.06);
+        background: rgba(255,255,255,0.88);
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .coach-list-item:hover { transform: translateX(2px); background: rgba(255,255,255,1); }
+    .coach-list-item.active {
+        background: linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%);
+        color: white;
+        border-color: transparent;
+    }
+    .coach-list-item.active strong,
+    .coach-list-item.active .coach-list-range,
+    .coach-list-item.active .coach-list-headline { color: white; }
+    .coach-list-item strong {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #4a5568;
+        letter-spacing: 0.04em;
+    }
+    .coach-list-range { font-size: 0.8rem; color: #6b7280; }
+    .coach-list-headline {
+        font-size: 0.88rem;
+        color: #1f2937;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .coach-body {
+        background: rgba(255,255,255,0.92);
+        border-radius: 16px;
+        padding: 26px 28px;
+        box-shadow: 0 12px 30px rgba(20,30,60,0.10);
+    }
+    .coach-body-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+    .coach-body-head h2 { margin: 0; font-size: 1.4rem; color: #1f2937; }
+    .coach-body-range { margin: 2px 0 0; color: #6b7280; font-size: 0.9rem; }
+    .coach-body-meta { color: #6b7280; font-size: 0.78rem; }
+    .coach-body-meta code {
+        background: rgba(0,0,0,0.05);
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+
+    .coach-headline {
+        margin: 14px 0 18px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, rgba(102,126,234,0.12) 0%, rgba(118,75,162,0.12) 100%);
+        border-left: 4px solid #667eea;
+        border-radius: 0 12px 12px 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .coach-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin: 0 0 22px;
+        padding: 0;
+    }
+    .coach-metrics > div { margin: 0; }
+    .coach-metrics dt {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+    .coach-metrics dd {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .coach-narrative p {
+        margin: 0 0 14px;
+        line-height: 1.6;
+        color: #1f2937;
+    }
+
+    .coach-block {
+        margin-top: 18px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        border-left: 4px solid;
+    }
+    .coach-block h3 { margin: 0 0 8px; font-size: 0.98rem; color: #1f2937; }
+    .coach-block ul { margin: 0; padding-left: 20px; }
+    .coach-block li { margin-bottom: 4px; }
+    .coach-block.ok { background: rgba(34,197,94,0.08); border-color: #22c55e; }
+    .coach-block.warn { background: rgba(245,158,11,0.10); border-color: #f59e0b; }
+    .coach-block.focus { background: rgba(102,126,234,0.10); border-color: #667eea; }
+</style>
+
+@code {
+    private IReadOnlyList<CoachReport> _reports = Array.Empty<CoachReport>();
+    private CoachReport? _selected;
+    private bool _loading = true;
+    private bool _isGenerating;
+    private string? _status;
+    private bool _statusError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _reports = await CoachReports.ListAsync();
+        _selected = _reports.FirstOrDefault();
+        _loading = false;
+    }
+
+    private void Select(CoachReport report)
+    {
+        _selected = report;
+    }
+
+    private async Task GenerateThisWeek()
+    {
+        if (_isGenerating) return;
+        _isGenerating = true;
+        _status = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await CoachReports.GenerateForWeekAsync(DateTime.UtcNow);
+            _statusError = !result.IsSuccess;
+            _status = result.Message;
+            if (result.IsSuccess && result.Value is not null)
+            {
+                await ReloadAsync();
+                _selected = result.Value;
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusError = true;
+            _status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private static IEnumerable<string> SplitParagraphs(string text) =>
+        text.Split(new[] { "\n\n", "\r\n\r\n" }, StringSplitOptions.RemoveEmptyEntries
+                    | StringSplitOptions.TrimEntries);
+
+    private static string TruncateHeadline(string headline) =>
+        headline.Length <= 90 ? headline : headline[..90] + "…";
+}
