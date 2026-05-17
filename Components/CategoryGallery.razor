@@ -908,13 +908,43 @@
 
     protected override async Task OnInitializedAsync()
     {
-        videos = await VideoService.GetVideosByCategoryAsync(Category);
+        videos = await LoadVideosAsync();
     }
 
     private async Task RefreshVideos()
     {
-        videos = await VideoService.GetVideosByCategoryAsync(Category);
+        videos = await LoadVideosAsync();
         showUpload = false;
+    }
+
+    /// <summary>
+    /// Loads the list of collections to render. For the regular per-sport
+    /// galleries this is just a category filter; for the synthetic
+    /// /multisport subview we instead pick every collection whose Training
+    /// is the aggregate produced by the merge service, regardless of its
+    /// stored <c>Category</c>. That keeps masters created before the
+    /// "always file under Multi-sport" rule visible too.
+    /// </summary>
+    private async Task<IReadOnlyList<Video>> LoadVideosAsync()
+    {
+        if (Category == VideoCategories.MultiSport)
+        {
+            var all = await VideoService.GetAllVideosAsync();
+            return all
+                .Where(v => v.Training?.IsMultiSport == true
+                            || v.Category == VideoCategories.MultiSport)
+                .ToList()
+                .AsReadOnly();
+        }
+
+        // Regular per-sport gallery: hide the multi-sport masters so they
+        // do not appear twice (once on /multisport, once on their stored
+        // category page when that category is e.g. Calisthenics).
+        var byCategory = await VideoService.GetVideosByCategoryAsync(Category);
+        return byCategory
+            .Where(v => v.Training?.IsMultiSport != true)
+            .ToList()
+            .AsReadOnly();
     }
 
     private void ToggleUpload() => showUpload = !showUpload;
