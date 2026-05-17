@@ -150,15 +150,16 @@ public sealed class MediaItemTests
 public sealed class VideoCategoriesTests
 {
     [Test]
-    public void All_ContainsEverySixDefinedCategories()
+    public void All_ContainsEverySevenDefinedCategories()
     {
-        Assert.That(VideoCategories.All, Has.Count.EqualTo(6));
+        Assert.That(VideoCategories.All, Has.Count.EqualTo(7));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.Gory));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.WspinaczkaSkalowa));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.Bouldering));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.ProwadzieniHala));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.Calisthenics));
         Assert.That(VideoCategories.All, Does.Contain(VideoCategories.Running));
+        Assert.That(VideoCategories.All, Does.Contain(VideoCategories.Bicycle));
     }
 
     [TestCase("Mountains", "/gory")]
@@ -167,6 +168,7 @@ public sealed class VideoCategoriesTests
     [TestCase("Indoor Climbing", "/prowadzeni-hala")]
     [TestCase("Calisthenics", "/calisthenics")]
     [TestCase("Running", "/running")]
+    [TestCase("Bicycle", "/bicycle")]
     [TestCase("unknown", "/")]
     public void GetUrl_MapsCategoryToExpectedPath(string category, string expected)
     {
@@ -180,6 +182,8 @@ public sealed class VideoCategoriesTests
             Is.EqualTo("/images/running-bg.jpg"));
         Assert.That(VideoCategories.GetPlaceholderImage(VideoCategories.Bouldering),
             Is.EqualTo("/images/bouldering-bg.jpg"));
+        Assert.That(VideoCategories.GetPlaceholderImage(VideoCategories.Bicycle),
+            Is.EqualTo("/images/cycling-bg.jpg"));
     }
 
     [Test]

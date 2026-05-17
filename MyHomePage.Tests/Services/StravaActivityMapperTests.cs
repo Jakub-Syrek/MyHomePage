@@ -10,6 +10,14 @@ public sealed class StravaActivityMapperTests
     [TestCase("Run", VideoCategories.Running)]
     [TestCase("TrailRun", VideoCategories.Running)]
     [TestCase("VirtualRun", VideoCategories.Running)]
+    [TestCase("Ride", VideoCategories.Bicycle)]
+    [TestCase("VirtualRide", VideoCategories.Bicycle)]
+    [TestCase("EBikeRide", VideoCategories.Bicycle)]
+    [TestCase("MountainBikeRide", VideoCategories.Bicycle)]
+    [TestCase("GravelRide", VideoCategories.Bicycle)]
+    [TestCase("Handcycle", VideoCategories.Bicycle)]
+    [TestCase("Velomobile", VideoCategories.Bicycle)]
+    [TestCase("Cycling", VideoCategories.Bicycle)]
     [TestCase("Hike", VideoCategories.Gory)]
     [TestCase("Snowshoe", VideoCategories.Gory)]
     [TestCase("RockClimbing", VideoCategories.WspinaczkaSkalowa)]
@@ -32,7 +40,7 @@ public sealed class StravaActivityMapperTests
     [Test]
     public void ResolveCategory_UnknownType_FallsBackToRunning()
     {
-        var activity = new StravaActivity { SportType = "EBikeRide" };
+        var activity = new StravaActivity { SportType = "Tennis" };
 
         var category = StravaActivityMapper.ResolveCategory(activity);
 

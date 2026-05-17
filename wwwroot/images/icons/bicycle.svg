@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bike-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7DD3FC"/>
+      <stop offset="100%" stop-color="#C6EAFD"/>
+    </linearGradient>
+    <linearGradient id="bike-frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0b1320"/>
+    </linearGradient>
+    <linearGradient id="bike-ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6b7280"/>
+      <stop offset="100%" stop-color="#3f4650"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bike-sky)"/>
+  <!-- Sun -->
+  <circle cx="96" cy="36" r="9" fill="#FFE7A0" opacity="0.85"/>
+  <!-- Ground strip -->
+  <path d="M 8 96 L 120 96 L 120 108 L 8 108 Z" fill="url(#bike-ground)"/>
+  <!-- Road centre dashes -->
+  <path d="M 18 102 L 32 102" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 44 102 L 58 102" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 70 102 L 84 102" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 96 102 L 110 102" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <!-- Rear wheel -->
+  <circle cx="38" cy="86" r="14" fill="none" stroke="url(#bike-frame)" stroke-width="3"/>
+  <circle cx="38" cy="86" r="2.5" fill="url(#bike-frame)"/>
+  <!-- Front wheel -->
+  <circle cx="92" cy="86" r="14" fill="none" stroke="url(#bike-frame)" stroke-width="3"/>
+  <circle cx="92" cy="86" r="2.5" fill="url(#bike-frame)"/>
+  <!-- Spokes (rear) -->
+  <path d="M 38 73 L 38 99 M 26 86 L 50 86 M 30 78 L 46 94 M 30 94 L 46 78"
+        stroke="url(#bike-frame)" stroke-width="1" opacity="0.55"/>
+  <!-- Spokes (front) -->
+  <path d="M 92 73 L 92 99 M 80 86 L 104 86 M 84 78 L 100 94 M 84 94 L 100 78"
+        stroke="url(#bike-frame)" stroke-width="1" opacity="0.55"/>
+  <!-- Frame: down tube + seat tube + top tube + chain stay -->
+  <path d="M 38 86 L 62 60 L 78 60 L 92 86 Z M 62 60 L 70 86 L 38 86 Z"
+        fill="none" stroke="url(#bike-frame)" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Seat post + saddle -->
+  <path d="M 62 60 L 58 50" stroke="url(#bike-frame)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 50 48 L 66 48" stroke="url(#bike-frame)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Head tube + handlebars + fork -->
+  <path d="M 78 60 L 84 48" stroke="url(#bike-frame)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 78 48 L 92 48" stroke="url(#bike-frame)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 78 60 L 92 86" stroke="url(#bike-frame)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Crank + pedal -->
+  <circle cx="70" cy="86" r="3" fill="url(#bike-frame)"/>
+  <path d="M 70 86 L 76 92" stroke="url(#bike-frame)" stroke-width="2" stroke-linecap="round"/>
+  <!-- Ring border -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+</svg>

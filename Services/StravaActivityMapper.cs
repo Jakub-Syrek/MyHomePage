@@ -153,6 +153,9 @@ public static class StravaActivityMapper
     private static string MapTypeToCategory(string sportType) => sportType.ToLowerInvariant() switch
     {
         "run" or "trailrun" or "virtualrun" => VideoCategories.Running,
+        "ride" or "virtualride" or "ebikeride" or "mountainbikeride"
+            or "gravelride" or "handcycle" or "velomobile" or "cycling"
+            => VideoCategories.Bicycle,
         "hike" or "snowshoe" or "backcountryski" or "alpineski"
             => VideoCategories.Gory,
         "rockclimbing" or "rockclimb" or "climbing" => VideoCategories.WspinaczkaSkalowa,

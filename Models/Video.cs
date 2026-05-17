@@ -99,9 +99,10 @@ public static class VideoCategories
     public const string ProwadzieniHala = "Indoor Climbing";
     public const string Calisthenics = "Calisthenics";
     public const string Running = "Running";
+    public const string Bicycle = "Bicycle";
 
     public static IReadOnlyList<string> All =>
-        [Gory, WspinaczkaSkalowa, Bouldering, ProwadzieniHala, Calisthenics, Running];
+        [Gory, WspinaczkaSkalowa, Bouldering, ProwadzieniHala, Calisthenics, Running, Bicycle];
 
     /// <summary>Returns the route URL for the given category slug.</summary>
     public static string GetUrl(string category) => category switch
@@ -112,6 +113,7 @@ public static class VideoCategories
         ProwadzieniHala => "/prowadzeni-hala",
         Calisthenics => "/calisthenics",
         Running => "/running",
+        Bicycle => "/bicycle",
         _ => "/"
     };
 
@@ -129,6 +131,7 @@ public static class VideoCategories
         ProwadzieniHala => "/images/indoor-climbing-bg.jpg",
         Calisthenics => "/images/calisthenics-bg.jpg",
         Running => "/images/running-bg.jpg",
+        Bicycle => "/images/cycling-bg.jpg",
         _ => "/images/mountains-bg.jpg"
     };
 }
