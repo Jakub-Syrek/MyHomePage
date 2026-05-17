@@ -501,6 +501,137 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task ImportActivityAsync_DuplicateStumps_CollapsedToCanonical()
+    {
+        // Pre-existing duplicates (from before the ImportLock fix shipped)
+        // must be collapsed automatically on the next import. Pure stumps
+        // — items without user-added media — are safe to delete.
+        ArrangeValidTokens();
+
+        var dupeOlder = MakeStravaStump(id: 10, externalId: "555");
+        var dupeNewer = MakeStravaStump(id: 12, externalId: "555");
+        var dupeNewest = MakeStravaStump(id: 15, externalId: "555");
+        _videos.GetAllAsync().Returns(new[] { dupeOlder, dupeNewer, dupeNewest });
+
+        _api.GetActivityAsync(Arg.Any<string>(), 555, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 555,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone",
+                StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 1800,
+                DistanceMeters = 5000
+            }));
+
+        var result = await _sync.ImportActivityAsync(555);
+
+        Assert.That(result.IsSuccess, Is.True);
+        // Canonical = lowest id (oldest record).
+        Assert.That(result.Value!.Id, Is.EqualTo(10));
+        // The other two stumps were deleted.
+        await _videos.Received(1).DeleteAsync(12);
+        await _videos.Received(1).DeleteAsync(15);
+        await _videos.DidNotReceive().DeleteAsync(10);
+        // Canonical was re-saved with refreshed training data.
+        await _videos.Received(1).SaveAsync(Arg.Is<Video>(v => v.Id == 10));
+    }
+
+    [Test]
+    public async Task ImportActivityAsync_DuplicateWithUserMedia_PicksTouchedAsCanonical()
+    {
+        // A duplicate that the operator has been working on (real photos /
+        // videos beyond the cover.jpg seed) must be promoted to canonical
+        // and pure stumps get collapsed into it — never the other way
+        // around, so operator work is preserved.
+        ArrangeValidTokens();
+
+        var stump = MakeStravaStump(id: 10, externalId: "555");
+        var touched = MakeStravaStump(id: 12, externalId: "555");
+        touched.Media = new List<MediaItem>
+        {
+            MediaItem.Create("photo-01.jpg", MediaType.Image, 200, 0),
+            MediaItem.Create("video.mp4", MediaType.Video, 5_000_000, 1)
+        };
+        _videos.GetAllAsync().Returns(new[] { stump, touched });
+
+        _api.GetActivityAsync(Arg.Any<string>(), 555, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 555,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone"
+            }));
+
+        var result = await _sync.ImportActivityAsync(555);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Id, Is.EqualTo(12),
+            "Canonical should be the item with user-added media");
+        await _videos.Received(1).DeleteAsync(10);
+        await _videos.DidNotReceive().DeleteAsync(12);
+    }
+
+    [Test]
+    public async Task ImportActivityAsync_BothDuplicatesHaveUserMedia_NeitherDeleted()
+    {
+        // When both duplicates carry real media, leave them alone for
+        // manual merge — better to leak a dupe than silently delete
+        // operator work.
+        ArrangeValidTokens();
+
+        var olderTouched = MakeStravaStump(id: 10, externalId: "555");
+        olderTouched.Media = new List<MediaItem>
+        {
+            MediaItem.Create("photo-old.jpg", MediaType.Image, 100, 0)
+        };
+        var newerTouched = MakeStravaStump(id: 12, externalId: "555");
+        newerTouched.Media = new List<MediaItem>
+        {
+            MediaItem.Create("photo-new.jpg", MediaType.Image, 200, 0),
+            MediaItem.Create("video.mp4", MediaType.Video, 5_000_000, 1)
+        };
+        _videos.GetAllAsync().Returns(new[] { olderTouched, newerTouched });
+
+        _api.GetActivityAsync(Arg.Any<string>(), 555, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 555,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone"
+            }));
+
+        var result = await _sync.ImportActivityAsync(555);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Id, Is.EqualTo(12),
+            "Canonical picks the more-developed item");
+        await _videos.DidNotReceive().DeleteAsync(Arg.Any<int>());
+    }
+
+    private static Video MakeStravaStump(int id, string externalId)
+    {
+        var v = Video.Create(
+            id: id, title: $"Strava {externalId}", description: "",
+            fileName: "cover.jpg", location: null,
+            category: VideoCategories.Running, fileSizeBytes: 0);
+        v.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = externalId,
+            ActivityType = "Run"
+        };
+        v.Media = new List<MediaItem>
+        {
+            MediaItem.Create("cover.jpg", MediaType.Image, 0, 0)
+        };
+        return v;
+    }
+
+    [Test]
     public async Task SyncRecentAsync_PrivacyFilterEnforced_PrivateActivitiesCountedAsFailures()
     {
         ArrangeValidTokens();

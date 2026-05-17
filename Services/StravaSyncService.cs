@@ -261,10 +261,48 @@ public sealed class StravaSyncService : IStravaSyncService
         cancellationToken.ThrowIfCancellationRequested();
         var external = activityId.ToString();
         var all = await _videos.GetAllAsync();
-        return all.FirstOrDefault(v =>
-            v.Training is not null &&
-            v.Training.Source == TrainingSource.Strava &&
-            v.Training.ExternalId == external);
+        var matches = all.Where(v =>
+                v.Training is not null &&
+                v.Training.Source == TrainingSource.Strava &&
+                v.Training.ExternalId == external)
+            .ToList();
+
+        if (matches.Count <= 1) return matches.FirstOrDefault();
+
+        // Pre-existing duplicates (created before the ImportLock was in
+        // place) get cleaned up lazily on the next sync. Keep the item
+        // with the most user-added media — it represents the most
+        // operator effort. Tie-break on the lowest id (oldest record).
+        var canonical = matches
+            .OrderByDescending(v => v.Media?.Count ?? 0)
+            .ThenBy(v => v.Id)
+            .First();
+
+        foreach (var dupe in matches)
+        {
+            if (dupe.Id == canonical.Id) continue;
+
+            // Only collapse duplicates that have no user-added media on
+            // top of the cover.jpg seed — never silently delete an item
+            // the operator has actually touched.
+            var dupeUserMedia = (dupe.Media ?? new List<MediaItem>())
+                .Count(m => !string.Equals(m.FileName, "cover.jpg", StringComparison.OrdinalIgnoreCase));
+            if (dupeUserMedia > 0)
+            {
+                _logger.LogWarning(
+                    "Duplicate Strava activity {ActivityId} found on items {KeepId} and {DupeId}, " +
+                    "but the duplicate has {Count} user media — leaving it for manual merge",
+                    activityId, canonical.Id, dupe.Id, dupeUserMedia);
+                continue;
+            }
+
+            _logger.LogInformation(
+                "Collapsing duplicate Strava stump {DupeId} -> canonical {KeepId} for activity {ActivityId}",
+                dupe.Id, canonical.Id, activityId);
+            await _videos.DeleteAsync(dupe.Id);
+        }
+
+        return canonical;
     }
 
     private async Task<Video> CreatePlaceholderAsync(
