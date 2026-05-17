@@ -161,6 +161,17 @@
             throw new Error(begin.body?.error || `Failed to start registration (HTTP ${begin.status}).`);
         }
 
+        // Defensive: log the raw begin response so a mismatch between the
+        // server-side JSON shape and what decodeCreateOptions expects is
+        // easy to diagnose from DevTools.
+        console.debug("[webauthn] register/begin response:", begin.body);
+        if (!begin.body || typeof begin.body.challenge !== "string") {
+            throw new Error(
+                "Registration response did not include a challenge. " +
+                "Open DevTools console for the raw payload."
+            );
+        }
+
         const options = decodeCreateOptions(begin.body);
         const credential = await navigator.credentials.create({ publicKey: options });
         if (!credential) {
@@ -189,6 +200,14 @@
         const begin = await postJson("/auth/passkey/login/begin", { email: email || null });
         if (!begin.ok) {
             throw new Error(begin.body?.error || `Failed to start sign-in (HTTP ${begin.status}).`);
+        }
+
+        console.debug("[webauthn] login/begin response:", begin.body);
+        if (!begin.body || typeof begin.body.challenge !== "string") {
+            throw new Error(
+                "Sign-in response did not include a challenge. " +
+                "Open DevTools console for the raw payload."
+            );
         }
 
         const options = decodeRequestOptions(begin.body);

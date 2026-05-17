@@ -1,7 +1,18 @@
-﻿<CascadingAuthenticationState>
+﻿@using MyHomePage.Shared
+
+<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            @* AuthorizeRouteView (not the plain RouteView) is what makes
+               @attribute [Authorize] on Blazor pages actually enforce —
+               without it the attribute is silently ignored. *@
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <LayoutView Layout="@typeof(MainLayout)">
+                        <RedirectToLogin />
+                    </LayoutView>
+                </NotAuthorized>
+            </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>

@@ -1,0 +1,23 @@
+@namespace MyHomePage.Shared
+@inject NavigationManager Navigation
+
+@*
+    Tiny redirector used as the <NotAuthorized> content of <AuthorizeRouteView>
+    in App.razor. When the router lands on a page decorated with
+    [Authorize] but the user isn't signed in, Blazor renders this component;
+    we force a full-page navigation to /login carrying the current path
+    as ReturnUrl so the user comes back to the page they were trying to
+    open. A full-page nav (forceLoad: true) is required so the cookie auth
+    middleware kicks in for the /login round-trip — a SignalR-only
+    navigation would never hit the server-side auth pipeline.
+*@
+
+@code {
+    /// <summary>Forces a server round-trip to <c>/login</c> on first render.</summary>
+    protected override void OnInitialized()
+    {
+        var current = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var target = string.IsNullOrEmpty(current) ? "/login" : $"/login?ReturnUrl=/{Uri.EscapeDataString(current)}";
+        Navigation.NavigateTo(target, forceLoad: true);
+    }
+}
