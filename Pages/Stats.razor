@@ -290,6 +290,7 @@
                             <th class="num">Distance</th>
                             <th class="num">Time</th>
                             <th class="num">HR</th>
+                            <th class="num">kcal</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -309,6 +310,7 @@
                                 <td class="num">@FormatDistanceOrDash(training.DistanceMeters)</td>
                                 <td class="num">@FormatDuration(training.Duration)</td>
                                 <td class="num">@(training.AverageHeartRate?.ToString() ?? "—")</td>
+                                <td class="num">@(training.Calories is > 0 ? training.Calories.ToString() : "—")</td>
                             </tr>
                         }
                     </tbody>
@@ -625,7 +627,9 @@
         .stats-sessions th:nth-child(4),
         .stats-sessions td:nth-child(4),
         .stats-sessions th:nth-child(7),
-        .stats-sessions td:nth-child(7) {
+        .stats-sessions td:nth-child(7),
+        .stats-sessions th:nth-child(8),
+        .stats-sessions td:nth-child(8) {
             display: none;
         }
     }
