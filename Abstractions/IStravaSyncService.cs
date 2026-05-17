@@ -53,4 +53,29 @@ public interface IStravaSyncService
         int page = 1,
         int perPage = 30,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bulk-imports every recent activity in one pass: lists the latest
+    /// <paramref name="perPage"/> activities, skips the ones already in the
+    /// repository (matched on <c>Source.Strava + ExternalId</c>) and creates
+    /// a new gallery item for each new one.
+    /// </summary>
+    /// <param name="perPage">Number of recent activities to inspect (max 30).</param>
+    /// <param name="enforcePrivacyFilter">
+    /// When false (default for the admin UI button), the privacy filter is
+    /// bypassed so private / followers-only activities are imported too.
+    /// </param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    Task<OperationResult<StravaSyncSummary>> SyncRecentAsync(
+        int perPage = 30,
+        bool enforcePrivacyFilter = false,
+        CancellationToken cancellationToken = default);
 }
+
+/// <summary>Outcome counters returned by <see cref="IStravaSyncService.SyncRecentAsync"/>.</summary>
+public sealed record StravaSyncSummary(
+    int Inspected,
+    int Imported,
+    int Skipped,
+    int Failed,
+    IReadOnlyList<string> FailureMessages);

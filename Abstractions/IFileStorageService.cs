@@ -40,4 +40,19 @@ public interface IFileStorageService
         int jpegQuality = 85);
 
     Task DeleteVideoDirectoryAsync(int id);
+
+    /// <summary>
+    /// Copies a static asset shipped with the app (under <c>wwwroot/</c>) into
+    /// the video directory of the given gallery item. Used to seed
+    /// Strava-imported placeholders with a real cover image so they render
+    /// like normal photo uploads instead of empty media tiles.
+    /// </summary>
+    /// <param name="wwwRootRelativePath">Path relative to <c>wwwroot</c> (e.g. <c>images/running-bg.jpg</c>).</param>
+    /// <param name="videoId">Target gallery item id.</param>
+    /// <param name="targetFileName">File name to write under that item's directory.</param>
+    /// <returns>Byte size of the written copy, or 0 when the source did not exist.</returns>
+    Task<long> CopyWwwRootFileToVideoAsync(
+        string wwwRootRelativePath,
+        int videoId,
+        string targetFileName);
 }

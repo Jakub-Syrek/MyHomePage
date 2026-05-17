@@ -68,9 +68,19 @@
                     }
                 </ul>
             }
-            <button class="btn secondary" @onclick="LoadActivitiesAsync" disabled="@_busy">
-                Refresh list
-            </button>
+            <div class="actions-row">
+                <button class="btn secondary" @onclick="LoadActivitiesAsync" disabled="@_busy">
+                    Refresh list
+                </button>
+                <button class="btn primary" @onclick="SyncRecentAsync" disabled="@_busy">
+                    @if (_isSyncing) { <span>Syncing…</span> }
+                    else { <span>📥 Sync all recent (last 30)</span> }
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(_syncSummary))
+            {
+                <p class="sync-summary @(_syncError ? "err" : "ok")">@_syncSummary</p>
+            }
         </section>
 
         @if (!string.IsNullOrEmpty(_status))
@@ -120,6 +130,30 @@
     .strava-admin .activity-list .muted { color: #6b7280; font-weight: 400; }
     .strava-admin .status { color: #4a5568; margin-top: 12px; }
     .strava-admin .error { color: #b91c1c; }
+
+    .strava-admin .actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .strava-admin .sync-summary {
+        margin-top: 10px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.92rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .strava-admin .sync-summary.ok {
+        background: rgba(34, 197, 94, 0.10);
+        color: #166534;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+    .strava-admin .sync-summary.err {
+        background: rgba(239, 68, 68, 0.10);
+        color: #991b1b;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+    }
 </style>
 
 @code {
@@ -129,6 +163,10 @@
     private string? _status;
     private bool _loading = true;
     private bool _busy;
+
+    private bool _isSyncing;
+    private string? _syncSummary;
+    private bool _syncError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -155,6 +193,48 @@
         }
         _busy = false;
         StateHasChanged();
+    }
+
+    private async Task SyncRecentAsync()
+    {
+        if (_isSyncing) return;
+
+        _isSyncing = true;
+        _busy = true;
+        _syncSummary = "Syncing recent activities…";
+        _syncError = false;
+        StateHasChanged();
+
+        try
+        {
+            var result = await Sync.SyncRecentAsync(perPage: 30, enforcePrivacyFilter: false);
+            _syncError = !result.IsSuccess;
+            if (result.IsSuccess && result.Value is not null)
+            {
+                var summary = result.Value;
+                _syncSummary =
+                    $"✅ Inspected {summary.Inspected}, imported {summary.Imported}, " +
+                    $"skipped {summary.Skipped} already in gallery, failed {summary.Failed}.";
+
+                // Refresh the activity list so the imported ones are visible
+                await LoadActivitiesAsync();
+            }
+            else
+            {
+                _syncSummary = $"Sync failed: {result.Message}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _syncError = true;
+            _syncSummary = $"Sync threw: {ex.Message}";
+        }
+        finally
+        {
+            _isSyncing = false;
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task ImportAsync(long activityId)

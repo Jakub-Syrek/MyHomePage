@@ -123,4 +123,37 @@ public sealed class FileStorageService : IFileStorageService
         if (Directory.Exists(dir))
             await Task.Run(() => Directory.Delete(dir, recursive: true));
     }
+
+    /// <inheritdoc />
+    public async Task<long> CopyWwwRootFileToVideoAsync(
+        string wwwRootRelativePath,
+        int videoId,
+        string targetFileName)
+    {
+        if (string.IsNullOrWhiteSpace(wwwRootRelativePath)) return 0;
+        if (string.IsNullOrWhiteSpace(targetFileName)) return 0;
+
+        var safeRelative = wwwRootRelativePath.Replace('\\', '/').TrimStart('/');
+        var sourcePath = Path.Combine(_environment.WebRootPath,
+            safeRelative.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(sourcePath))
+        {
+            _logger.LogWarning(
+                "Could not seed video {Id} from {Source}: file does not exist",
+                videoId, sourcePath);
+            return 0;
+        }
+
+        EnsureVideoDirectoryExists(videoId);
+        var destinationPath = Path.Combine(GetVideoDirectoryPath(videoId), targetFileName);
+
+        await using var source = File.OpenRead(sourcePath);
+        await using var destination = File.Create(destinationPath);
+        await source.CopyToAsync(destination);
+        var size = new FileInfo(destinationPath).Length;
+        _logger.LogInformation(
+            "Seeded item {Id} with {File} ({KB} KB) from {Source}",
+            videoId, targetFileName, size / 1024, safeRelative);
+        return size;
+    }
 }

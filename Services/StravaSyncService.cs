@@ -14,11 +14,14 @@ namespace MyHomePage.Services;
 /// </summary>
 public sealed class StravaSyncService : IStravaSyncService
 {
+    private const string CoverFileName = "cover.jpg";
+
     private readonly IStravaApiClient _api;
     private readonly StravaTokenService _tokens;
     private readonly IVideoRepository _videos;
     private readonly IAiAssistantService _ai;
     private readonly IReverseGeocoder _geocoder;
+    private readonly IFileStorageService _storage;
     private readonly StravaOptions _options;
     private readonly ILogger<StravaSyncService> _logger;
 
@@ -30,6 +33,7 @@ public sealed class StravaSyncService : IStravaSyncService
     /// <param name="videos">Gallery repository for creating / updating items.</param>
     /// <param name="ai">AI assistant used as a last-resort location extractor.</param>
     /// <param name="geocoder">Reverse geocoder used when GPS is known but the city is not.</param>
+    /// <param name="storage">File storage service used to seed the placeholder cover image.</param>
     /// <param name="options">Bound Strava options (privacy filter etc.).</param>
     /// <param name="logger">Structured logger for diagnostic events.</param>
     public StravaSyncService(
@@ -38,6 +42,7 @@ public sealed class StravaSyncService : IStravaSyncService
         IVideoRepository videos,
         IAiAssistantService ai,
         IReverseGeocoder geocoder,
+        IFileStorageService storage,
         IOptions<StravaOptions> options,
         ILogger<StravaSyncService> logger)
     {
@@ -46,6 +51,7 @@ public sealed class StravaSyncService : IStravaSyncService
         _videos = videos;
         _ai = ai;
         _geocoder = geocoder;
+        _storage = storage;
         _options = options.Value;
         _logger = logger;
     }
@@ -116,6 +122,60 @@ public sealed class StravaSyncService : IStravaSyncService
             : await _api.ListAthleteActivitiesAsync(token.Value, page, perPage, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<StravaSyncSummary>> SyncRecentAsync(
+        int perPage = 30,
+        bool enforcePrivacyFilter = false,
+        CancellationToken cancellationToken = default)
+    {
+        var list = await ListRecentActivitiesAsync(1, perPage, cancellationToken);
+        if (!list.IsSuccess || list.Value is null)
+            return OperationResult<StravaSyncSummary>.Failure(list.Message);
+
+        var allVideos = await _videos.GetAllAsync();
+        var existingExternalIds = allVideos
+            .Where(v => v.Training is { Source: TrainingSource.Strava })
+            .Select(v => v.Training!.ExternalId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var inspected = list.Value.Count;
+        var imported = 0;
+        var skipped = 0;
+        var failed = 0;
+        var failures = new List<string>();
+
+        foreach (var activity in list.Value)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (existingExternalIds.Contains(activity.Id.ToString()))
+            {
+                skipped++;
+                continue;
+            }
+
+            var result = await ImportActivityAsync(
+                activity.Id, enforcePrivacyFilter, cancellationToken);
+            if (result.IsSuccess)
+            {
+                imported++;
+            }
+            else
+            {
+                failed++;
+                failures.Add($"{activity.Id}: {result.Message}");
+            }
+        }
+
+        _logger.LogInformation(
+            "Strava bulk sync: inspected {Inspected}, imported {Imported}, " +
+            "skipped {Skipped}, failed {Failed}",
+            inspected, imported, skipped, failed);
+
+        return OperationResult<StravaSyncSummary>.Success(
+            new StravaSyncSummary(inspected, imported, skipped, failed, failures),
+            $"Inspected {inspected}, imported {imported}, skipped {skipped}, failed {failed}.");
+    }
+
     private async Task<OperationResult<StravaActivity>> FetchActivityAsync(
         long activityId,
         CancellationToken cancellationToken)
@@ -171,16 +231,31 @@ public sealed class StravaSyncService : IStravaSyncService
         var category = StravaActivityMapper.ResolveCategory(activity);
         var (lat, lng) = StravaActivityMapper.ExtractStartCoordinates(activity);
         var location = await ResolveLocationAsync(activity, cancellationToken);
+        var videoId = _videos.GenerateNextId();
+
+        // Seed a real cover.jpg by copying the category's static background
+        // image so the placeholder renders as a proper photo tile instead
+        // of an empty video stub.
+        var coverSize = await SeedCoverAsync(videoId, category);
+        var mediaItems = coverSize > 0
+            ? new List<MediaItem>
+            {
+                MediaItem.Create(CoverFileName, MediaType.Image, coverSize, 0)
+            }
+            : new List<MediaItem>();
+        var primaryFileName = coverSize > 0 ? CoverFileName : string.Empty;
+
         var video = Video.Create(
-            id: _videos.GenerateNextId(),
+            id: videoId,
             title: string.IsNullOrWhiteSpace(activity.Name)
                 ? $"Strava {activity.Type} {activity.StartDate:yyyy-MM-dd}"
                 : activity.Name,
             description: activity.Description ?? string.Empty,
-            fileName: string.Empty,
+            fileName: primaryFileName,
             location: location,
             category: category,
-            fileSizeBytes: 0,
+            fileSizeBytes: coverSize,
+            media: mediaItems,
             latitude: lat,
             longitude: lng);
 
@@ -189,9 +264,42 @@ public sealed class StravaSyncService : IStravaSyncService
         await _videos.SaveAsync(video);
         _logger.LogInformation(
             "Created gallery item {VideoId} from Strava activity {ActivityId} " +
-            "(category {Category}, location '{Location}', GPS {Lat:F4},{Lng:F4})",
-            video.Id, activity.Id, category, location ?? "<unknown>", lat ?? 0, lng ?? 0);
+            "(category {Category}, location '{Location}', GPS {Lat:F4},{Lng:F4}, cover {CoverKB} KB)",
+            video.Id, activity.Id, category, location ?? "<unknown>", lat ?? 0, lng ?? 0, coverSize / 1024);
         return video;
+    }
+
+    /// <summary>
+    /// Copies the category's <c>wwwroot/images/{slug}-bg.jpg</c> into the
+    /// new item's directory as <c>cover.jpg</c>. Returns the byte count on
+    /// success or 0 when no asset was available — the caller then leaves
+    /// the item without primary media (the editor still lets the operator
+    /// add files later).
+    /// </summary>
+    private async Task<long> SeedCoverAsync(int videoId, string category)
+    {
+        var relative = ResolveCategoryAssetRelativePath(category);
+        if (string.IsNullOrEmpty(relative)) return 0;
+        try
+        {
+            return await _storage.CopyWwwRootFileToVideoAsync(
+                relative, videoId, CoverFileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not seed placeholder cover for item {Id}", videoId);
+            return 0;
+        }
+    }
+
+    private static string ResolveCategoryAssetRelativePath(string category)
+    {
+        // VideoCategories.GetPlaceholderImage returns an absolute URL path
+        // like "/images/running-bg.jpg" — strip the leading slash to make
+        // it a wwwroot-relative path.
+        var url = VideoCategories.GetPlaceholderImage(category);
+        return url.TrimStart('/');
     }
 
     /// <summary>
