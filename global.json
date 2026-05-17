@@ -1,0 +1,7 @@
+{
+  "//": "Pin the .NET SDK so local builds match the Railway Docker base (mcr.microsoft.com/dotnet/sdk:8.0). Without this, a SDK 10 dev box silently accepts syntax / Razor parser features that the SDK 8 source generator on Railway rejects (e.g. relational-pattern switch arms inside @code { }), and breakages only show up after the push.",
+  "sdk": {
+    "version": "8.0.420",
+    "rollForward": "latestFeature"
+  }
+}
