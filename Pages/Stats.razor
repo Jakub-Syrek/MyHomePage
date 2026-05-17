@@ -102,11 +102,24 @@
             }
             @if (_stats.TotalSufferScore > 0)
             {
-                <article class="stats-card">
+                var sessionsWithEffort = (_videos ?? Array.Empty<Video>())
+                    .Count(v => v.Training is not null
+                                && v.Training.StartTimeUtc >= _stats.FromUtc
+                                && v.Training.StartTimeUtc <= _stats.ToUtc
+                                && v.Training.SufferScore is > 0);
+                var avgEffort = sessionsWithEffort > 0
+                    ? _stats.TotalSufferScore / (double)sessionsWithEffort
+                    : 0;
+                var (effortBand, effortColour) = ClassifyEffort(avgEffort);
+                <article class="stats-card stats-card-effort"
+                         title="@EffortTooltip(avgEffort, sessionsWithEffort)">
                     <span class="stats-card-icon">💪</span>
                     <div>
                         <strong>@_stats.TotalSufferScore</strong>
                         <span>effort score</span>
+                        <small class="stats-card-hint" style="color: @effortColour">
+                            @($"~ {avgEffort:F0}/session — {effortBand}")
+                        </small>
                     </div>
                 </article>
             }
@@ -121,6 +134,41 @@
                 </article>
             }
         </section>
+
+        @if (_stats.TotalSufferScore > 0)
+        {
+            <details class="stats-effort-key">
+                <summary>
+                    <span>What's an <strong>effort score</strong>?</span>
+                </summary>
+                <p>
+                    Strava's <strong>Relative Effort</strong> (historically Suffer Score) — a heart-rate-driven
+                    measure of how hard a session was for <em>your</em> body, calibrated to your max HR.
+                    The number above sums the score across every session in the selected window.
+                </p>
+                <ul class="stats-effort-bands">
+                    <li><span class="stats-band-dot" style="background:#10b981"></span>
+                        <strong>&lt; 50</strong> per session — easy / recovery
+                    </li>
+                    <li><span class="stats-band-dot" style="background:#3b82f6"></span>
+                        <strong>50 – 100</strong> — moderate (typical Z2 run, easy ride)
+                    </li>
+                    <li><span class="stats-band-dot" style="background:#f59e0b"></span>
+                        <strong>100 – 150</strong> — hard (tempo, long run, threshold)
+                    </li>
+                    <li><span class="stats-band-dot" style="background:#ef4444"></span>
+                        <strong>150 – 250</strong> — very hard (race effort, intervals)
+                    </li>
+                    <li><span class="stats-band-dot" style="background:#7c3aed"></span>
+                        <strong>&gt; 250</strong> — extreme (long race / ultra)
+                    </li>
+                </ul>
+                <p class="stats-effort-note">
+                    For a weekly load reference: most amateurs sit around <strong>200 – 400</strong>
+                    summed per week; competitive athletes <strong>500 – 800+</strong>.
+                </p>
+            </details>
+        }
 
         <section class="stats-streaks">
             <div class="stats-streak">
@@ -355,6 +403,69 @@
         color: #1f2937;
     }
     .stats-card span { color: #6b7280; font-size: 0.85rem; }
+    .stats-card-hint {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-top: 2px;
+        letter-spacing: 0.01em;
+    }
+    .stats-card-effort { cursor: help; }
+
+    .stats-effort-key {
+        background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%);
+        border: 1px solid rgba(102,126,234,0.18);
+        border-radius: 14px;
+        padding: 12px 18px;
+        margin-bottom: 18px;
+        font-size: 0.9rem;
+        color: #374151;
+    }
+    .stats-effort-key > summary {
+        cursor: pointer;
+        list-style: none;
+        font-weight: 600;
+        color: #4338ca;
+        padding: 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .stats-effort-key > summary::before {
+        content: 'ℹ';
+        font-size: 1.05rem;
+        margin-right: 2px;
+    }
+    .stats-effort-key > summary::-webkit-details-marker { display: none; }
+    .stats-effort-key[open] > summary { margin-bottom: 8px; }
+    .stats-effort-key p { margin: 6px 0; line-height: 1.45; }
+    .stats-effort-key strong { color: #1f2937; }
+    .stats-effort-key em { font-style: italic; color: #4338ca; }
+    .stats-effort-bands {
+        list-style: none;
+        padding: 0;
+        margin: 8px 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 6px 18px;
+    }
+    .stats-effort-bands li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats-band-dot {
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.7);
+    }
+    .stats-effort-note {
+        font-size: 0.85rem !important;
+        color: #6b7280 !important;
+        margin-top: 8px !important;
+    }
 
     .stats-streaks {
         display: flex;
@@ -578,6 +689,27 @@
 
     private static string FormatDistanceOrDash(double? meters) =>
         meters is null || meters <= 0 ? "—" : FormatDistance(meters.Value);
+
+    /// <summary>
+    /// Buckets an average per-session Strava Relative Effort value into
+    /// the same bands Strava uses on its training-log heat-map. Returns
+    /// a short label and a hex colour for the inline hint pill.
+    /// </summary>
+    private static (string Band, string Colour) ClassifyEffort(double avgEffort) => avgEffort switch
+    {
+        < 50 => ("easy", "#10b981"),
+        < 100 => ("moderate", "#3b82f6"),
+        < 150 => ("hard", "#f59e0b"),
+        < 250 => ("very hard", "#ef4444"),
+        _ => ("extreme", "#7c3aed")
+    };
+
+    private static string EffortTooltip(double avgEffort, int sessionsWithEffort)
+    {
+        if (sessionsWithEffort == 0) return "Strava Relative Effort score";
+        return $"Sum of Strava Relative Effort across {sessionsWithEffort} session(s). " +
+               $"Average per session: {avgEffort:F0}. Click \"What's an effort score?\" below for the scale.";
+    }
 
     private static string FormatDuration(TimeSpan duration)
     {
