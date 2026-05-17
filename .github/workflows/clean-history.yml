@@ -1,0 +1,72 @@
+name: Clean AI attribution from history
+
+# Manual-trigger workflow that rewrites the entire branch history to
+# remove any Claude / Anthropic / OpenAI / generic AI attribution from
+# commit messages and force-pushes the cleaned history back. Use this
+# only when the strict 'No AI attribution' check has already failed on
+# master.
+#
+# Side effect: rewrites SHAs. Anyone with a local checkout must
+# re-clone or run `git fetch --all && git reset --hard origin/master`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to clean (default - master)
+        required: true
+        default: master
+        type: string
+      confirm:
+        description: Type the branch name again to confirm force-push
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    name: Rewrite and force-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate confirmation token
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_BRANCH" != "$CONFIRM" ]; then
+            echo "::error::Confirmation token does not match target_branch - aborting."
+            exit 1
+          fi
+
+      - name: Checkout target branch (full history)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install git-filter-repo
+        shell: bash
+        run: python -m pip install --quiet git-filter-repo
+
+      - name: Rewrite commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Jakub Syrek"
+          git config user.email "jakubvonsyrek@gmail.com"
+          git filter-repo --force --message-callback "$(cat .github/scripts/rewrite-ai-attribution.py)"
+
+      - name: Force-push cleaned branch
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:$TARGET_BRANCH" --force-with-lease
+          echo "Pushed cleaned history to $TARGET_BRANCH"
