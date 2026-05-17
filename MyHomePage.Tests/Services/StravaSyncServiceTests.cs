@@ -156,11 +156,12 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
-    public async Task ImportActivityAsync_ActivityOwnedByMultiSportMaster_ReturnsMasterWithoutOverwrite()
+    public async Task ImportActivityAsync_ActivityReferencedByMultiSportMaster_StillCreatesFreshStump()
     {
-        // A previous merge swallowed Strava activity #7 into a multi-sport
-        // master collection. The next sync round must NOT recreate a stump
-        // for #7 nor overwrite the master's aggregate Training payload.
+        // A multi-sport master mentions Strava activity #7 in its
+        // SubActivities[] for display only — masters do NOT claim
+        // ownership. Importing #7 again must produce its own stump so
+        // the activity reappears on its sport page.
         ArrangeValidTokens();
         var master = Video.Create(
             id: 42, title: "Hybrid Sunday", description: "merged",
@@ -187,20 +188,10 @@ public sealed class StravaSyncServiceTests
                     Calories: 200,
                     AverageHeartRate: 150,
                     SufferScore: 50),
-                new(
-                    Source: TrainingSource.Strava,
-                    ExternalId: "8",
-                    ExternalUrl: "https://www.strava.com/activities/8",
-                    ActivityType: "WeightTraining",
-                    StartTimeUtc: new DateTime(2026, 5, 15, 13, 0, 0, DateTimeKind.Utc),
-                    Duration: TimeSpan.FromMinutes(45),
-                    DistanceMeters: null,
-                    Calories: 250,
-                    AverageHeartRate: 130,
-                    SufferScore: 40),
             },
         };
         _videos.GetAllAsync().Returns(new[] { master });
+        _videos.GenerateNextId().Returns(99);
 
         _api.GetActivityAsync(Arg.Any<string>(), 7, Arg.Any<CancellationToken>())
             .Returns(OperationResult<StravaActivity>.Success(
@@ -218,15 +209,16 @@ public sealed class StravaSyncServiceTests
         var result = await _sync.ImportActivityAsync(7);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(result.Value, Is.SameAs(master));
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value!.Id, Is.EqualTo(99));
+        Assert.That(result.Value, Is.Not.SameAs(master));
+        Assert.That(result.Value.Training!.ExternalId, Is.EqualTo("7"));
+        Assert.That(result.Value.Category, Is.EqualTo(VideoCategories.Running));
 
-        // The aggregate must be untouched — ActivityType still "Multi-sport",
-        // Duration still 75 minutes, SubActivities[] still intact.
+        // Master payload must remain untouched.
         Assert.That(master.Training!.ActivityType, Is.EqualTo("Multi-sport"));
         Assert.That(master.Training.Duration, Is.EqualTo(TimeSpan.FromMinutes(75)));
-        Assert.That(master.Training.SubActivities!.Count, Is.EqualTo(2));
-        await _videos.DidNotReceive().SaveAsync(master);
-        _videos.DidNotReceive().GenerateNextId();
+        Assert.That(master.Training.SubActivities!.Count, Is.EqualTo(1));
     }
 
     [Test]
