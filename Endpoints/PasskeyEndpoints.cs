@@ -127,6 +127,9 @@ public static class PasskeyEndpoints
             return Results.BadRequest(new { error = ex.Message });
         }
 
+        var transports = registered.Transports?.Select(t => t.ToString()).ToList()
+            ?? new List<string>();
+
         var credential = new PasskeyCredential(
             UserEmail: email,
             UserHandle: WebEncoders.Base64UrlEncode(registered.User.Id),
@@ -138,16 +141,13 @@ public static class PasskeyEndpoints
                 ? $"Passkey ({DateTime.UtcNow:yyyy-MM-dd})"
                 : request.Nickname.Trim(),
             CreatedAtUtc: DateTimeOffset.UtcNow,
-            LastUsedAtUtc: null);
+            LastUsedAtUtc: null,
+            Transports: transports);
 
         await store.AddAsync(credential, cancellationToken);
         context.Session.Remove(RegistrationSessionKey);
 
-        return Results.Ok(new PasskeyDescriptor(
-            credential.CredentialId,
-            credential.Nickname,
-            credential.CreatedAtUtc,
-            credential.LastUsedAtUtc));
+        return Results.Ok(ToDescriptor(credential));
     }
 
     private static async Task<IResult> LoginBeginAsync(
@@ -261,11 +261,16 @@ public static class PasskeyEndpoints
         }
 
         var creds = await store.GetByEmailAsync(email, cancellationToken);
-        var descriptors = creds
-            .Select(c => new PasskeyDescriptor(c.CredentialId, c.Nickname, c.CreatedAtUtc, c.LastUsedAtUtc))
-            .ToList();
+        var descriptors = creds.Select(ToDescriptor).ToList();
         return Results.Ok(descriptors);
     }
+
+    private static PasskeyDescriptor ToDescriptor(PasskeyCredential credential) => new(
+        credential.CredentialId,
+        credential.Nickname,
+        PasskeyTypeFormatter.Describe(credential.Transports),
+        credential.CreatedAtUtc,
+        credential.LastUsedAtUtc);
 
     private static async Task<IResult> DeleteAsync(
         string credentialId,

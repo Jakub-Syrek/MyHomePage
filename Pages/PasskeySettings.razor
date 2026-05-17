@@ -52,6 +52,7 @@
                 <thead>
                     <tr>
                         <th>Nickname</th>
+                        <th>Type</th>
                         <th>Created</th>
                         <th>Last used</th>
                         <th></th>
@@ -62,6 +63,7 @@
                     {
                         <tr>
                             <td>@pk.Nickname</td>
+                            <td><span class="type-pill">@PrettyType(pk.Type)</span></td>
                             <td>@pk.CreatedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
                             <td>@(pk.LastUsedAtUtc?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                             <td>
@@ -112,6 +114,12 @@
         font-size: 0.95rem;
     }
     .passkey-table th { color: #64748b; font-weight: 600; }
+    .type-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 10px; border-radius: 999px;
+        background: #eef2ff; color: #4338ca;
+        font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+    }
     .alert { padding: 12px 16px; border-radius: 8px; margin-top: 16px; }
     .alert-error { background: #fee2e2; color: #991b1b; }
     .alert-success { background: #d1fae5; color: #065f46; }
@@ -200,9 +208,19 @@
         }
     }
 
+    private static string PrettyType(string? type) => type switch
+    {
+        null or "" or "Unknown" => "🔐 Unknown",
+        "Fingerprint / face / PIN" => "🫆 Fingerprint / face / PIN",
+        "Phone / cross-device" => "📱 Phone / cross-device",
+        var t when t.StartsWith("Security key", StringComparison.Ordinal) => $"🔑 {t}",
+        var t => t,
+    };
+
     private sealed record PasskeyDescriptor(
         string CredentialId,
         string Nickname,
+        string Type,
         DateTimeOffset CreatedAtUtc,
         DateTimeOffset? LastUsedAtUtc);
 }
