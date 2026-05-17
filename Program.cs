@@ -77,6 +77,34 @@ try
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
 
+    // ── WebAuthn / passkeys (Fido2NetLib) ─────────────────────────────────────
+    // Short-lived server session stores the per-ceremony challenge between
+    // the /begin and /complete WebAuthn calls. Memory cache is sufficient
+    // for the single-instance Railway deployment.
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddSession(options =>
+    {
+        options.Cookie.Name = ".MyHomePage.Session";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.IsEssential = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.IdleTimeout = TimeSpan.FromMinutes(5);
+    });
+
+    builder.Services.Configure<WebAuthnOptions>(
+        builder.Configuration.GetSection(WebAuthnOptions.SectionName));
+    builder.Services.AddFido2(fido2 =>
+    {
+        var section = builder.Configuration
+            .GetSection(WebAuthnOptions.SectionName)
+            .Get<WebAuthnOptions>() ?? new WebAuthnOptions();
+        fido2.ServerDomain = section.RpId;
+        fido2.ServerName = section.RpName;
+        fido2.Origins = section.Origins.ToHashSet();
+        fido2.TimestampDriftTolerance = section.TimestampDriftToleranceMs;
+    });
+    builder.Services.AddScoped<IPasskeyStore, JsonPasskeyStore>();
+
     // ── Response compression (Brotli + Gzip) ──────────────────────────────────
     // Compresses HTML/CSS/JS/JSON responses. NOT applied to MP4 (already compressed).
     builder.Services.AddResponseCompression(options =>
@@ -282,6 +310,11 @@ try
         }
     });
 
+    // Session must come before auth so the FIDO2 ceremony session cookie is
+    // available to the /auth/passkey/* endpoints when authentication middleware
+    // runs the authorization filters.
+    app.UseSession();
+
     // Skip auth + antiforgery entirely for scraper traffic — they only hit
     // public preview routes (/og/{id}), no cookies to validate, no forms.
     app.UseWhen(ctx => !IsScraperRequest(ctx), branch =>
@@ -300,6 +333,7 @@ try
     }));
 
     app.MapStravaEndpoints();
+    app.MapPasskeyEndpoints();
     app.MapRazorPages();
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");
