@@ -39,6 +39,13 @@
 
         <section class="card">
             <h2>Recent Strava activities</h2>
+            <p class="hint">
+                Visiting this page automatically imports the 30 most-recent
+                activities as <strong>stumps</strong> — gallery items that
+                carry the training metrics and a category-cover placeholder
+                but no real photos or videos yet. Open an item and use
+                <em>Add media</em> in the editor to attach files later.
+            </p>
             @if (_activitiesError is not null)
             {
                 <p class="error">@_activitiesError</p>
@@ -74,7 +81,7 @@
                 </button>
                 <button class="btn primary" @onclick="SyncRecentAsync" disabled="@_busy">
                     @if (_isSyncing) { <span>Syncing…</span> }
-                    else { <span>📥 Sync all recent (last 30)</span> }
+                    else { <span>📥 Re-import recent (last 30)</span> }
                 </button>
             </div>
             @if (!string.IsNullOrEmpty(_syncSummary))
@@ -130,6 +137,17 @@
     .strava-admin .activity-list .muted { color: #6b7280; font-weight: 400; }
     .strava-admin .status { color: #4a5568; margin-top: 12px; }
     .strava-admin .error { color: #b91c1c; }
+    .strava-admin .hint {
+        background: rgba(59, 130, 246, 0.08);
+        border-left: 3px solid #3b82f6;
+        padding: 10px 14px;
+        border-radius: 0 8px 8px 0;
+        color: #1e3a8a;
+        font-size: 0.92rem;
+        margin: 4px 0 14px;
+    }
+    .strava-admin .hint strong { color: #1d4ed8; }
+    .strava-admin .hint em { color: #4338ca; font-style: normal; font-weight: 500; }
 
     .strava-admin .actions-row {
         display: flex;
@@ -171,7 +189,15 @@
     protected override async Task OnInitializedAsync()
     {
         _tokens = await TokenStore.LoadAsync();
-        if (_tokens is not null) await LoadActivitiesAsync();
+        if (_tokens is not null)
+        {
+            // Auto-import on entry: every visit to /admin/strava sweeps the
+            // 30 most-recent activities into the gallery as stumps. New
+            // ones get a category-cover placeholder; the operator adds
+            // real photos / videos later via the editor. SyncRecentAsync
+            // dedupes by external id so re-running is cheap.
+            await SyncRecentAsync(autoTriggered: true);
+        }
         _loading = false;
     }
 
@@ -195,13 +221,17 @@
         StateHasChanged();
     }
 
-    private async Task SyncRecentAsync()
+    private Task SyncRecentAsync() => SyncRecentAsync(autoTriggered: false);
+
+    private async Task SyncRecentAsync(bool autoTriggered)
     {
         if (_isSyncing) return;
 
         _isSyncing = true;
         _busy = true;
-        _syncSummary = "Syncing recent activities…";
+        _syncSummary = autoTriggered
+            ? "Auto-importing recent activities as stumps…"
+            : "Syncing recent activities…";
         _syncError = false;
         StateHasChanged();
 
@@ -212,9 +242,13 @@
             if (result.IsSuccess && result.Value is not null)
             {
                 var summary = result.Value;
-                _syncSummary =
-                    $"✅ Inspected {summary.Inspected}, imported {summary.Imported}, " +
-                    $"skipped {summary.Skipped} already in gallery, failed {summary.Failed}.";
+                var verb = autoTriggered ? "Auto-imported" : "Imported";
+                _syncSummary = summary.Imported > 0
+                    ? $"✅ {verb} {summary.Imported} new stump(s). " +
+                      $"Inspected {summary.Inspected}, skipped {summary.Skipped} already in gallery, " +
+                      $"failed {summary.Failed}. Open one and use \"Add media\" to attach photos / videos."
+                    : $"Nothing new — inspected {summary.Inspected}, " +
+                      $"all {summary.Skipped} already in gallery.";
 
                 // Refresh the activity list so the imported ones are visible
                 await LoadActivitiesAsync();

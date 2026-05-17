@@ -342,6 +342,119 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task SyncRecentAsync_NewActivities_AreImportedAsStumps()
+    {
+        // "Stump" = placeholder gallery item with training data + cover
+        // image but no real user media. Verify the new item has no
+        // user-uploaded media beyond the optional category cover.
+        ArrangeValidTokens();
+        _videos.GetAllAsync().Returns(Array.Empty<Video>());
+        _videos.GenerateNextId().Returns(50);
+
+        _api.ListAthleteActivitiesAsync(
+                Arg.Any<string>(), 1, 30, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<IReadOnlyList<StravaActivity>>.Success(new List<StravaActivity>
+            {
+                new()
+                {
+                    Id = 555,
+                    Type = "Run",
+                    SportType = "Run",
+                    Visibility = "everyone",
+                    StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                    MovingTimeSeconds = 1800,
+                    DistanceMeters = 5000
+                }
+            }));
+
+        _api.GetActivityAsync(Arg.Any<string>(), 555, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 555,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone",
+                StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 1800,
+                DistanceMeters = 5000
+            }));
+
+        Video? saved = null;
+        await _videos.GetAllAsync(); // priming
+        _videos.SaveAsync(Arg.Do<Video>(v => saved = v))
+            .Returns(Task.CompletedTask);
+
+        var result = await _sync.SyncRecentAsync();
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value!.Imported, Is.EqualTo(1));
+        Assert.That(saved, Is.Not.Null,
+            "SyncRecentAsync should have saved exactly one new gallery item");
+        Assert.That(saved!.Training, Is.Not.Null,
+            "Stump must carry the Strava training metrics");
+        Assert.That(saved.Training!.Source, Is.EqualTo(TrainingSource.Strava));
+        Assert.That(saved.Training.ExternalId, Is.EqualTo("555"));
+        // Cover-image seeding via IFileStorageService is mocked to return 0
+        // in the SetUp, so the stump correctly has no media attached and is
+        // ready for the operator to add real files later.
+        Assert.That(saved.Media, Is.Empty);
+        Assert.That(saved.FileName, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public async Task SyncRecentAsync_TwoVisits_DedupesOnSecondPass()
+    {
+        // Auto-import is wired to the /admin/strava page entry, so re-
+        // visiting the page must NOT create duplicate stumps for activities
+        // already in the gallery.
+        ArrangeValidTokens();
+
+        _api.ListAthleteActivitiesAsync(
+                Arg.Any<string>(), 1, 30, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<IReadOnlyList<StravaActivity>>.Success(new List<StravaActivity>
+            {
+                new() { Id = 101, Type = "Run", SportType = "Run", Visibility = "everyone" }
+            }));
+
+        _api.GetActivityAsync(Arg.Any<string>(), 101, Arg.Any<CancellationToken>())
+            .Returns(OperationResult<StravaActivity>.Success(new StravaActivity
+            {
+                Id = 101,
+                Type = "Run",
+                SportType = "Run",
+                Visibility = "everyone",
+                StartDate = new DateTime(2026, 5, 15, 6, 0, 0, DateTimeKind.Utc),
+                MovingTimeSeconds = 1800,
+                DistanceMeters = 5000
+            }));
+
+        // First pass: no existing items.
+        _videos.GetAllAsync().Returns(Array.Empty<Video>());
+        _videos.GenerateNextId().Returns(60);
+        var firstResult = await _sync.SyncRecentAsync();
+
+        Assert.That(firstResult.Value!.Imported, Is.EqualTo(1));
+        Assert.That(firstResult.Value.Skipped, Is.EqualTo(0));
+
+        // Second pass: pretend the import landed in the gallery.
+        var existing = Video.Create(
+            id: 60, title: "Already there", description: "", fileName: "",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+        existing.Training = new TrainingData
+        {
+            Source = TrainingSource.Strava,
+            ExternalId = "101"
+        };
+        _videos.GetAllAsync().Returns(new[] { existing });
+
+        var secondResult = await _sync.SyncRecentAsync();
+
+        Assert.That(secondResult.Value!.Imported, Is.EqualTo(0),
+            "Activity 101 must not be re-imported on the second page visit");
+        Assert.That(secondResult.Value.Skipped, Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task SyncRecentAsync_PrivacyFilterEnforced_PrivateActivitiesCountedAsFailures()
     {
         ArrangeValidTokens();
