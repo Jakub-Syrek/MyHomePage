@@ -57,7 +57,7 @@
         let flakes = [];
         function flakeCount() {
             const area = width * height;
-            return Math.min(360, Math.max(120, Math.round(area / 6500)));
+            return Math.min(650, Math.max(220, Math.round(area / 3600)));
         }
 
         function resize() {
