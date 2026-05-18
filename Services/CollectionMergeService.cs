@@ -91,6 +91,7 @@ public sealed class CollectionMergeService : ICollectionMergeService
             var merged = BuildMergedVideo(
                 newId, title, description, sources, mergedMedia, totalSize, trainingAggregate);
             await _repository.SaveAsync(merged);
+            await GenerateMergedOgPreviewAsync(merged);
 
             _logger.LogInformation(
                 "Created multi-sport collection {NewId} aggregating {SourceCount} sources [{SourceIds}] — sources retained",
@@ -104,6 +105,37 @@ public sealed class CollectionMergeService : ICollectionMergeService
                 string.Join(",", sourceIds), newId);
             await _storage.DeleteVideoDirectoryAsync(newId);
             return OperationResult<int>.Failure($"Merge failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Renders the Facebook / Open Graph preview for a freshly-merged
+    /// multi-sport master. Picks the first image media file as the
+    /// source crop, layers the aggregated stats overlay (distance, time,
+    /// pace, kcal, elevation) on top. Best-effort: failures stay silent
+    /// so a transient ImageSharp / font problem can't roll back the
+    /// merge that already succeeded.
+    /// </summary>
+    private async Task GenerateMergedOgPreviewAsync(Video merged)
+    {
+        try
+        {
+            var firstImage = merged.GetAllMedia()
+                .FirstOrDefault(m => m.Type == MediaType.Image);
+            if (firstImage is null) return;
+
+            var dir = _storage.GetVideoDirectoryPath(merged.Id);
+            var sourcePath = Path.Combine(dir, firstImage.FileName);
+            if (!File.Exists(sourcePath)) return;
+
+            var ogPath = Path.Combine(dir, "og.jpg");
+            var overlay = merged.ToOgOverlay();
+            await _storage.GenerateOgImageAsync(sourcePath, ogPath, overlay: overlay);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not render OG preview for merged collection {Id}", merged.Id);
         }
     }
 

@@ -82,6 +82,19 @@ public interface IStravaSyncService
     /// <param name="cancellationToken">Token used to cancel the sweep.</param>
     /// <returns>Number of stumps refreshed.</returns>
     Task<int> RefreshStumpCoversAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Regenerates the 1.91:1 Facebook / Open Graph preview (with stats
+    /// overlay) for every gallery item that has at least one image and a
+    /// usable overlay payload. Idempotent — overwriting a freshly-correct
+    /// og.jpg with the same crop is a no-op write. Run this after
+    /// shipping a change to the overlay renderer to bring stale og.jpg
+    /// files (uploaded before the renderer existed) up to the current
+    /// look.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the sweep.</param>
+    /// <returns>Number of items whose og.jpg was rewritten.</returns>
+    Task<int> RefreshOgPreviewsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome counters returned by <see cref="IStravaSyncService.SyncRecentAsync"/>.</summary>

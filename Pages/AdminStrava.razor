@@ -98,6 +98,10 @@
                     @if (_isRefreshingCovers) { <span>Refreshing…</span> }
                     else { <span>🖼️ Refresh stump covers</span> }
                 </button>
+                <button class="btn secondary" @onclick="RefreshOgPreviewsAsync" disabled="@_busy">
+                    @if (_isRefreshingOg) { <span>Refreshing OG…</span> }
+                    else { <span>📘 Refresh Facebook previews (with stats)</span> }
+                </button>
             </div>
             @if (!string.IsNullOrEmpty(_syncSummary))
             {
@@ -363,6 +367,7 @@
 
     private bool _isSyncing;
     private bool _isRefreshingCovers;
+    private bool _isRefreshingOg;
     private string? _syncSummary;
     private bool _syncError;
     private bool _autoSyncFired;
@@ -401,12 +406,40 @@
         try
         {
             await Sync.RefreshStumpCoversAsync();
+            // Same idea for Facebook previews — items that already had
+            // an og.jpg from before the stats-overlay renderer existed
+            // get their file rewritten with the current layout.
+            await Sync.RefreshOgPreviewsAsync();
         }
         catch (Exception ex)
         {
             _status = $"Cover refresh failed: {ex.Message}";
         }
         StateHasChanged();
+    }
+
+    private async Task RefreshOgPreviewsAsync()
+    {
+        if (_isRefreshingOg) return;
+        _isRefreshingOg = true;
+        _busy = true;
+        _status = "Refreshing Facebook previews…";
+        StateHasChanged();
+        try
+        {
+            var refreshed = await Sync.RefreshOgPreviewsAsync();
+            _status = $"✅ Regenerated Facebook preview for {refreshed} item(s).";
+        }
+        catch (Exception ex)
+        {
+            _status = $"OG refresh failed: {ex.Message}";
+        }
+        finally
+        {
+            _isRefreshingOg = false;
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task RefreshCoversAsync()

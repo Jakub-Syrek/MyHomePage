@@ -821,6 +821,70 @@ public sealed class StravaSyncServiceTests
     }
 
     [Test]
+    public async Task RefreshOgPreviewsAsync_RegeneratesOgForEveryItemWithAnImage()
+    {
+        // Multi-sport masters and regular uploads carry user media (not
+        // stumps) — they were untouched by the stump-cover sweep but
+        // their og.jpg also needs the stats overlay refresh. This sweep
+        // covers every item with an image, regardless of training.
+        var stump = MakeStravaStump(id: 10, externalId: "111");
+        stump.Category = VideoCategories.Running;
+
+        var master = Video.Create(
+            id: 11, title: "Multi-sport — May 18", description: "",
+            fileName: "photo-01.jpg", location: null,
+            category: VideoCategories.MultiSport, fileSizeBytes: 0);
+        master.Media = new List<MediaItem>
+        {
+            MediaItem.Create("photo-01.jpg", MediaType.Image, 1234, 0)
+        };
+
+        var videoOnly = Video.Create(
+            id: 12, title: "Video", description: "", fileName: "clip.mp4",
+            location: null, category: VideoCategories.Running, fileSizeBytes: 0);
+        videoOnly.Media = new List<MediaItem>
+        {
+            MediaItem.Create("clip.mp4", MediaType.Video, 5_000_000, 0)
+        };
+
+        _videos.GetAllAsync().Returns(new[] { stump, master, videoOnly });
+        _storage.GetVideoDirectoryPath(Arg.Any<int>())
+            .Returns(call => $"/tmp/v/{call.Arg<int>()}");
+        // Pretend every source image is on disk — production code uses
+        // File.Exists which we can't easily intercept here, so just
+        // exercise the iteration and overlay-passing logic.
+        _storage.GenerateOgImageAsync(
+                Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<(double X, double Y)?>(), Arg.Any<OgOverlay?>())
+            .Returns(200L);
+
+        // Spoof File.Exists by writing actual sentinel files at the
+        // paths Storage hands out for the two items with images.
+        Directory.CreateDirectory("/tmp/v/10");
+        Directory.CreateDirectory("/tmp/v/11");
+        Directory.CreateDirectory("/tmp/v/12");
+        try
+        {
+            File.WriteAllBytes("/tmp/v/10/cover.jpg", new byte[1]);
+            File.WriteAllBytes("/tmp/v/11/photo-01.jpg", new byte[1]);
+            File.WriteAllBytes("/tmp/v/12/clip.mp4", new byte[1]);
+
+            var refreshed = await _sync.RefreshOgPreviewsAsync();
+
+            Assert.That(refreshed, Is.EqualTo(2),
+                "Both the stump's cover and the master's first photo should produce an OG image");
+            // Video-only item has no image media -> no OG generation call.
+            await _storage.DidNotReceive().GenerateOgImageAsync(
+                Arg.Is<string>(p => p.EndsWith("clip.mp4", StringComparison.Ordinal)),
+                Arg.Any<string>(), Arg.Any<(double X, double Y)?>(), Arg.Any<OgOverlay?>());
+        }
+        finally
+        {
+            try { Directory.Delete("/tmp/v", recursive: true); } catch { }
+        }
+    }
+
+    [Test]
     public async Task RefreshStumpCoversAsync_ReseedsCoverForEveryStumpUsingItsCategory()
     {
         // Each stored item picks its own bg asset based on its Category,

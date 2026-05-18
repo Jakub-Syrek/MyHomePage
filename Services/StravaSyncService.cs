@@ -327,6 +327,42 @@ public sealed class StravaSyncService : IStravaSyncService
         }
     }
 
+    /// <inheritdoc />
+    public async Task<int> RefreshOgPreviewsAsync(CancellationToken cancellationToken = default)
+    {
+        await ImportLock.WaitAsync(cancellationToken);
+        try
+        {
+            var all = await _videos.GetAllAsync();
+            var refreshed = 0;
+            foreach (var video in all)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var firstImage = video.GetAllMedia()
+                    .FirstOrDefault(m => m.Type == MediaType.Image);
+                if (firstImage is null) continue;
+
+                var dir = _storage.GetVideoDirectoryPath(video.Id);
+                var sourcePath = Path.Combine(dir, firstImage.FileName);
+                if (!File.Exists(sourcePath)) continue;
+
+                var ogPath = Path.Combine(dir, "og.jpg");
+                var overlay = video.ToOgOverlay();
+                var size = await _storage.GenerateOgImageAsync(
+                    sourcePath, ogPath, overlay: overlay);
+                if (size > 0) refreshed++;
+            }
+            _logger.LogInformation(
+                "OG preview sweep: {Refreshed} of {Total} items refreshed",
+                refreshed, all.Count);
+            return refreshed;
+        }
+        finally
+        {
+            ImportLock.Release();
+        }
+    }
+
     /// <summary>
     /// A "stump" is a Strava-imported gallery item that the operator has
     /// not yet attached real photos / videos to — its media list is
