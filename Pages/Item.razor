@@ -18,13 +18,36 @@
     // the source otherwise, which routinely chops off heads and hands.
     // Falls back to the first image (original aspect) and finally to a
     // static category bg if the item has no media at all.
+    //
+    // We append the file's last-write timestamp as a "v=" query string
+    // so the URL changes the moment the operator re-crops or replaces
+    // the image. Without this Facebook (and every other OG scraper)
+    // keeps serving a copy that was scraped against the old file path
+    // — the same URL, so they think they're already current.
     var ogJpgPath = Path.Combine(FileStorage.GetVideoDirectoryPath(Id), "og.jpg");
     var hasDedicatedOgImage = File.Exists(ogJpgPath);
-    var ogImageUrl = hasDedicatedOgImage
-        ? Nav.ToAbsoluteUri($"/videos/{Id}/og.jpg").ToString()
-        : firstImage is not null
-            ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstImage.FileName}").ToString()
-            : Nav.ToAbsoluteUri("/images/mountains-bg.jpg").ToString();
+    string ogImageUrl;
+    if (hasDedicatedOgImage)
+    {
+        var ogStamp = new DateTimeOffset(File.GetLastWriteTimeUtc(ogJpgPath))
+            .ToUnixTimeSeconds();
+        ogImageUrl = Nav.ToAbsoluteUri($"/videos/{Id}/og.jpg?v={ogStamp}").ToString();
+    }
+    else if (firstImage is not null)
+    {
+        var firstImagePath = Path.Combine(
+            FileStorage.GetVideoDirectoryPath(Id), firstImage.FileName);
+        var fallbackStamp = File.Exists(firstImagePath)
+            ? new DateTimeOffset(File.GetLastWriteTimeUtc(firstImagePath))
+                .ToUnixTimeSeconds()
+            : 0;
+        ogImageUrl = Nav.ToAbsoluteUri(
+            $"/videos/{Id}/{firstImage.FileName}?v={fallbackStamp}").ToString();
+    }
+    else
+    {
+        ogImageUrl = Nav.ToAbsoluteUri("/images/mountains-bg.jpg").ToString();
+    }
     var ogVideoUrl = firstVideo is not null
         ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstVideo.FileName}").ToString()
         : null;
