@@ -635,8 +635,14 @@
             var sourcePath = Path.Combine(dir, firstImage.FileName);
             var ogPath = Path.Combine(dir, "og.jpg");
 
+            // Re-fetch the freshest video so any field the operator just
+            // saved (title, location, training) is reflected in the
+            // overlay payload. Falls back to the in-memory copy.
+            var fresh = await VideoService.GetVideoByIdAsync(video.Id) ?? video;
+            var overlay = fresh.ToOgOverlay();
+
             var size = await FileStorage.GenerateOgImageAsync(
-                sourcePath, ogPath, (_ogFocusX, _ogFocusY));
+                sourcePath, ogPath, (_ogFocusX, _ogFocusY), overlay);
 
             if (size > 0)
             {

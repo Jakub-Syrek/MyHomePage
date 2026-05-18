@@ -29,9 +29,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
 # Install FFmpeg (apt is much faster than the Xabe.FFmpeg.Downloader)
-# Also install curl for healthcheck
+# Also install curl for healthcheck and DejaVu fonts so ImageSharp.Drawing
+# can render text on Open Graph preview overlays (SystemFonts.TryGet picks
+# DejaVu Sans first; without the package the container ships zero fonts
+# and the OG bar would silently fall back to the plain crop).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg curl \
+    && apt-get install -y --no-install-recommends ffmpeg curl fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && ffmpeg -version
 

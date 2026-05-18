@@ -1,9 +1,13 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Options;
 using MyHomePage.Abstractions;
 using MyHomePage.Options;
+using SixLabors.Fonts;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
 namespace MyHomePage.Services;
@@ -134,11 +138,32 @@ public sealed class FileStorageService : IFileStorageService
     private const int OgHeight = 630;
     private const double OgAspect = (double)OgWidth / OgHeight; // 1.9047...
 
+    /// <summary>
+    /// Lazily-resolved system font used for the OG stats overlay. We pick
+    /// the first available match from a short whitelist (DejaVu first,
+    /// because the Dockerfile installs fonts-dejavu-core specifically for
+    /// this code path). When no system font is available the overlay is
+    /// silently skipped — the plain crop still ships, just without text.
+    /// </summary>
+    private static readonly Lazy<FontFamily?> _ogFont = new(() =>
+    {
+        foreach (var name in new[]
+        {
+            "DejaVu Sans", "Inter", "Roboto", "Arial",
+            "Liberation Sans", "Segoe UI", "Helvetica"
+        })
+        {
+            if (SystemFonts.TryGet(name, out var family)) return family;
+        }
+        return SystemFonts.Families.FirstOrDefault();
+    });
+
     /// <inheritdoc />
     public async Task<long> GenerateOgImageAsync(
         string sourceImagePath,
         string targetOgPath,
-        (double X, double Y)? cropFocus = null)
+        (double X, double Y)? cropFocus = null,
+        OgOverlay? overlay = null)
     {
         if (!File.Exists(sourceImagePath))
         {
@@ -164,14 +189,19 @@ public sealed class FileStorageService : IFileStorageService
                 });
             });
 
+            if (overlay is not null)
+            {
+                DrawOverlay(source, overlay);
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(targetOgPath)!);
             var encoder = new JpegEncoder { Quality = 88 };
             await source.SaveAsJpegAsync(targetOgPath, encoder);
 
             var size = new FileInfo(targetOgPath).Length;
             _logger.LogInformation(
-                "OG image generated {Path} ({KB} KB, focus {X:F2}/{Y:F2})",
-                targetOgPath, size / 1024, focus.X, focus.Y);
+                "OG image generated {Path} ({KB} KB, focus {X:F2}/{Y:F2}, overlay {HasOverlay})",
+                targetOgPath, size / 1024, focus.X, focus.Y, overlay is not null);
             return size;
         }
         catch (Exception ex)
@@ -180,6 +210,146 @@ public sealed class FileStorageService : IFileStorageService
                 "OG image generation failed for {Source}", sourceImagePath);
             return 0;
         }
+    }
+
+    /// <summary>
+    /// Paints a translucent bottom strip with the supplied training /
+    /// metadata. Layout: top row = activity label + date / location,
+    /// bottom row = up to four big-number stats separated by dots.
+    /// Silently no-ops when no system font is available so we still
+    /// produce a clean cropped image instead of throwing.
+    /// </summary>
+    private void DrawOverlay(Image image, OgOverlay overlay)
+    {
+        var family = _ogFont.Value;
+        if (family is null)
+        {
+            _logger.LogDebug("No system font available — OG overlay text skipped");
+            return;
+        }
+
+        var titleFont = family.Value.CreateFont(28, FontStyle.Regular);
+        var statFont = family.Value.CreateFont(46, FontStyle.Bold);
+        var statLabelFont = family.Value.CreateFont(18, FontStyle.Regular);
+
+        var stripHeight = 170;
+        var stripTop = OgHeight - stripHeight;
+
+        image.Mutate(ctx =>
+        {
+            // Translucent dark gradient strip — solid black at 70 % alpha
+            // is good enough at this size; a true gradient would need
+            // SixLabors.ImageSharp.Drawing.LinearGradientBrush which is
+            // overkill for the readability boost it gives here.
+            ctx.Fill(
+                Color.FromRgba(0, 0, 0, 175),
+                new RectangleF(0, stripTop, OgWidth, stripHeight));
+
+            var marginLeft = 36f;
+            var marginRight = 36f;
+
+            // ── Top row: activity label (left) + date / location (right)
+            var topRowY = stripTop + 14f;
+            var topLabelParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(overlay.ActivityLabel))
+                topLabelParts.Add(overlay.ActivityLabel!);
+            if (!string.IsNullOrWhiteSpace(overlay.Location))
+                topLabelParts.Add(overlay.Location!);
+            var topLabel = string.Join("  ·  ", topLabelParts);
+            if (!string.IsNullOrEmpty(topLabel))
+            {
+                ctx.DrawText(
+                    topLabel, titleFont, Color.FromRgba(255, 255, 255, 235),
+                    new PointF(marginLeft, topRowY));
+            }
+            if (overlay.CapturedAt is DateTime captured)
+            {
+                var dateText = captured.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+                var dateOptions = new RichTextOptions(titleFont)
+                {
+                    Origin = new PointF(OgWidth - marginRight, topRowY),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                ctx.DrawText(dateOptions, dateText, Color.FromRgba(255, 255, 255, 200));
+            }
+
+            // ── Stats row: up to 4 big numbers separated by a thin divider
+            var statY = stripTop + 70f;
+            var stats = BuildStatsList(overlay).Take(4).ToList();
+            if (stats.Count == 0) return;
+
+            var slotWidth = (OgWidth - marginLeft - marginRight) / stats.Count;
+            for (var i = 0; i < stats.Count; i++)
+            {
+                var stat = stats[i];
+                var slotCentre = marginLeft + slotWidth * (i + 0.5f);
+
+                var valueOptions = new RichTextOptions(statFont)
+                {
+                    Origin = new PointF(slotCentre, statY),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                ctx.DrawText(valueOptions, stat.Value, Color.White);
+
+                var labelOptions = new RichTextOptions(statLabelFont)
+                {
+                    Origin = new PointF(slotCentre, statY + 56f),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                ctx.DrawText(labelOptions, stat.Label, Color.FromRgba(255, 255, 255, 195));
+
+                // Divider between slots (skip after the last).
+                if (i < stats.Count - 1)
+                {
+                    var dividerX = marginLeft + slotWidth * (i + 1);
+                    ctx.Fill(
+                        Color.FromRgba(255, 255, 255, 70),
+                        new RectangleF(
+                            dividerX, statY + 4f, 1f, 78f));
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Picks the four most informative stat slots out of the overlay
+    /// payload in a fixed priority order so the look stays consistent
+    /// across activity types.
+    /// </summary>
+    private static IEnumerable<(string Value, string Label)> BuildStatsList(OgOverlay overlay)
+    {
+        if (overlay.DistanceMeters is > 0)
+            yield return (FormatKm(overlay.DistanceMeters.Value), "DISTANCE");
+        if (overlay.Duration is { } duration && duration > TimeSpan.Zero)
+            yield return (FormatDuration(duration), "TIME");
+        if (overlay.PaceSecondsPerKm is > 0)
+            yield return (FormatPace(overlay.PaceSecondsPerKm.Value), "PACE");
+        if (overlay.Calories is > 0)
+            yield return (overlay.Calories.Value.ToString(CultureInfo.InvariantCulture), "KCAL");
+        if (overlay.ElevationGainMeters is > 0)
+            yield return ($"{overlay.ElevationGainMeters.Value:F0} m", "ELEVATION");
+    }
+
+    private static string FormatKm(double meters) =>
+        meters >= 1000
+            ? $"{(meters / 1000):F1} km"
+            : $"{meters:F0} m";
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}:{duration.Minutes:D2}";
+        return $"{duration.Minutes}:{duration.Seconds:D2}";
+    }
+
+    private static string FormatPace(double secondsPerKm)
+    {
+        var minutes = (int)(secondsPerKm / 60);
+        var seconds = (int)Math.Round(secondsPerKm - minutes * 60);
+        return $"{minutes}:{seconds:D2}/km";
     }
 
     /// <summary>

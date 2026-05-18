@@ -70,9 +70,50 @@ public interface IFileStorageService
     /// of the crop window. <c>null</c> defaults to (0.5, 0.5) (geometric
     /// centre).
     /// </param>
+    /// <param name="overlay">
+    /// Optional stats payload. When supplied (and a system font is
+    /// available), the cropped image is composited with a translucent
+    /// bottom strip carrying the activity label, distance, duration,
+    /// pace, calories etc. so the Facebook preview shows the numbers
+    /// without the operator having to type them into the post body.
+    /// </param>
     /// <returns>Byte size of the generated OG image, or 0 on failure.</returns>
     Task<long> GenerateOgImageAsync(
         string sourceImagePath,
         string targetOgPath,
-        (double X, double Y)? cropFocus = null);
+        (double X, double Y)? cropFocus = null,
+        OgOverlay? overlay = null);
+}
+
+/// <summary>
+/// Optional stats panel rendered onto the bottom of an Open Graph image.
+/// Every field is nullable — only populated entries are drawn so the
+/// strip stays compact for plain photo uploads while still surfacing the
+/// full training summary for Strava-imported items.
+/// </summary>
+public sealed record OgOverlay
+{
+    /// <summary>Activity-type display label (e.g. "Run", "Ride", "Mountains").</summary>
+    public string? ActivityLabel { get; init; }
+
+    /// <summary>Distance covered, in metres. Rendered as kilometres.</summary>
+    public double? DistanceMeters { get; init; }
+
+    /// <summary>Moving time. Rendered as <c>HH:MM</c> or <c>MM:SS</c>.</summary>
+    public TimeSpan? Duration { get; init; }
+
+    /// <summary>Pace as seconds per kilometre. Rendered as <c>m:ss/km</c>.</summary>
+    public double? PaceSecondsPerKm { get; init; }
+
+    /// <summary>Total calories burned during the session.</summary>
+    public int? Calories { get; init; }
+
+    /// <summary>Total elevation gain, in metres.</summary>
+    public double? ElevationGainMeters { get; init; }
+
+    /// <summary>Date the activity / photo was captured.</summary>
+    public DateTime? CapturedAt { get; init; }
+
+    /// <summary>Free-form location label (e.g. "Kraków, Poland").</summary>
+    public string? Location { get; init; }
 }

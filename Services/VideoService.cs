@@ -101,12 +101,22 @@ public sealed class VideoService : IVideoService
                     // First image of the upload becomes the Facebook / OG
                     // preview source. A 1200x630 centre-crop is written to
                     // og.jpg so scrapers display a deterministic preview
-                    // instead of running their own crop heuristic.
+                    // instead of running their own crop heuristic. The
+                    // overlay carries any metadata we have at upload time
+                    // (date + location); the editor's manual crop can
+                    // re-render later with training stats once a Strava
+                    // import attaches them.
                     if (imageCounter == 1)
                     {
                         var ogPath = Path.Combine(
                             _storage.GetVideoDirectoryPath(videoId), "og.jpg");
-                        await _storage.GenerateOgImageAsync(savedPath, ogPath);
+                        var overlay = new OgOverlay
+                        {
+                            ActivityLabel = request.Category,
+                            Location = request.Location,
+                            CapturedAt = earliestCapture ?? DateTime.UtcNow
+                        };
+                        await _storage.GenerateOgImageAsync(savedPath, ogPath, overlay: overlay);
                     }
 
                     if (latitude is null) // try GPS from this photo
@@ -394,6 +404,12 @@ public sealed class VideoService : IVideoService
         MediaItem.DetectType(fileName) == MediaType.Image;
 
     /// <summary>
+    /// Convenience wrapper around <see cref="OgOverlayExtensions.ToOgOverlay"/>
+    /// kept for backwards compatibility with internal call-sites.
+    /// </summary>
+    internal static OgOverlay? BuildOverlay(Video video) => video.ToOgOverlay();
+
+    /// <summary>
     /// Reads the capture timestamp from the given file and remembers the
     /// earliest one across the whole upload. The collection's
     /// <see cref="Video.UploadedAt"/> is then anchored to that timestamp
@@ -443,12 +459,17 @@ public sealed class VideoService : IVideoService
         // First photo appended to an item that did not yet have a real
         // photo becomes the new OG preview source. We always regenerate
         // og.jpg from the freshest first image — easier to reason about
-        // than tracking which photo "owns" the preview.
+        // than tracking which photo "owns" the preview. Overlay payload
+        // is rebuilt from the up-to-date video record so any Strava
+        // training data attached after the upload makes it onto the
+        // preview without an extra round-trip.
         if (photoIndex == 1)
         {
             var ogPath = Path.Combine(
                 _storage.GetVideoDirectoryPath(videoId), "og.jpg");
-            await _storage.GenerateOgImageAsync(savedPath, ogPath);
+            var video = await _repository.GetByIdAsync(videoId);
+            var overlay = video?.ToOgOverlay();
+            await _storage.GenerateOgImageAsync(savedPath, ogPath, overlay: overlay);
         }
 
         _logger.LogInformation(

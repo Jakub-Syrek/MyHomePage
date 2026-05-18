@@ -132,6 +132,89 @@ public sealed class FileStorageServiceOgTests
     }
 
     [Test]
+    public async Task GenerateOgImageAsync_WithOverlay_StripIsVisibleAndDarkAtBottom()
+    {
+        // Solid blue source — once the overlay strip lands, the bottom
+        // band must be visibly darker than the top because the bar is
+        // semi-transparent black. We probe a pixel near the top (full
+        // blue) and a pixel near the bottom (overlay-darkened).
+        var sourcePath = Path.Combine(_tempStorageRoot, "blue.jpg");
+        await WriteSolidJpegAsync(sourcePath, width: 4000, height: 2200, color: Color.SkyBlue);
+
+        var ogPath = Path.Combine(_tempStorageRoot, "og.jpg");
+        var overlay = new OgOverlay
+        {
+            ActivityLabel = "Run",
+            DistanceMeters = 12345,
+            Duration = TimeSpan.FromMinutes(54),
+            PaceSecondsPerKm = 4 * 60 + 22, // 4:22 /km
+            Calories = 612,
+            ElevationGainMeters = 142,
+            Location = "Kraków, Poland",
+            CapturedAt = new DateTime(2026, 5, 17, 9, 0, 0, DateTimeKind.Utc)
+        };
+        var size = await _service.GenerateOgImageAsync(
+            sourcePath, ogPath, cropFocus: (0.5, 0.5), overlay: overlay);
+
+        Assert.That(size, Is.GreaterThan(0));
+        using var image = await Image.LoadAsync<Rgba32>(ogPath);
+        Assert.That(image.Width, Is.EqualTo(1200));
+        Assert.That(image.Height, Is.EqualTo(630));
+
+        var topSample = image[image.Width / 2, 80];
+        // Sample at the very last pixel row, two pixels from the left
+        // edge — guaranteed to be inside the dark strip and away from
+        // any text glyph painted in the stats slots.
+        var bottomSample = image[2, image.Height - 2];
+
+        Assert.That(topSample.B, Is.GreaterThan(150), "top sample should still be sky-blue dominant");
+        var topLuma = 0.299 * topSample.R + 0.587 * topSample.G + 0.114 * topSample.B;
+        var bottomLuma = 0.299 * bottomSample.R + 0.587 * bottomSample.G + 0.114 * bottomSample.B;
+        Assert.That(bottomLuma, Is.LessThan(topLuma - 80),
+            "overlay strip should darken the bottom of the image by a clear margin");
+    }
+
+    [Test]
+    public async Task GenerateOgImageAsync_OverlayNull_NoStripBottomMatchesTop()
+    {
+        // Sanity check: without an overlay, the bottom of the image
+        // should be just as bright as the top (no strip drawn).
+        var sourcePath = Path.Combine(_tempStorageRoot, "blue.jpg");
+        await WriteSolidJpegAsync(sourcePath, width: 4000, height: 2200, color: Color.SkyBlue);
+
+        var ogPath = Path.Combine(_tempStorageRoot, "og.jpg");
+        await _service.GenerateOgImageAsync(sourcePath, ogPath);
+
+        using var image = await Image.LoadAsync<Rgba32>(ogPath);
+        var topSample = image[image.Width / 2, 80];
+        var bottomSample = image[image.Width / 2, image.Height - 80];
+
+        var topLuma = 0.299 * topSample.R + 0.587 * topSample.G + 0.114 * topSample.B;
+        var bottomLuma = 0.299 * bottomSample.R + 0.587 * bottomSample.G + 0.114 * bottomSample.B;
+        Assert.That(Math.Abs(topLuma - bottomLuma), Is.LessThan(20),
+            "without an overlay the bottom should be the same brightness as the top");
+    }
+
+    [Test]
+    public async Task GenerateOgImageAsync_OverlayEmpty_StillRendersStrip()
+    {
+        // Overlay with all fields null should still darken the bottom
+        // (the strip is drawn even if no text lands on it) — the contract
+        // is "any overlay value triggers the band".
+        var sourcePath = Path.Combine(_tempStorageRoot, "blue.jpg");
+        await WriteSolidJpegAsync(sourcePath, width: 4000, height: 2200, color: Color.SkyBlue);
+
+        var ogPath = Path.Combine(_tempStorageRoot, "og.jpg");
+        await _service.GenerateOgImageAsync(sourcePath, ogPath, overlay: new OgOverlay());
+
+        using var image = await Image.LoadAsync<Rgba32>(ogPath);
+        var bottomSample = image[2, image.Height - 2];
+        var bottomLuma = 0.299 * bottomSample.R + 0.587 * bottomSample.G + 0.114 * bottomSample.B;
+        Assert.That(bottomLuma, Is.LessThan(160),
+            "overlay strip should still darken the bottom even when no text fields are populated");
+    }
+
+    [Test]
     public async Task GenerateOgImageAsync_FocusOutOfRange_ClampedAndStillProduces1200x630()
     {
         var sourcePath = Path.Combine(_tempStorageRoot, "landscape.jpg");

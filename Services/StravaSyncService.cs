@@ -168,7 +168,7 @@ public sealed class StravaSyncService : IStravaSyncService
         // editor, mid-migration crash, schema change). The seed is
         // cheap and idempotent: overwriting the file with the right
         // category's bg is a no-op if it was already correct.
-        var newCoverSize = await SeedCoverAsync(existing.Id, freshCategory);
+        var newCoverSize = await CopyCoverOnlyAsync(existing.Id, freshCategory);
         if (newCoverSize > 0)
         {
             existing.Media = new List<MediaItem>
@@ -177,6 +177,9 @@ public sealed class StravaSyncService : IStravaSyncService
             };
             existing.FileName = CoverFileName;
             existing.FileSizeBytes = newCoverSize;
+            // Regenerate og.jpg with the up-to-date stats overlay now
+            // that Training is set and the cover is in the right place.
+            await GenerateOgWithOverlayAsync(existing);
         }
         else if (categoryChanged)
         {
@@ -298,7 +301,7 @@ public sealed class StravaSyncService : IStravaSyncService
             foreach (var stump in stumps)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var coverSize = await SeedCoverAsync(stump.Id, stump.Category);
+                var coverSize = await CopyCoverOnlyAsync(stump.Id, stump.Category);
                 if (coverSize <= 0) continue;
 
                 stump.Media = new List<MediaItem>
@@ -308,6 +311,8 @@ public sealed class StravaSyncService : IStravaSyncService
                 stump.FileName = CoverFileName;
                 stump.FileSizeBytes = coverSize;
                 await _videos.SaveAsync(stump);
+                // Stats-aware og.jpg refresh after the cover is in place.
+                await GenerateOgWithOverlayAsync(stump);
                 refreshed++;
             }
 
@@ -458,8 +463,9 @@ public sealed class StravaSyncService : IStravaSyncService
 
         // Seed a real cover.jpg by copying the category's static background
         // image so the placeholder renders as a proper photo tile instead
-        // of an empty video stub.
-        var coverSize = await SeedCoverAsync(videoId, category);
+        // of an empty video stub. og.jpg is generated AFTER the video has
+        // its Training set so the stats overlay can pull from it.
+        var coverSize = await CopyCoverOnlyAsync(videoId, category);
         var mediaItems = coverSize > 0
             ? new List<MediaItem>
             {
@@ -485,6 +491,7 @@ public sealed class StravaSyncService : IStravaSyncService
         video.UploadedAt = training.StartTimeUtc;
         video.Training = training;
         await _videos.SaveAsync(video);
+        await GenerateOgWithOverlayAsync(video);
         _logger.LogInformation(
             "Created gallery item {VideoId} from Strava activity {ActivityId} " +
             "(category {Category}, location '{Location}', GPS {Lat:F4},{Lng:F4}, cover {CoverKB} KB)",
@@ -499,35 +506,70 @@ public sealed class StravaSyncService : IStravaSyncService
     /// the item without primary media (the editor still lets the operator
     /// add files later).
     /// </summary>
-    private async Task<long> SeedCoverAsync(int videoId, string category)
+    /// <summary>
+    /// Copies the category's wwwroot bg into <c>cover.jpg</c> for the
+    /// stump. Skips the og.jpg step on purpose — that one needs the
+    /// freshly-saved <see cref="Video"/> so the overlay can pull the
+    /// stats payload.
+    /// </summary>
+    private async Task<long> CopyCoverOnlyAsync(int videoId, string category)
     {
         var relative = ResolveCategoryAssetRelativePath(category);
         if (string.IsNullOrEmpty(relative)) return 0;
         try
         {
-            var coverBytes = await _storage.CopyWwwRootFileToVideoAsync(
+            return await _storage.CopyWwwRootFileToVideoAsync(
                 relative, videoId, CoverFileName);
-
-            // Seed the OG preview from the same category asset so Strava
-            // stumps share on Facebook with a sane 1.91:1 image instead
-            // of letting the scraper guess. Best-effort — failures stay
-            // silent inside GenerateOgImageAsync.
-            if (coverBytes > 0)
-            {
-                var coverPath = Path.Combine(
-                    _storage.GetVideoDirectoryPath(videoId), CoverFileName);
-                var ogPath = Path.Combine(
-                    _storage.GetVideoDirectoryPath(videoId), "og.jpg");
-                await _storage.GenerateOgImageAsync(coverPath, ogPath);
-            }
-
-            return coverBytes;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
                 "Could not seed placeholder cover for item {Id}", videoId);
             return 0;
+        }
+    }
+
+    /// <summary>
+    /// Backwards-compatible name kept for callers that just want a
+    /// cover-and-og combo with no overlay; delegates to the split
+    /// helpers internally.
+    /// </summary>
+    private async Task<long> SeedCoverAsync(int videoId, string category)
+    {
+        var coverBytes = await CopyCoverOnlyAsync(videoId, category);
+        if (coverBytes > 0)
+        {
+            var coverPath = Path.Combine(
+                _storage.GetVideoDirectoryPath(videoId), CoverFileName);
+            var ogPath = Path.Combine(
+                _storage.GetVideoDirectoryPath(videoId), "og.jpg");
+            await _storage.GenerateOgImageAsync(coverPath, ogPath);
+        }
+        return coverBytes;
+    }
+
+    /// <summary>
+    /// Re-renders <c>og.jpg</c> for the supplied video using its current
+    /// <see cref="Video.Training"/> stats + location as the overlay
+    /// payload. Source is the existing cover image (which the Strava
+    /// importer already copied from the category bg).
+    /// </summary>
+    private async Task GenerateOgWithOverlayAsync(Video video)
+    {
+        try
+        {
+            var dir = _storage.GetVideoDirectoryPath(video.Id);
+            var coverPath = Path.Combine(dir, CoverFileName);
+            if (!File.Exists(coverPath)) return;
+
+            var ogPath = Path.Combine(dir, "og.jpg");
+            var overlay = video.ToOgOverlay();
+            await _storage.GenerateOgImageAsync(coverPath, ogPath, overlay: overlay);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not generate OG overlay for video {Id}", video.Id);
         }
     }
 
