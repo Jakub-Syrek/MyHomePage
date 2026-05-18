@@ -17,15 +17,15 @@
                 <span>My Mountain Adventures</span>
             </a>
             <nav class="nav-menu">
-                <a href="/">Home</a>
-                <a href="/gory">Mountains</a>
-                <a href="/wspinaczka-skalowa">Rock Climbing</a>
-                <a href="/bouldering">Bouldering</a>
-                <a href="/prowadzeni-hala">Indoor Climbing</a>
-                <a href="/calisthenics">Calisthenics</a>
-                <a href="/running">Running</a>
-                <a href="/bicycle">Bicycle</a>
-                <a href="/multisport">Multi-sport</a>
+                <a href="/"                    class="nav-tile" data-fx-tile data-tilt-max="6">Home</a>
+                <a href="/gory"                class="nav-tile" data-fx-tile data-tilt-max="6">Mountains</a>
+                <a href="/wspinaczka-skalowa"  class="nav-tile" data-fx-tile data-tilt-max="6">Rock Climbing</a>
+                <a href="/bouldering"          class="nav-tile" data-fx-tile data-tilt-max="6">Bouldering</a>
+                <a href="/prowadzeni-hala"     class="nav-tile" data-fx-tile data-tilt-max="6">Indoor Climbing</a>
+                <a href="/calisthenics"        class="nav-tile" data-fx-tile data-tilt-max="6">Calisthenics</a>
+                <a href="/running"             class="nav-tile" data-fx-tile data-tilt-max="6">Running</a>
+                <a href="/bicycle"             class="nav-tile" data-fx-tile data-tilt-max="6">Bicycle</a>
+                <a href="/multisport"          class="nav-tile" data-fx-tile data-tilt-max="6">Multi-sport</a>
             </nav>
             <div class="pinned-controls">
                 <a href="/map" class="pinned-globe" title="Adventures map" aria-label="Map">
@@ -218,18 +218,40 @@
         .nav-menu { gap: 14px; font-size: 0.95rem; }
     }
 
+    /* Each nav link is a slim glass tile — same vibe as the
+       home-page category cards but compressed to fit a single row.
+       padding + border + bg combine with the parent's backdrop-blur
+       to read as a frosted button. card-tilt.js + cursor-trail.js
+       attach to anything with [data-fx-tile], so these tiles get
+       3D tilt, glare, and magnetic snap for free. */
     .nav-menu a {
+        position: relative;
         color: white;
         text-decoration: none;
-        font-weight: 500;
-        font-size: 0.92rem;
+        font-weight: 600;
+        font-size: 0.88rem;
         letter-spacing: 0.01em;
-        transition: opacity 0.3s;
         white-space: nowrap;
+        padding: 8px 14px;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 10px;
+        backdrop-filter: blur(8px) saturate(160%);
+        -webkit-backdrop-filter: blur(8px) saturate(160%);
+        box-shadow:
+            0 2px 8px rgba(20, 30, 70, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.30);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        transition: background 0.22s ease, box-shadow 0.22s ease,
+                    border-color 0.22s ease;
+        transform-style: preserve-3d;
     }
-
     .nav-menu a:hover {
-        opacity: 0.8;
+        background: rgba(255, 255, 255, 0.26);
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow:
+            0 6px 18px rgba(20, 30, 70, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.45);
     }
 
     /* Always-visible pinned controls — globe goes to /map (public),
@@ -399,8 +421,8 @@
         }
         .nav-menu::-webkit-scrollbar { display: none; }
         .nav-menu a {
-            font-size: 0.88rem;
-            padding: 4px 2px;
+            font-size: 0.82rem;
+            padding: 7px 11px;
             /* Bigger touch target without changing visual size */
             min-height: 36px;
             display: inline-flex;

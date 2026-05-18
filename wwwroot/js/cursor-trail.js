@@ -29,13 +29,15 @@
 
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-        // Hide the OS cursor over any hero-effects region. The rule
-        // is scoped to `[data-hero-effects]` and its descendants so
-        // the rest of the page (header, footer, etc.) keeps the
-        // native cursor.
+        // Hide the OS cursor in any FX-active region. We cover both
+        // the page hero blocks AND the header nav tiles so the
+        // custom dot is visible end-to-end as the user moves between
+        // them — without this they'd see a flicker between native
+        // arrow and custom cursor.
         const styleEl = document.createElement('style');
         styleEl.textContent =
-            '[data-hero-effects], [data-hero-effects] * { cursor: none !important; }';
+            '[data-hero-effects], [data-hero-effects] *, ' +
+            '[data-fx-tile], [data-fx-tile] * { cursor: none !important; }';
         document.head.appendChild(styleEl);
 
         const MAGNET_RADIUS = 90;
@@ -59,12 +61,15 @@
         resize();
         window.addEventListener('resize', resize, { passive: true });
 
-        function isOverHero(x, y) {
-            // Walk every hero region — a page may end up with more
-            // than one in flight during a Blazor transition.
-            const heroes = document.querySelectorAll('[data-hero-effects]');
-            for (let i = 0; i < heroes.length; i++) {
-                const r = heroes[i].getBoundingClientRect();
+        function isOverFxRegion(x, y) {
+            // Active anywhere the user is hovering an effect surface:
+            // either a hero page background or an individual FX
+            // tile (e.g. header nav buttons). Multiple may exist
+            // during a Blazor transition — first match wins.
+            const regions = document.querySelectorAll(
+                '[data-hero-effects], [data-fx-tile]');
+            for (let i = 0; i < regions.length; i++) {
+                const r = regions[i].getBoundingClientRect();
                 if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
                     return true;
             }
@@ -72,29 +77,43 @@
         }
 
         function nearestMagnetTarget(x, y) {
-            const cards = document.querySelectorAll('.category-card');
-            let bestDist = MAGNET_RADIUS;
-            let bestX = null, bestY = null;
+            // Magnetic snap targets — large category cards on the
+            // home page plus the slim nav tiles in the header.
+            //
+            // Per-tile radius is capped at ~45% of the tile's
+            // shorter dimension so packed nav tiles (~36 px tall)
+            // get a tight ~16 px pull while big home cards (~260 px)
+            // keep the full 90 px reach. Without this scaling the
+            // cursor jitters between adjacent nav-tile centres.
+            const cards = document.querySelectorAll(
+                '.category-card, [data-fx-tile]');
+            let bestStrength = 0;
+            let bestX = null, bestY = null, bestDist = 0;
             cards.forEach(card => {
                 const r = card.getBoundingClientRect();
                 const cx = r.left + r.width / 2;
                 const cy = r.top + r.height / 2;
                 const dx = cx - x, dy = cy - y;
                 const d = Math.sqrt(dx * dx + dy * dy);
-                if (d < bestDist &&
-                    x > r.left - MAGNET_RADIUS && x < r.right + MAGNET_RADIUS &&
-                    y > r.top - MAGNET_RADIUS && y < r.bottom + MAGNET_RADIUS) {
-                    bestDist = d;
-                    bestX = cx; bestY = cy;
+                const tileRadius = Math.min(
+                    MAGNET_RADIUS,
+                    Math.min(r.width, r.height) * 0.45);
+                if (d >= tileRadius) return;
+                const strength = 1 - d / tileRadius;
+                if (strength > bestStrength) {
+                    bestStrength = strength;
+                    bestX = cx; bestY = cy; bestDist = d;
                 }
             });
-            return bestX === null ? null : { x: bestX, y: bestY, dist: bestDist };
+            return bestX === null
+                ? null
+                : { x: bestX, y: bestY, strength: bestStrength };
         }
 
         window.addEventListener('pointermove', e => {
             mouseX = e.clientX; mouseY = e.clientY;
             if (renderX < -1000) { renderX = mouseX; renderY = mouseY; }
-            active = isOverHero(mouseX, mouseY);
+            active = isOverFxRegion(mouseX, mouseY);
             styleEl.disabled = !active;
         }, { passive: true });
         window.addEventListener('blur', () => {
@@ -114,7 +133,11 @@
                 let targetX = mouseX, targetY = mouseY;
                 const magnet = nearestMagnetTarget(mouseX, mouseY);
                 if (magnet) {
-                    const t = (1 - magnet.dist / MAGNET_RADIUS) * MAGNET_STRENGTH;
+                    // `strength` is already normalised to 0..1 by
+                    // nearestMagnetTarget — multiply by the global
+                    // pull cap so close proximity feels firm but
+                    // not snap-locking.
+                    const t = magnet.strength * MAGNET_STRENGTH;
                     targetX = mouseX * (1 - t) + magnet.x * t;
                     targetY = mouseY * (1 - t) + magnet.y * t;
                 }

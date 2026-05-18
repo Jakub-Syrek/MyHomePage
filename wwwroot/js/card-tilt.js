@@ -11,13 +11,26 @@
     if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const MAX_TILT = 10;
+    const DEFAULT_MAX_TILT = 10;
     const ICON_PARALLAX = 8;
     const INIT_FLAG = '__cardTiltInit';
+    // Anything matching this selector gets the tilt + glare. The
+    // category cards on the home page have `.category-card`; the
+    // header nav tiles use `[data-fx-tile]` so the same script
+    // covers both without duplicating selectors. New tile-like UI
+    // can opt in by adding `data-fx-tile`.
+    const TILT_SELECTOR = '.category-card, [data-fx-tile]';
 
     function setup(card) {
         if (card[INIT_FLAG]) return;
         card[INIT_FLAG] = true;
+
+        // Per-element tilt cap via `data-tilt-max`. Falls back to
+        // DEFAULT_MAX_TILT — keeps the big home-page cards at the
+        // dramatic ±10° while header tiles can dial down to ~6° so
+        // a rapid swipe across nine of them doesn't feel jittery.
+        const MAX_TILT =
+            parseFloat(card.getAttribute('data-tilt-max')) || DEFAULT_MAX_TILT;
 
         card.style.transformStyle = 'preserve-3d';
         card.style.willChange = 'transform';
@@ -60,7 +73,7 @@
     }
 
     function scan() {
-        document.querySelectorAll('.category-card').forEach(setup);
+        document.querySelectorAll(TILT_SELECTOR).forEach(setup);
     }
     function startup() {
         scan();
