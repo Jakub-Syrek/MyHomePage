@@ -1,4 +1,5 @@
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -212,6 +213,42 @@ public sealed class FileStorageServiceOgTests
         var bottomLuma = 0.299 * bottomSample.R + 0.587 * bottomSample.G + 0.114 * bottomSample.B;
         Assert.That(bottomLuma, Is.LessThan(160),
             "overlay strip should still darken the bottom even when no text fields are populated");
+    }
+
+    [Test]
+    public async Task GenerateOgImageAsync_SourceWithExifOrientationTag_OgHasNoOrientationTag()
+    {
+        // Mobile cameras save portrait shots as wide pixel buffers with
+        // Orientation=6 ("rotate 270 CW") in EXIF. Viewers like Facebook
+        // double-rotate when they see the tag, which is exactly what
+        // dragged the stats strip onto the left side of the post in the
+        // field. The og.jpg writer must strip the tag so the file is
+        // displayed as-is.
+        var sourcePath = Path.Combine(_tempStorageRoot, "rotated.jpg");
+        using (var img = new Image<Rgba32>(2000, 3000))
+        {
+            img.Metadata.ExifProfile = new ExifProfile();
+            img.Metadata.ExifProfile.SetValue(
+                ExifTag.Orientation, (ushort)6); // rotate 270 CW
+            await img.SaveAsJpegAsync(sourcePath);
+        }
+
+        var ogPath = Path.Combine(_tempStorageRoot, "og.jpg");
+        var size = await _service.GenerateOgImageAsync(sourcePath, ogPath);
+
+        Assert.That(size, Is.GreaterThan(0));
+        using var og = await Image.LoadAsync(ogPath);
+        var exif = og.Metadata.ExifProfile;
+        if (exif is not null && exif.TryGetValue(ExifTag.Orientation, out var orientationValue))
+        {
+            Assert.That(orientationValue.Value,
+                Is.EqualTo((ushort)1),
+                "og.jpg must not carry an EXIF orientation that would rotate it again");
+        }
+        // If the profile itself is null or the tag was stripped, that
+        // also satisfies the invariant — no rotation hint to apply.
+        Assert.That(og.Width, Is.EqualTo(1200));
+        Assert.That(og.Height, Is.EqualTo(630));
     }
 
     [Test]

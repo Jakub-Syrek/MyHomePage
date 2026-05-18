@@ -91,6 +91,18 @@ public sealed class FileStorageService : IFileStorageService
             await using var readStream = file.OpenReadStream(maxFileSizeBytes);
             using var image = await Image.LoadAsync(readStream);
 
+            // Bake the EXIF rotation into pixels and drop the metadata
+            // — phone cameras routinely save portrait shots with
+            // Orientation=6 ("rotate 270 CW") and Facebook is one of
+            // many viewers that double-rotates the already-upright
+            // pixels because it sees the leftover EXIF tag. Stripping
+            // here means every downstream consumer (gallery, lightbox,
+            // og.jpg pipeline) sees a deterministic upright JPEG.
+            image.Mutate(x => x.AutoOrient());
+            image.Metadata.ExifProfile = null;
+            image.Metadata.IptcProfile = null;
+            image.Metadata.XmpProfile = null;
+
             // Resize while preserving aspect ratio, only if larger than maxDimension
             if (image.Width > maxDimension || image.Height > maxDimension)
             {
@@ -174,6 +186,18 @@ public sealed class FileStorageService : IFileStorageService
         try
         {
             using var source = await Image.LoadAsync(sourceImagePath);
+
+            // Force the in-memory pixel buffer to match the upright
+            // orientation declared by any EXIF tag on the source, then
+            // wipe every metadata profile so the saved og.jpg cannot
+            // accidentally carry a second rotation hint that a viewer
+            // (Facebook, in particular) would apply on top of pixels
+            // that are already in their final landscape orientation.
+            source.Mutate(ctx => ctx.AutoOrient());
+            source.Metadata.ExifProfile = null;
+            source.Metadata.IptcProfile = null;
+            source.Metadata.XmpProfile = null;
+            source.Metadata.IccProfile = null;
 
             var focus = cropFocus ?? (0.5, 0.5);
             var (cropX, cropY, cropW, cropH) = ResolveCropWindow(
