@@ -75,6 +75,105 @@ public sealed class CredentialService : ICredentialRepository
         }
     }
 
+    /// <inheritdoc />
+    public bool HasAccount(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+
+        // Mirror the precedence used by ValidateCredentials so the
+        // answers stay consistent — the account either exists in the
+        // currently-active source or it doesn't.
+        var adminUsersJson = Environment.GetEnvironmentVariable("ADMIN_USERS");
+        if (!string.IsNullOrWhiteSpace(adminUsersJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(adminUsersJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) return false;
+                return EnumerateContainsEmail(doc.RootElement, email);
+            }
+            catch (JsonException) { return false; }
+        }
+
+        var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
+        if (!string.IsNullOrWhiteSpace(adminEmail))
+        {
+            return string.Equals(adminEmail, email, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!File.Exists(_credentialsPath)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(_credentialsPath));
+            if (!doc.RootElement.TryGetProperty("users", out var users)) return false;
+            return EnumerateContainsEmail(users, email);
+        }
+        catch (JsonException) { return false; }
+    }
+
+    /// <inheritdoc />
+    public async Task<PasswordResetResult> ResetPasswordAsync(
+        string email, string newPassword, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(newPassword))
+            return new PasswordResetResult(PasswordResetOutcome.AccountNotFound, null);
+
+        if (!HasAccount(email))
+            return new PasswordResetResult(PasswordResetOutcome.AccountNotFound, null);
+
+        var newHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: 12);
+
+        // Env-var-backed credentials can't be rewritten at runtime —
+        // hand the operator the new hash and let them paste it into
+        // Railway. We return early so we never accidentally fall
+        // through to writing a stale credentials.json.
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ADMIN_USERS"))
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ADMIN_EMAIL")))
+        {
+            _logger.LogWarning(
+                "Password reset issued for {Email} but credentials live in env vars — " +
+                "operator must update ADMIN_PASSWORD / ADMIN_USERS manually", email);
+            return new PasswordResetResult(PasswordResetOutcome.ManualUpdateRequired, newHash);
+        }
+
+        // credentials.json — rewrite just the matching user record.
+        var json = await File.ReadAllTextAsync(_credentialsPath, cancellationToken);
+        using var doc = JsonDocument.Parse(json);
+        var users = new List<Dictionary<string, object?>>();
+        if (doc.RootElement.TryGetProperty("users", out var usersArray)
+            && usersArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var user in usersArray.EnumerateArray())
+            {
+                var dict = new Dictionary<string, object?>();
+                foreach (var prop in user.EnumerateObject())
+                    dict[prop.Name] = prop.Value.GetString();
+                var storedEmail = dict.TryGetValue("email", out var e) ? e as string : null;
+                if (string.Equals(storedEmail, email, StringComparison.OrdinalIgnoreCase))
+                    dict["password"] = newHash;
+                users.Add(dict);
+            }
+        }
+
+        var output = new Dictionary<string, object?> { ["users"] = users };
+        var serialized = JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(_credentialsPath, serialized, cancellationToken);
+
+        _logger.LogInformation("Password reset persisted to credentials.json for {Email}", email);
+        return new PasswordResetResult(PasswordResetOutcome.Updated, null);
+    }
+
+    private static bool EnumerateContainsEmail(JsonElement usersArray, string email)
+    {
+        foreach (var user in usersArray.EnumerateArray())
+        {
+            if (user.TryGetProperty("email", out var emailEl)
+                && string.Equals(emailEl.GetString(), email, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>Validates against JSON object shape: { "users": [ {email,password}, ... ] }</summary>
     private bool TryValidateAgainstJsonObject(string json, string email, string password)
     {

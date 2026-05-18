@@ -196,6 +196,8 @@ try
     builder.Services.AddScoped<IVideoService, VideoService>();
     builder.Services.AddScoped<ICollectionMergeService, CollectionMergeService>();
     builder.Services.AddScoped<ICredentialRepository, CredentialService>();
+    builder.Services.AddScoped<IPasswordResetTokenStore, JsonPasswordResetTokenStore>();
+    builder.Services.AddScoped<IEmailSender, LogOnlyEmailSender>();
     builder.Services.AddScoped<ILogReaderService, LogReaderService>();
     builder.Services.AddSingleton<ITrainingStatsService, TrainingStatsService>();
     builder.Services.AddScoped<ICoachReportRepository, JsonCoachReportRepository>();
