@@ -46,7 +46,7 @@ public sealed class CredentialService : ICredentialRepository
             {
                 _logger.LogDebug("Validating against ADMIN_EMAIL/ADMIN_PASSWORD env vars");
                 if (string.Equals(adminEmail, email, StringComparison.OrdinalIgnoreCase)
-                    && adminPassword == password)
+                    && VerifyPassword(adminPassword, password))
                 {
                     _logger.LogInformation("Credentials validated (env var) for {Email}", email);
                     return true;
@@ -112,7 +112,7 @@ public sealed class CredentialService : ICredentialRepository
                 var storedPassword = passwordEl.GetString();
 
                 if (string.Equals(storedEmail, email, StringComparison.OrdinalIgnoreCase)
-                    && storedPassword == password)
+                    && VerifyPassword(storedPassword, password))
                 {
                     _logger.LogInformation("Credentials validated for {Email}", email);
                     return true;
@@ -123,5 +123,58 @@ public sealed class CredentialService : ICredentialRepository
             "Credentials validation failed for {Email}. Checked {UserCount} users",
             email, userCount);
         return false;
+    }
+
+    /// <summary>
+    /// Compares a candidate plaintext password against the stored
+    /// secret. Supports two storage formats so existing deployments
+    /// don't have to migrate everything at once:
+    /// <list type="bullet">
+    ///   <item><description>BCrypt hashes (prefix <c>$2</c>) are verified
+    ///   via <see cref="BCrypt.Net.BCrypt.Verify(string, string)"/> in
+    ///   constant time relative to the hash work-factor.</description></item>
+    ///   <item><description>Plain strings are compared with
+    ///   <see cref="System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>
+    ///   so a timing-side-channel can't leak the secret one byte at a
+    ///   time. A deprecation warning is logged so the operator knows
+    ///   to migrate to BCrypt.</description></item>
+    /// </list>
+    /// </summary>
+    /// <param name="stored">Value loaded from the configured source.</param>
+    /// <param name="candidate">Plaintext password supplied at login.</param>
+    /// <returns><c>true</c> when the candidate matches the stored secret.</returns>
+    internal bool VerifyPassword(string? stored, string candidate)
+    {
+        if (string.IsNullOrEmpty(stored) || candidate is null) return false;
+
+        // BCrypt hashes start with $2a$, $2b$, $2x$ or $2y$ + a cost
+        // marker. Anything else is treated as a legacy plaintext.
+        if (stored.StartsWith("$2", StringComparison.Ordinal))
+        {
+            try
+            {
+                return BCrypt.Net.BCrypt.Verify(candidate, stored);
+            }
+            catch (BCrypt.Net.SaltParseException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Stored BCrypt hash is malformed; treating as no match");
+                return false;
+            }
+        }
+
+        _logger.LogWarning(
+            "Plaintext password storage detected. Rotate the credential to a " +
+            "BCrypt hash (see /admin/hash-password) — plaintext storage is " +
+            "supported only for backwards compatibility and will be removed.");
+
+        var storedBytes = System.Text.Encoding.UTF8.GetBytes(stored);
+        var candidateBytes = System.Text.Encoding.UTF8.GetBytes(candidate);
+        // FixedTimeEquals only operates on equal-length spans, so we
+        // pad / truncate by always allocating to the longer length and
+        // comparing both. Mismatched lengths inherently fail.
+        if (storedBytes.Length != candidateBytes.Length) return false;
+        return System.Security.Cryptography.CryptographicOperations
+            .FixedTimeEquals(storedBytes, candidateBytes);
     }
 }

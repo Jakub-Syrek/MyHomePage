@@ -154,6 +154,41 @@ public sealed class CredentialServiceFullTests
     }
 
     [Test]
+    public void ValidateCredentials_BCryptHashInFile_VerifiesAgainstPlaintext()
+    {
+        // BCrypt hash for "correct horse battery staple" generated with
+        // work factor 4 (test-only — never use < 12 in production).
+        var hash = BCrypt.Net.BCrypt.HashPassword("correct horse battery staple", workFactor: 4);
+        WriteCredentialsFile($$"""
+        { "users": [ { "email": "u@x.com", "password": "{{hash}}" } ] }
+        """);
+
+        Assert.That(_service.ValidateCredentials("u@x.com", "correct horse battery staple"), Is.True);
+        Assert.That(_service.ValidateCredentials("u@x.com", "wrong"), Is.False);
+    }
+
+    [Test]
+    public void ValidateCredentials_BCryptHashInEnvVar_VerifiesAgainstPlaintext()
+    {
+        var hash = BCrypt.Net.BCrypt.HashPassword("s3cret", workFactor: 4);
+        Environment.SetEnvironmentVariable("ADMIN_EMAIL", "admin@x.com");
+        Environment.SetEnvironmentVariable("ADMIN_PASSWORD", hash);
+
+        Assert.That(_service.ValidateCredentials("admin@x.com", "s3cret"), Is.True);
+        Assert.That(_service.ValidateCredentials("admin@x.com", "wrong"), Is.False);
+    }
+
+    [Test]
+    public void ValidateCredentials_BCryptHashMalformed_ReturnsFalseGracefully()
+    {
+        WriteCredentialsFile("""
+        { "users": [ { "email": "u@x.com", "password": "$2b$NOTAVALIDHASH" } ] }
+        """);
+
+        Assert.That(_service.ValidateCredentials("u@x.com", "anything"), Is.False);
+    }
+
+    [Test]
     public void ValidateCredentials_FileUserMissingPasswordProperty_Skipped()
     {
         WriteCredentialsFile("""
