@@ -872,6 +872,31 @@
         max-width: 560px;
         opacity: 0.96;
     }
+
+    /* Mobile: drop the desktop "card-glued-under-master" treatment.
+       The master row goes full-width and flat-cornered on phones
+       (the 700 px breakpoint inside CollectionRow), so the nested
+       sources panel has to match — otherwise the 620 px max-width
+       + negative top margin + bottom-only border-radius all look
+       like a detached, miniature card stuck under a wider one, and
+       the nested CollectionRow items get squeezed to 560 px while
+       the master stretches edge-to-edge. */
+    @@media (max-width: 700px) {
+        .ms-subs {
+            max-width: 100%;
+            margin: 4px 0 22px;
+            padding: 6px 10px 4px;
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
+            box-shadow: 0 8px 18px rgba(20, 30, 60, 0.08);
+        }
+        .ms-subs > summary { padding: 10px 6px; }
+        .ms-subs-list .ig-post {
+            max-width: 100%;
+            margin-bottom: 14px;
+        }
+    }
 </style>
 
 @code {
