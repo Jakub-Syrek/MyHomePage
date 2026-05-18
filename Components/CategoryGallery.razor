@@ -607,8 +607,15 @@
     }
     .rows-anchor {
         width: 100%;
+        /* Column direction so the optional .ms-subs source-activities
+           panel that sits as a sibling of the master CollectionRow
+           lands BELOW it instead of being flex-rowed next to it. The
+           previous flex-row + justify-content:center put the master
+           on the left and the panel on the right at different vertical
+           levels — the screenshot in the review thread showed it. */
         display: flex;
-        justify-content: center;
+        flex-direction: column;
+        align-items: center;
         scroll-margin-top: 90px;
     }
 
