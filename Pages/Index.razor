@@ -5,8 +5,9 @@
 
 <PageTitle>My Home Page - Mountain Adventures</PageTitle>
 
-<div style="background-image: url('/images/mountains-bg.jpg'); background-size: cover; background-attachment: fixed; background-position: center; padding: 40px 20px; min-height: 90vh;">
-    <div style="max-width: 1200px; margin: 0 auto;">
+<div class="home-hero">
+    <canvas id="snow-tunnel-canvas" class="home-hero-canvas" aria-hidden="true"></canvas>
+    <div class="home-hero-content">
         @if (showSuccessMessage)
         {
             <div style="background: #d4edda; color: #155724; padding: 15px 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #28a745;">
@@ -66,12 +67,48 @@
     </div>
 </div>
 
+<script src="/js/snow-tunnel.js"></script>
+
 <style>
+    /* Hero block — owns the mountain backdrop and hosts the snow
+       tunnel canvas behind everything else. `position: relative` so
+       the canvas can absolute-position itself against this container,
+       and `isolation: isolate` keeps the canvas's stacking context
+       from competing with the layout shell. */
+    .home-hero {
+        position: relative;
+        isolation: isolate;
+        padding: 40px 20px;
+        min-height: 90vh;
+        background:
+            linear-gradient(135deg, rgba(15, 24, 56, 0.55) 0%, rgba(40, 60, 110, 0.35) 50%, rgba(20, 30, 70, 0.55) 100%),
+            url('/images/mountains-bg.jpg') center/cover fixed;
+        overflow: hidden;
+    }
+    .home-hero-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none; /* clicks fall through to the cards */
+        display: block;
+    }
+    .home-hero-content {
+        position: relative;
+        z-index: 1;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
     .category-card {
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        /* Slightly more opaque than the previous 0.15 — the snow
+           tunnel sits behind a darker gradient now, so the cards
+           need a brighter backdrop to keep titles legible. */
+        background: rgba(255, 255, 255, 0.32);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.35);
         border-radius: 12px;
         padding: 30px 20px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -84,8 +121,8 @@
 
     .category-card:hover {
         transform: translateY(-5px);
-        background: rgba(255, 255, 255, 0.25);
-        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
+        background: rgba(255, 255, 255, 0.44);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
     }
 
     .category-card-icon {
