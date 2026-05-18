@@ -2,7 +2,9 @@
 @page "/edit-video/{VideoId:int}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
 @inject IVideoService VideoService
+@inject IFileStorageService FileStorage
 @inject IAiAssistantService Ai
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
@@ -199,6 +201,51 @@
                     }
                 </section>
 
+                @{
+                    var firstImage = video.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Image);
+                }
+                @if (firstImage is not null)
+                {
+                    <section class="og-section">
+                        <h3>📱 Social preview crop (Facebook / LinkedIn)</h3>
+                        <p class="upload-hint">
+                            Click anywhere on the image to set where the Facebook preview should be centred.
+                            The orange box shows the exact 1.91:1 / 1200&times;630 area Facebook will use.
+                            The crop respects your focus point on every re-share — without this it falls back to a generic centre crop that often chops off heads or hands.
+                        </p>
+                        <div class="og-preview-wrap" @ref="_ogPreviewRef" @onclick="OnOgFocusClick">
+                            <img class="og-preview-img"
+                                 src="/videos/@VideoId/@firstImage.FileName?v=@_ogImageCacheBuster"
+                                 alt="Source image with crop overlay" />
+                            <div class="og-crop-box" style="@OgBoxStyle()"></div>
+                            <div class="og-focus-dot" style="@OgDotStyle()"></div>
+                        </div>
+                        <div class="og-actions">
+                            <button type="button" class="btn btn-primary" @onclick="SaveOgCropAsync" disabled="@_ogBusy">
+                                @if (_ogBusy) { <span>Saving crop&hellip;</span> }
+                                else { <span>💾 Save Facebook crop</span> }
+                            </button>
+                            <button type="button" class="btn btn-secondary" @onclick="ResetOgFocus" disabled="@_ogBusy">
+                                Reset to centre
+                            </button>
+                            @if (!string.IsNullOrEmpty(_ogStatusMessage))
+                            {
+                                <span class="og-status @(_ogStatusError ? "err" : "ok")">@_ogStatusMessage</span>
+                            }
+                        </div>
+                        @if (_ogJpgExists)
+                        {
+                            <div class="og-current">
+                                <span class="og-current-label">Current Facebook preview:</span>
+                                <img class="og-current-img"
+                                     src="/videos/@VideoId/og.jpg?v=@_ogImageCacheBuster"
+                                     alt="Current 1200x630 OG image"
+                                     loading="lazy" />
+                            </div>
+                        }
+                    </section>
+                }
+
                 <section class="danger-section">
                     <h3>⚠️ Danger zone</h3>
                     <p class="upload-hint">
@@ -364,6 +411,86 @@
     }
     .btn-delete:hover { background: #b91c1c; }
     .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Facebook / OG preview crop ───────────────────────────────────── */
+    .og-section {
+        background: white;
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin-top: 18px;
+        box-shadow: 0 10px 28px rgba(20, 30, 60, 0.08);
+    }
+    .og-section h3 { margin: 0 0 8px; color: #1f2937; }
+    .og-preview-wrap {
+        position: relative;
+        max-width: 760px;
+        margin-top: 12px;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: crosshair;
+        background: #0a0a12;
+        user-select: none;
+        line-height: 0;
+    }
+    .og-preview-img {
+        display: block;
+        width: 100%;
+        height: auto;
+        pointer-events: none;
+    }
+    .og-crop-box {
+        position: absolute;
+        border: 2px solid #f59e0b;
+        box-shadow:
+            0 0 0 9999px rgba(0, 0, 0, 0.40),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+        pointer-events: none;
+        transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s;
+    }
+    .og-focus-dot {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        margin-top: -7px;
+        border-radius: 50%;
+        background: #f59e0b;
+        border: 2px solid white;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.45);
+        pointer-events: none;
+        transition: left 0.18s, top 0.18s;
+    }
+    .og-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+    }
+    .og-status {
+        font-size: 0.9rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .og-status.ok { color: #166534; }
+    .og-status.err { color: #991b1b; }
+    .og-current {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .og-current-label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    .og-current-img {
+        max-width: 600px;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 6px 18px rgba(20, 30, 60, 0.14);
+    }
 </style>
 
 @code {
@@ -387,6 +514,160 @@
     private string aiKeywords = "";
     private string aiMessage = "";
     private bool isGenerating;
+
+    // ── Facebook / OG crop state ──────────────────────────────────────────
+    private ElementReference _ogPreviewRef;
+    private double _ogFocusX = 0.5;
+    private double _ogFocusY = 0.5;
+    private bool _ogBusy;
+    private string? _ogStatusMessage;
+    private bool _ogStatusError;
+    private bool _ogJpgExists;
+    /// <summary>Bumped after every OG re-crop so the &lt;img&gt; URL changes and browsers stop serving the stale cached copy.</summary>
+    private long _ogImageCacheBuster = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    /// <summary>
+    /// 1.91:1 ratio Facebook uses for og:image. Used to draw the crop
+    /// overlay so the operator sees exactly what the scrape will keep.
+    /// </summary>
+    private const double OgAspectRatio = 1200.0 / 630.0;
+
+    /// <summary>
+    /// CSS inline style for the orange 1.91:1 crop rectangle. The box is
+    /// sized as a percentage of the source image so the same fractions
+    /// drive both the visual overlay and the eventual server-side
+    /// ImageSharp crop window.
+    /// </summary>
+    private string OgBoxStyle()
+    {
+        // Box dimensions as a fraction of the displayed image. We pick the
+        // largest 1.91:1 rectangle that fits — whichever axis is the
+        // limiting one for the source image at its rendered aspect.
+        // Without the source dimensions we conservatively assume the
+        // displayed image fills width and let the box be the largest
+        // 1.91:1 rectangle inside it (height = width / 1.91).
+        const double boxWidthFraction = 1.0;
+        var boxHeightFraction = boxWidthFraction / OgAspectRatio;
+
+        // If that height overflows the displayed image, fall back to
+        // matching height and shrinking width.
+        if (boxHeightFraction > 1.0)
+        {
+            boxHeightFraction = 1.0;
+        }
+
+        // Centre the box on the focus point, clamp inside the image.
+        var halfW = boxWidthFraction / 2.0;
+        var halfH = boxHeightFraction / 2.0;
+        var leftFraction = Math.Clamp(_ogFocusX - halfW, 0.0, 1.0 - boxWidthFraction);
+        var topFraction = Math.Clamp(_ogFocusY - halfH, 0.0, 1.0 - boxHeightFraction);
+
+        return $"left:{leftFraction * 100:F2}%;" +
+               $"top:{topFraction * 100:F2}%;" +
+               $"width:{boxWidthFraction * 100:F2}%;" +
+               $"height:{boxHeightFraction * 100:F2}%;";
+    }
+
+    private string OgDotStyle() =>
+        $"left:{_ogFocusX * 100:F2}%; top:{_ogFocusY * 100:F2}%;";
+
+    /// <summary>
+    /// Translates a mouse click on the preview into a normalised focal
+    /// point in [0, 1] x [0, 1] and re-renders the overlay. The actual
+    /// crop is not regenerated until the operator presses "Save".
+    /// </summary>
+    private async Task OnOgFocusClick(MouseEventArgs args)
+    {
+        try
+        {
+            // Read the rendered image's bounding rect via JS interop so we
+            // can convert the page-relative click coordinates into the
+            // image-relative fractions the server expects.
+            var rect = await Js.InvokeAsync<DomRectDto>(
+                "myHomePage.getBoundingRect", _ogPreviewRef);
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            var fractionX = (args.ClientX - rect.Left) / rect.Width;
+            var fractionY = (args.ClientY - rect.Top) / rect.Height;
+            _ogFocusX = Math.Clamp(fractionX, 0.0, 1.0);
+            _ogFocusY = Math.Clamp(fractionY, 0.0, 1.0);
+            _ogStatusMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _ogStatusError = true;
+            _ogStatusMessage = $"Click failed: {ex.Message}";
+        }
+    }
+
+    private void ResetOgFocus()
+    {
+        _ogFocusX = 0.5;
+        _ogFocusY = 0.5;
+        _ogStatusMessage = null;
+    }
+
+    /// <summary>
+    /// Regenerates <c>og.jpg</c> from the first attached image using the
+    /// operator-picked focus point. Runs server-side via ImageSharp; the
+    /// cache buster query parameter forces every gallery viewer to pick
+    /// up the new file on its next request.
+    /// </summary>
+    private async Task SaveOgCropAsync()
+    {
+        if (video is null || _ogBusy) return;
+        var firstImage = video.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Image);
+        if (firstImage is null)
+        {
+            _ogStatusError = true;
+            _ogStatusMessage = "No image attached to crop.";
+            return;
+        }
+
+        _ogBusy = true;
+        _ogStatusMessage = "Generating Facebook preview…";
+        _ogStatusError = false;
+        StateHasChanged();
+
+        try
+        {
+            var dir = FileStorage.GetVideoDirectoryPath(video.Id);
+            var sourcePath = Path.Combine(dir, firstImage.FileName);
+            var ogPath = Path.Combine(dir, "og.jpg");
+
+            var size = await FileStorage.GenerateOgImageAsync(
+                sourcePath, ogPath, (_ogFocusX, _ogFocusY));
+
+            if (size > 0)
+            {
+                _ogJpgExists = true;
+                _ogImageCacheBuster = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                _ogStatusError = false;
+                _ogStatusMessage = $"✅ Saved — {size / 1024} KB.";
+            }
+            else
+            {
+                _ogStatusError = true;
+                _ogStatusMessage = "Crop failed — see server logs.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _ogStatusError = true;
+            _ogStatusMessage = $"Crop error: {ex.Message}";
+        }
+        finally
+        {
+            _ogBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// DTO mirroring DOMRect properties returned by the inline
+    /// <c>myHomePage.getBoundingRect</c> JS helper.
+    /// </summary>
+    private sealed record DomRectDto(double Left, double Top, double Width, double Height);
 
     private void OnFilesSelected(InputFileChangeEventArgs e)
     {
@@ -578,7 +859,37 @@
             editLocation = video.Location ?? "";
             editLatitude = video.Latitude;
             editLongitude = video.Longitude;
+
+            // Mark whether og.jpg already exists so the editor can show
+            // the "Current Facebook preview" thumbnail without flashing
+            // a 404 on first render.
+            var ogPath = Path.Combine(
+                FileStorage.GetVideoDirectoryPath(VideoId), "og.jpg");
+            _ogJpgExists = System.IO.File.Exists(ogPath);
         }
+    }
+
+    private bool _ogJsRegistered;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _ogJsRegistered) return;
+        _ogJsRegistered = true;
+        // Inline JS helper: returns DOMRect for a Blazor ElementReference
+        // so the OG focus-click handler can map page coordinates to
+        // image-relative fractions. Co-located here to avoid spinning up
+        // a separate .js file for one function.
+        try
+        {
+            await Js.InvokeVoidAsync("eval",
+                "window.myHomePage = window.myHomePage || {};" +
+                "window.myHomePage.getBoundingRect = function(el) {" +
+                "  if (!el || !el.getBoundingClientRect) return { Left: 0, Top: 0, Width: 0, Height: 0 };" +
+                "  var r = el.getBoundingClientRect();" +
+                "  return { Left: r.left, Top: r.top, Width: r.width, Height: r.height };" +
+                "};");
+        }
+        catch { /* best-effort during prerender / teardown */ }
     }
 
     private async Task SaveVideo()
