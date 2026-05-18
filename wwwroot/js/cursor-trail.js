@@ -1,35 +1,26 @@
 /* eslint-disable */
-// cursor-trail.js — custom glowing cursor with a fading particle
-// trail and magnetic attraction to category cards.
-//
-// The native cursor is hidden over the home-hero block (and over
-// cards inside it) and replaced with a soft luminous dot on a
-// fullscreen canvas. Each pointer move spawns a particle that fades
-// over ~400 ms, producing a comet-tail effect. When the cursor gets
-// within MAGNET_RADIUS px of a category-card centre the dot is
-// pulled toward that centre — a tactile "magnetic click" feel.
-//
-// Skips on touch / coarse-pointer devices (no cursor to replace)
-// and on prefers-reduced-motion.
+// cursor-trail.js — custom glowing cursor + fading particle trail
+// that activates whenever the pointer is over any element marked
+// `[data-hero-effects]`. The trail canvas lives at body level
+// (position: fixed, z-index: 9999) so it covers home and subview
+// pages alike without per-page wiring. Magnetic snap targets any
+// `.category-card` on screen — on subviews there are no such cards,
+// so the cursor falls back to plain tracking.
 (function () {
     'use strict';
+    if (window.__cursorTrailInstalled) return;
+    window.__cursorTrailInstalled = true;
+
+    if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     function init() {
-        if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-        const hero = document.querySelector('.home-hero');
-        if (!hero) return;
-
         const canvas = document.createElement('canvas');
         canvas.setAttribute('aria-hidden', 'true');
         canvas.style.cssText = [
-            'position: fixed',
-            'inset: 0',
-            'width: 100vw',
-            'height: 100vh',
-            'pointer-events: none',
-            'z-index: 9999',
+            'position: fixed', 'inset: 0',
+            'width: 100vw', 'height: 100vh',
+            'pointer-events: none', 'z-index: 9999',
         ].join(';');
         document.body.appendChild(canvas);
 
@@ -38,24 +29,22 @@
 
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-        // Hide the OS cursor while inside the hero. Cards inherit
-        // the rule via CSS so the cursor stays hidden even when
-        // hovering an <a>.
+        // Hide the OS cursor over any hero-effects region. The rule
+        // is scoped to `[data-hero-effects]` and its descendants so
+        // the rest of the page (header, footer, etc.) keeps the
+        // native cursor.
         const styleEl = document.createElement('style');
         styleEl.textContent =
-            '.home-hero, .home-hero * { cursor: none !important; }';
+            '[data-hero-effects], [data-hero-effects] * { cursor: none !important; }';
         document.head.appendChild(styleEl);
 
-        const MAGNET_RADIUS = 90;       // px from a card centre to start pulling
-        const MAGNET_STRENGTH = 0.45;   // 0 = none, 1 = snap-to-centre
-        const TRAIL_LIFE = 0.42;        // seconds
+        const MAGNET_RADIUS = 90;
+        const MAGNET_STRENGTH = 0.45;
+        const TRAIL_LIFE = 0.42;
         const MAX_PARTICLES = 90;
 
         let width = 0, height = 0;
         let mouseX = -9999, mouseY = -9999;
-        // The rendered cursor position eases toward (mouseX,mouseY)
-        // unless magnetic pull overrides it. Drawn separately from
-        // particles so the dot stays sharp.
         let renderX = -9999, renderY = -9999;
         let active = false;
         let particles = [];
@@ -70,12 +59,19 @@
         resize();
         window.addEventListener('resize', resize, { passive: true });
 
+        function isOverHero(x, y) {
+            // Walk every hero region — a page may end up with more
+            // than one in flight during a Blazor transition.
+            const heroes = document.querySelectorAll('[data-hero-effects]');
+            for (let i = 0; i < heroes.length; i++) {
+                const r = heroes[i].getBoundingClientRect();
+                if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+                    return true;
+            }
+            return false;
+        }
+
         function nearestMagnetTarget(x, y) {
-            // Snap the cursor toward the nearest visible card if
-            // we're inside its magnet radius. Returns the centre of
-            // the strongest attractor, or null when none is in
-            // range. Pulled fresh each frame so layout / scroll
-            // changes are picked up automatically.
             const cards = document.querySelectorAll('.category-card');
             let bestDist = MAGNET_RADIUS;
             let bestX = null, bestY = null;
@@ -85,9 +81,6 @@
                 const cy = r.top + r.height / 2;
                 const dx = cx - x, dy = cy - y;
                 const d = Math.sqrt(dx * dx + dy * dy);
-                // Also require the cursor to be inside the card
-                // half-extents so the magnet doesn't kick in from
-                // way above or below a tile.
                 if (d < bestDist &&
                     x > r.left - MAGNET_RADIUS && x < r.right + MAGNET_RADIUS &&
                     y > r.top - MAGNET_RADIUS && y < r.bottom + MAGNET_RADIUS) {
@@ -98,22 +91,15 @@
             return bestX === null ? null : { x: bestX, y: bestY, dist: bestDist };
         }
 
-        function onMove(e) {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
+        window.addEventListener('pointermove', e => {
+            mouseX = e.clientX; mouseY = e.clientY;
             if (renderX < -1000) { renderX = mouseX; renderY = mouseY; }
-
-            // Only activate the custom cursor when the pointer is
-            // over the hero — outside it, let the page have its
-            // normal cursor back.
-            const heroRect = hero.getBoundingClientRect();
-            active =
-                mouseX >= heroRect.left && mouseX <= heroRect.right &&
-                mouseY >= heroRect.top && mouseY <= heroRect.bottom;
+            active = isOverHero(mouseX, mouseY);
             styleEl.disabled = !active;
-        }
-        window.addEventListener('pointermove', onMove, { passive: true });
-        window.addEventListener('blur', () => { active = false; styleEl.disabled = true; });
+        }, { passive: true });
+        window.addEventListener('blur', () => {
+            active = false; styleEl.disabled = true;
+        });
 
         let lastTime = performance.now();
         let raf = 0;
@@ -125,9 +111,6 @@
             ctx.clearRect(0, 0, width, height);
 
             if (active) {
-                // Magnetic snap — bias the eased target toward the
-                // nearest card centre, weighted by how close we
-                // already are (closer = stronger pull).
                 let targetX = mouseX, targetY = mouseY;
                 const magnet = nearestMagnetTarget(mouseX, mouseY);
                 if (magnet) {
@@ -135,14 +118,9 @@
                     targetX = mouseX * (1 - t) + magnet.x * t;
                     targetY = mouseY * (1 - t) + magnet.y * t;
                 }
-
                 renderX += (targetX - renderX) * 0.35;
                 renderY += (targetY - renderY) * 0.35;
 
-                // Spawn a fresh particle every frame so the trail
-                // density scales with mouse speed automatically —
-                // fast moves drop fewer particles per pixel travelled
-                // but the speed itself produces the stretching.
                 if (particles.length < MAX_PARTICLES) {
                     particles.push({
                         x: renderX, y: renderY,
@@ -152,7 +130,6 @@
                 }
             }
 
-            // Trail
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 const age = (now - p.born) / 1000;
@@ -169,7 +146,6 @@
             ctx.shadowBlur = 0;
 
             if (active) {
-                // Outer halo
                 const halo = ctx.createRadialGradient(renderX, renderY, 0, renderX, renderY, 22);
                 halo.addColorStop(0,   'rgba(220, 240, 255, 0.55)');
                 halo.addColorStop(0.45,'rgba(140, 190, 255, 0.20)');
@@ -179,7 +155,6 @@
                 ctx.arc(renderX, renderY, 22, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Bright core dot
                 ctx.fillStyle = 'rgba(245, 250, 255, 0.95)';
                 ctx.beginPath();
                 ctx.arc(renderX, renderY, 4.5, 0, Math.PI * 2);
@@ -193,7 +168,8 @@
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 if (raf) cancelAnimationFrame(raf);
-            } else {
+                raf = 0;
+            } else if (!raf) {
                 lastTime = performance.now();
                 raf = requestAnimationFrame(frame);
             }

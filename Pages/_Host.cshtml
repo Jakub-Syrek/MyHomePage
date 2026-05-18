@@ -50,5 +50,15 @@
 
     <script src="_framework/blazor.server.js"></script>
     <script src="js/video-handlers.js"></script>
+
+    @* ── Hero-effects bundle ─────────────────────────────────────
+       Loaded once globally; each script self-installs a
+       MutationObserver and idempotent init so it picks up the
+       [data-hero-effects] container after every Blazor SPA
+       navigation (home, subviews, future hero pages). *@
+    <script src="js/liquid-ripple.js"></script>
+    <script src="js/snow-tunnel.js"></script>
+    <script src="js/card-tilt.js"></script>
+    <script src="js/cursor-trail.js"></script>
 </body>
 </html>

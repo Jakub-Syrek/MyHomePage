@@ -15,7 +15,11 @@
       - Sort direction (newest first / oldest first)
 *@
 
-<div class="category-page" style="--bg-url: url('@BackgroundImage'); --bg-position: @BackgroundPosition;">
+<div class="category-page" data-hero-effects data-hero-image="@BackgroundImage" style="--bg-url: url('@BackgroundImage'); --bg-position: @BackgroundPosition;">
+    @* Snow tunnel canvas — same effect that runs on the home page.
+       Injected explicitly so the existing CSS layering rules apply;
+       liquid-ripple.js will insert its own canvas as a sibling. *@
+    <canvas class="snow-tunnel-canvas category-page-fx" aria-hidden="true"></canvas>
     <div class="category-hero">
         <div class="category-hero-inner">
             <button class="btn-back" @onclick="GoHome">← Back</button>
@@ -294,6 +298,8 @@
 <style>
     html { scroll-behavior: smooth; }
     .category-page {
+        position: relative;
+        isolation: isolate;
         min-height: 100vh;
         background:
             linear-gradient(180deg, rgba(60, 50, 100, 0.18) 0%, rgba(40, 30, 80, 0.32) 100%),
@@ -301,6 +307,27 @@
         background-size: cover;
         background-attachment: fixed;
         background-position: var(--bg-position, center);
+    }
+    /* Hero-effects canvases (snow tunnel + injected liquid ripple)
+       sit fixed under the page content so they follow the scroll,
+       just like the CSS background-attachment: fixed. */
+    .category-page > .snow-tunnel-canvas,
+    .category-page > #liquid-ripple-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        display: block;
+    }
+    .category-page > #liquid-ripple-canvas { z-index: 0; }
+    .category-page > .snow-tunnel-canvas   { z-index: 1; }
+    /* Any non-canvas direct child of the page sits above the FX
+       layer — cheaper than enumerating every section name and
+       resilient to new content being added later. */
+    .category-page > *:not(canvas) {
+        position: relative;
+        z-index: 2;
     }
 
     .category-hero {
