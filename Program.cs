@@ -189,6 +189,13 @@ try
     // can opt-out of suspicious-traffic handling.
     app.UseScraperRewrite();
 
+    // SECOND middleware — attach OWASP security headers (CSP / X-Frame /
+    // X-Content-Type / Referrer-Policy / Permissions-Policy / COOP /
+    // CORP) to every interactive response. Skipped for scraper traffic
+    // so social previews aren't blocked by CSP — those clients have
+    // already been routed to /og/{id} by ScraperRewriteMiddleware.
+    app.UseSecurityHeaders();
+
     // Helper: was this request marked as scraper traffic by the rewrite middleware?
     static bool IsScraperRequest(HttpContext ctx) =>
         ctx.Items.TryGetValue(MyHomePage.Services.ScraperRewriteMiddleware.ContextKey, out var v)
