@@ -41,6 +41,15 @@
         let centerY = 0;
         let targetCenterX = 0;
         let targetCenterY = 0;
+        // Raw cursor position (eased separately from the vanishing
+        // point) used to draw a soft spotlight that brightens the
+        // background under the mouse.
+        let cursorX = -9999;
+        let cursorY = -9999;
+        let smoothCursorX = -9999;
+        let smoothCursorY = -9999;
+        let cursorInside = false;
+        let cursorIntensity = 0; // 0 → 1, eases up when inside, down when out
 
         // Camera intrinsics. Field of view here is just a scaling
         // factor for the perspective projection: bigger FOV → flakes
@@ -195,6 +204,30 @@
             ctx.restore();
         }
 
+        function drawCursorGlow() {
+            // Soft spotlight under the mouse. `screen` blending adds
+            // brightness without producing the ugly white-out you get
+            // from `lighter` once multiple bright layers stack — it
+            // saturates gracefully at white. Radius scales with the
+            // hero size so the glow feels right on phones and 4K.
+            if (cursorIntensity <= 0.01) return;
+            const radius = Math.min(width, height) * 0.45;
+            const grad = ctx.createRadialGradient(
+                smoothCursorX, smoothCursorY, 0,
+                smoothCursorX, smoothCursorY, radius);
+            // Warm-cool icy white core; transparent at the edge so
+            // the glow blends seamlessly into the existing scene.
+            grad.addColorStop(0,   `rgba(230, 240, 255, ${0.55 * cursorIntensity})`);
+            grad.addColorStop(0.35,`rgba(170, 205, 255, ${0.22 * cursorIntensity})`);
+            grad.addColorStop(0.7, `rgba(120, 170, 240, ${0.08 * cursorIntensity})`);
+            grad.addColorStop(1,   'rgba(0, 0, 0, 0)');
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+            ctx.restore();
+        }
+
         function drawVignette() {
             // Subtle radial darkening from the vanishing point outward
             // sells the "tunnel" reading — without it the canvas
@@ -222,6 +255,15 @@
             centerX += (targetCenterX - centerX) * 0.06;
             centerY += (targetCenterY - centerY) * 0.06;
 
+            // Smooth the cursor-following spotlight on its own timeline
+            // (a bit snappier than the parallax — the glow should feel
+            // attached to the cursor, not lagging behind it).
+            if (smoothCursorX < -1000) { smoothCursorX = cursorX; smoothCursorY = cursorY; }
+            smoothCursorX += (cursorX - smoothCursorX) * 0.22;
+            smoothCursorY += (cursorY - smoothCursorY) * 0.22;
+            const intensityTarget = cursorInside ? 1 : 0;
+            cursorIntensity += (intensityTarget - cursorIntensity) * 0.08;
+
             ctx.clearRect(0, 0, width, height);
             drawVignette();
 
@@ -229,6 +271,11 @@
             // flakes correctly occlude (their alpha) the distant ones.
             flakes.sort((a, b) => b.z - a.z);
             for (let i = 0; i < flakes.length; i++) drawFlake(flakes[i], dt);
+
+            // Glow drawn last so it lights the flakes too, not just
+            // the background — the `screen` blend mode means it
+            // brightens every pixel under the spotlight equally.
+            drawCursorGlow();
 
             if (running) raf = requestAnimationFrame(frame);
         }
@@ -242,6 +289,20 @@
             const py = e.clientY - rect.top;
             targetCenterX = width / 2 + (px - width / 2) * 0.25;
             targetCenterY = height / 2 + (py - height / 2) * 0.25;
+
+            // Spotlight target = real cursor position. We accept any
+            // pointer move on the document so the glow tracks the
+            // mouse even while it's hovering a category card — the
+            // card sits above the canvas but the document still sees
+            // the event.
+            cursorX = px;
+            cursorY = py;
+            cursorInside =
+                px >= 0 && px <= width && py >= 0 && py <= height;
+        }
+
+        function onPointerLeave() {
+            cursorInside = false;
         }
 
         function onVisibilityChange() {
@@ -258,6 +319,8 @@
         resize();
         window.addEventListener('resize', resize, { passive: true });
         window.addEventListener('pointermove', onPointerMove, { passive: true });
+        window.addEventListener('pointerout', onPointerLeave, { passive: true });
+        window.addEventListener('blur', onPointerLeave, { passive: true });
         document.addEventListener('visibilitychange', onVisibilityChange);
         raf = requestAnimationFrame(frame);
     }
