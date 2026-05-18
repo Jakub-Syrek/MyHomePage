@@ -287,7 +287,7 @@ public sealed class VideoServiceMoreTests
     }
 
     [Test]
-    public async Task RemoveMediaAsync_RemovesLastMedia_LeavesFileNameEmpty()
+    public async Task RemoveMediaAsync_RemovesLastMedia_RestoresCategoryPlaceholder()
     {
         var video = Video.Create(
             1, "T", "", "only.mp4", null, VideoCategories.Running, 100);
@@ -296,6 +296,46 @@ public sealed class VideoServiceMoreTests
             MediaItem.Create("only.mp4", MediaType.Video, 100, 0)
         };
         _repo.GetByIdAsync(1).Returns(video);
+        // Pretend the wwwroot bg copy succeeds and returns a non-zero
+        // byte count — that's how the service learns it can restore.
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Any<string>(), 1, "cover.jpg")
+            .Returns(4242L);
+
+        var result = await _service.RemoveMediaAsync(1, "only.mp4");
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Message, Does.Contain("Default"));
+        Assert.That(video.Media, Has.Count.EqualTo(1));
+        Assert.That(video.Media[0].FileName, Is.EqualTo("cover.jpg"));
+        Assert.That(video.Media[0].Type, Is.EqualTo(MediaType.Image));
+        Assert.That(video.Media[0].SizeBytes, Is.EqualTo(4242));
+        Assert.That(video.FileName, Is.EqualTo("cover.jpg"));
+        Assert.That(video.FileSizeBytes, Is.EqualTo(4242));
+        await _storage.Received().CopyWwwRootFileToVideoAsync(
+            Arg.Is<string>(p => p.Contains("running-bg")), 1, "cover.jpg");
+        // og.jpg is re-rendered against the new cover.
+        await _storage.Received().GenerateOgImageAsync(
+            Arg.Is<string>(p => p.EndsWith("cover.jpg", StringComparison.OrdinalIgnoreCase)),
+            Arg.Is<string>(p => p.EndsWith("og.jpg", StringComparison.OrdinalIgnoreCase)),
+            Arg.Any<(double X, double Y)?>(),
+            Arg.Any<OgOverlay?>());
+    }
+
+    [Test]
+    public async Task RemoveMediaAsync_RemovesLastMedia_PlaceholderSeedFails_FallsBackToEmpty()
+    {
+        var video = Video.Create(
+            1, "T", "", "only.mp4", null, VideoCategories.Running, 100);
+        video.Media = new List<MediaItem>
+        {
+            MediaItem.Create("only.mp4", MediaType.Video, 100, 0)
+        };
+        _repo.GetByIdAsync(1).Returns(video);
+        // No category bg asset on disk -> CopyWwwRootFileToVideoAsync returns 0.
+        _storage.CopyWwwRootFileToVideoAsync(
+                Arg.Any<string>(), 1, "cover.jpg")
+            .Returns(0L);
 
         var result = await _service.RemoveMediaAsync(1, "only.mp4");
 

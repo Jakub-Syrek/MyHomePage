@@ -365,9 +365,22 @@ public sealed class VideoService : IVideoService
                     : string.Empty;
             }
 
+            // If the operator just removed the last attached media, the
+            // item would otherwise render as an empty "no media yet" tile.
+            // Restore the category's static background as a stump cover
+            // so the gallery still has a visual for the activity and the
+            // Facebook preview keeps working.
+            var restoredPlaceholder = false;
+            if (media.Count == 0)
+            {
+                restoredPlaceholder = await TryRestoreCategoryPlaceholderAsync(video);
+            }
+
             await _repository.SaveAsync(video);
-            return OperationResult.Success(
-                $"Removed '{entry.FileName}' from item {videoId}.");
+
+            return OperationResult.Success(restoredPlaceholder
+                ? $"Removed '{entry.FileName}'. Default {video.Category} placeholder restored."
+                : $"Removed '{entry.FileName}' from item {videoId}.");
         }
         catch (Exception ex)
         {
@@ -408,6 +421,56 @@ public sealed class VideoService : IVideoService
     /// kept for backwards compatibility with internal call-sites.
     /// </summary>
     internal static OgOverlay? BuildOverlay(Video video) => video.ToOgOverlay();
+
+    /// <summary>
+    /// Reseeds the category's static background image as <c>cover.jpg</c>
+    /// for a gallery item that has just lost its last media file. Also
+    /// regenerates <c>og.jpg</c> with the up-to-date overlay so the
+    /// Facebook preview keeps working. Returns <c>true</c> when the
+    /// placeholder was successfully restored.
+    /// </summary>
+    private async Task<bool> TryRestoreCategoryPlaceholderAsync(Video video)
+    {
+        // Map the category to its wwwroot-relative bg asset. Strip the
+        // leading slash because IFileStorageService.CopyWwwRootFileToVideoAsync
+        // works against the resolved WebRootPath.
+        var placeholderUrl = VideoCategories.GetPlaceholderImage(video.Category);
+        var wwwRootRelative = placeholderUrl.TrimStart('/');
+        if (string.IsNullOrEmpty(wwwRootRelative)) return false;
+
+        try
+        {
+            var coverSize = await _storage.CopyWwwRootFileToVideoAsync(
+                wwwRootRelative, video.Id, "cover.jpg");
+            if (coverSize <= 0) return false;
+
+            video.Media = new List<MediaItem>
+            {
+                MediaItem.Create("cover.jpg", MediaType.Image, coverSize, 0)
+            };
+            video.FileName = "cover.jpg";
+            video.FileSizeBytes = coverSize;
+
+            // Refresh the Facebook preview against the freshly-restored
+            // cover so the og.jpg matches what the gallery shows.
+            var dir = _storage.GetVideoDirectoryPath(video.Id);
+            var coverPath = Path.Combine(dir, "cover.jpg");
+            var ogPath = Path.Combine(dir, "og.jpg");
+            await _storage.GenerateOgImageAsync(
+                coverPath, ogPath, overlay: video.ToOgOverlay());
+
+            _logger.LogInformation(
+                "Restored {Category} placeholder cover for item {Id} ({KB} KB)",
+                video.Category, video.Id, coverSize / 1024);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not restore category placeholder for item {Id}", video.Id);
+            return false;
+        }
+    }
 
     /// <summary>
     /// Reads the capture timestamp from the given file and remembers the
