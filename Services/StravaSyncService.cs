@@ -505,8 +505,23 @@ public sealed class StravaSyncService : IStravaSyncService
         if (string.IsNullOrEmpty(relative)) return 0;
         try
         {
-            return await _storage.CopyWwwRootFileToVideoAsync(
+            var coverBytes = await _storage.CopyWwwRootFileToVideoAsync(
                 relative, videoId, CoverFileName);
+
+            // Seed the OG preview from the same category asset so Strava
+            // stumps share on Facebook with a sane 1.91:1 image instead
+            // of letting the scraper guess. Best-effort — failures stay
+            // silent inside GenerateOgImageAsync.
+            if (coverBytes > 0)
+            {
+                var coverPath = Path.Combine(
+                    _storage.GetVideoDirectoryPath(videoId), CoverFileName);
+                var ogPath = Path.Combine(
+                    _storage.GetVideoDirectoryPath(videoId), "og.jpg");
+                await _storage.GenerateOgImageAsync(coverPath, ogPath);
+            }
+
+            return coverBytes;
         }
         catch (Exception ex)
         {

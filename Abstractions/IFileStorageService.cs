@@ -55,4 +55,24 @@ public interface IFileStorageService
         string wwwRootRelativePath,
         int videoId,
         string targetFileName);
+
+    /// <summary>
+    /// Generates a Facebook / Open Graph friendly image (1200x630, 1.91:1
+    /// aspect ratio) from the supplied source image and writes it next to
+    /// the source. The source is centre-cropped by default; a normalised
+    /// <paramref name="cropFocus"/> point can shift the crop window so the
+    /// operator's framing is preserved.
+    /// </summary>
+    /// <param name="sourceImagePath">Absolute path to an existing JPEG/PNG/WEBP.</param>
+    /// <param name="targetOgPath">Absolute path to write the 1200x630 JPEG.</param>
+    /// <param name="cropFocus">
+    /// Optional focal point as (xFraction, yFraction) in [0,1] — the centre
+    /// of the crop window. <c>null</c> defaults to (0.5, 0.5) (geometric
+    /// centre).
+    /// </param>
+    /// <returns>Byte size of the generated OG image, or 0 on failure.</returns>
+    Task<long> GenerateOgImageAsync(
+        string sourceImagePath,
+        string targetOgPath,
+        (double X, double Y)? cropFocus = null);
 }

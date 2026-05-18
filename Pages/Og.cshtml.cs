@@ -17,8 +17,13 @@ namespace MyHomePage.Pages;
 public sealed class OgModel : PageModel
 {
     private readonly IVideoService _videoService;
+    private readonly IFileStorageService _storage;
 
-    public OgModel(IVideoService videoService) => _videoService = videoService;
+    public OgModel(IVideoService videoService, IFileStorageService storage)
+    {
+        _videoService = videoService;
+        _storage = storage;
+    }
 
     public string Title { get; set; } = "My Mountain Adventures";
     public string Description { get; set; } = "Mountain adventure photos and videos.";
@@ -60,10 +65,20 @@ public sealed class OgModel : PageModel
         var firstImage = media.FirstOrDefault(m => m.Type == MediaType.Image);
         var firstVideo = media.FirstOrDefault(m => m.Type == MediaType.Video);
 
-        ImageUrl = firstImage is not null
-            ? $"{origin}/videos/{id}/{firstImage.FileName}"
-            : $"{origin}/images/mountains-bg.jpg";
-        HasImage = firstImage is not null;
+        // Prefer the pre-cropped 1200x630 og.jpg if VideoService or the
+        // Strava importer generated one — scrapers then render the exact
+        // framing we chose instead of running their own centre-crop.
+        var ogJpgPath = Path.Combine(_storage.GetVideoDirectoryPath(id), "og.jpg");
+        // System.IO.File qualified because PageModel.File(byte[], string)
+        // shadows the type alias inside a Razor Page model context.
+        var hasDedicatedOgImage = System.IO.File.Exists(ogJpgPath);
+
+        ImageUrl = hasDedicatedOgImage
+            ? $"{origin}/videos/{id}/og.jpg"
+            : firstImage is not null
+                ? $"{origin}/videos/{id}/{firstImage.FileName}"
+                : $"{origin}/images/mountains-bg.jpg";
+        HasImage = hasDedicatedOgImage || firstImage is not null;
 
         if (firstVideo is not null)
         {

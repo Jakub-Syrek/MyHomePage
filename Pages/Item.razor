@@ -1,6 +1,7 @@
 @page "/item/{Id:int}"
 @layout MainLayout
 @inject IVideoService VideoService
+@inject IFileStorageService FileStorage
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -11,9 +12,19 @@
     var pageUrl = _pageUrl;
     var firstImage = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Image);
     var firstVideo = _item.GetAllMedia().FirstOrDefault(m => m.Type == MediaType.Video);
-    var ogImageUrl = firstImage is not null
-        ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstImage.FileName}").ToString()
-        : Nav.ToAbsoluteUri("/images/mountains-bg.jpg").ToString();
+
+    // Prefer the pre-cropped 1200x630 og.jpg if VideoService / Strava
+    // import generated one — Facebook + LinkedIn + Slack all centre-crop
+    // the source otherwise, which routinely chops off heads and hands.
+    // Falls back to the first image (original aspect) and finally to a
+    // static category bg if the item has no media at all.
+    var ogJpgPath = Path.Combine(FileStorage.GetVideoDirectoryPath(Id), "og.jpg");
+    var hasDedicatedOgImage = File.Exists(ogJpgPath);
+    var ogImageUrl = hasDedicatedOgImage
+        ? Nav.ToAbsoluteUri($"/videos/{Id}/og.jpg").ToString()
+        : firstImage is not null
+            ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstImage.FileName}").ToString()
+            : Nav.ToAbsoluteUri("/images/mountains-bg.jpg").ToString();
     var ogVideoUrl = firstVideo is not null
         ? Nav.ToAbsoluteUri($"/videos/{Id}/{firstVideo.FileName}").ToString()
         : null;

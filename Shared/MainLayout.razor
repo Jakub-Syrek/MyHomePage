@@ -439,9 +439,9 @@
     @@media (max-width: 500px) {
         .logo span { display: none; } /* keep only the icon to save space */
         .header-content { padding: 12px 10px; gap: 10px; }
-        /* On the very narrowest viewports, drop the Strava admin chevron
-           too — admin uses /admin/strava deep-link or desktop. */
-        .pinned-controls a[href="/admin/strava"] { display: none; }
+        /* Strava chevron stays visible — operator uses it heavily on the
+           phone to trigger auto-sync of fresh rides. The other admin
+           links (Coach, Logs) remain hidden via the 700px breakpoint. */
     }
 
     .app-main {

@@ -98,6 +98,17 @@ public sealed class VideoService : IVideoService
                     totalSize += size;
                     mediaItems.Add(MediaItem.Create(targetName, MediaType.Image, size, order));
 
+                    // First image of the upload becomes the Facebook / OG
+                    // preview source. A 1200x630 centre-crop is written to
+                    // og.jpg so scrapers display a deterministic preview
+                    // instead of running their own crop heuristic.
+                    if (imageCounter == 1)
+                    {
+                        var ogPath = Path.Combine(
+                            _storage.GetVideoDirectoryPath(videoId), "og.jpg");
+                        await _storage.GenerateOgImageAsync(savedPath, ogPath);
+                    }
+
                     if (latitude is null) // try GPS from this photo
                     {
                         var coords = _locationExtractor.TryExtract(savedPath);
@@ -428,6 +439,18 @@ public sealed class VideoService : IVideoService
         var savedPath = await _storage.SaveImageWithResizeAsync(
             file, videoId, _options.MaxFileSizeBytes, targetName);
         var size = new FileInfo(savedPath).Length;
+
+        // First photo appended to an item that did not yet have a real
+        // photo becomes the new OG preview source. We always regenerate
+        // og.jpg from the freshest first image — easier to reason about
+        // than tracking which photo "owns" the preview.
+        if (photoIndex == 1)
+        {
+            var ogPath = Path.Combine(
+                _storage.GetVideoDirectoryPath(videoId), "og.jpg");
+            await _storage.GenerateOgImageAsync(savedPath, ogPath);
+        }
+
         _logger.LogInformation(
             "Item {Id}: appended image {Name} ({KB} KB)",
             videoId, targetName, size / 1024);

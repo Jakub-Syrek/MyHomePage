@@ -124,6 +124,97 @@ public sealed class FileStorageService : IFileStorageService
             await Task.Run(() => Directory.Delete(dir, recursive: true));
     }
 
+    /// <summary>
+    /// Open Graph / Facebook recommended image dimensions: 1200x630, 1.91:1.
+    /// Producing this size up-front means scrapers (FB, LinkedIn, Slack,
+    /// WhatsApp) display the preview as-cropped instead of running their
+    /// own centre-crop heuristic that often chops off heads or hands.
+    /// </summary>
+    private const int OgWidth = 1200;
+    private const int OgHeight = 630;
+    private const double OgAspect = (double)OgWidth / OgHeight; // 1.9047...
+
+    /// <inheritdoc />
+    public async Task<long> GenerateOgImageAsync(
+        string sourceImagePath,
+        string targetOgPath,
+        (double X, double Y)? cropFocus = null)
+    {
+        if (!File.Exists(sourceImagePath))
+        {
+            _logger.LogDebug("OG image skipped: source missing at {Source}", sourceImagePath);
+            return 0;
+        }
+
+        try
+        {
+            using var source = await Image.LoadAsync(sourceImagePath);
+
+            var focus = cropFocus ?? (0.5, 0.5);
+            var (cropX, cropY, cropW, cropH) = ResolveCropWindow(
+                source.Width, source.Height, focus.X, focus.Y);
+
+            source.Mutate(ctx =>
+            {
+                ctx.Crop(new Rectangle(cropX, cropY, cropW, cropH));
+                ctx.Resize(new ResizeOptions
+                {
+                    Size = new Size(OgWidth, OgHeight),
+                    Mode = ResizeMode.Stretch
+                });
+            });
+
+            Directory.CreateDirectory(Path.GetDirectoryName(targetOgPath)!);
+            var encoder = new JpegEncoder { Quality = 88 };
+            await source.SaveAsJpegAsync(targetOgPath, encoder);
+
+            var size = new FileInfo(targetOgPath).Length;
+            _logger.LogInformation(
+                "OG image generated {Path} ({KB} KB, focus {X:F2}/{Y:F2})",
+                targetOgPath, size / 1024, focus.X, focus.Y);
+            return size;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "OG image generation failed for {Source}", sourceImagePath);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Computes the largest 1.91:1 rectangle that fits inside the source
+    /// image, then shifts it so the centre matches the supplied focal
+    /// point (clamped to stay inside the source).
+    /// </summary>
+    private static (int X, int Y, int Width, int Height) ResolveCropWindow(
+        int sourceWidth, int sourceHeight, double focusX, double focusY)
+    {
+        int cropW, cropH;
+        var sourceAspect = (double)sourceWidth / sourceHeight;
+        if (sourceAspect >= OgAspect)
+        {
+            // Source is wider than 1.91:1 — height is the limiting axis.
+            cropH = sourceHeight;
+            cropW = (int)Math.Round(sourceHeight * OgAspect);
+        }
+        else
+        {
+            // Source is taller than 1.91:1 — width is the limiting axis.
+            cropW = sourceWidth;
+            cropH = (int)Math.Round(sourceWidth / OgAspect);
+        }
+
+        var clampedFocusX = Math.Clamp(focusX, 0.0, 1.0);
+        var clampedFocusY = Math.Clamp(focusY, 0.0, 1.0);
+
+        var cropX = (int)Math.Round(clampedFocusX * sourceWidth - cropW / 2.0);
+        var cropY = (int)Math.Round(clampedFocusY * sourceHeight - cropH / 2.0);
+        cropX = Math.Clamp(cropX, 0, sourceWidth - cropW);
+        cropY = Math.Clamp(cropY, 0, sourceHeight - cropH);
+        return (cropX, cropY, cropW, cropH);
+    }
+
     /// <inheritdoc />
     public async Task<long> CopyWwwRootFileToVideoAsync(
         string wwwRootRelativePath,
