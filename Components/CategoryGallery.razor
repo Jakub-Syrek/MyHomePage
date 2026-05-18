@@ -827,18 +827,24 @@
     }
     .merge-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
-    /* ── Multi-sport nested source panel ───────────────────────────── */
+    /* ── Multi-sport nested source panel ─────────────────────────────
+       Standalone card that matches the master CollectionRow's geometry:
+       same max-width (620 px), same border-radius (22 px on all four
+       corners — not the previous 0/0/16/16 with a -18 px overlap, which
+       made the panel's flat top corners poke out of the master's
+       rounded bottom corners). A small positive top margin gives the
+       eye a clear "this is a follow-up panel" gap instead of trying
+       (and failing) to stitch the two cards into one shape. */
     .ms-subs {
         width: 100%;
         max-width: 620px;
-        margin: -18px auto 28px;
+        margin: 8px auto 28px;
         padding: 6px 14px 4px;
         background: rgba(255, 255, 255, 0.42);
         backdrop-filter: blur(14px) saturate(160%);
         -webkit-backdrop-filter: blur(14px) saturate(160%);
         border: 1px solid rgba(255, 255, 255, 0.55);
-        border-top: 0;
-        border-radius: 0 0 16px 16px;
+        border-radius: 22px;
         box-shadow: 0 12px 28px rgba(20, 30, 60, 0.10);
     }
     .ms-subs > summary {
@@ -884,11 +890,13 @@
     @@media (max-width: 700px) {
         .ms-subs {
             max-width: 100%;
-            margin: 4px 0 22px;
+            /* Keep the all-around border + 22 px radius even on phones
+               — CollectionRow drops to flat / full-width at this size
+               but the source-activities panel still reads as its own
+               card. Otherwise the right edge looks chopped against
+               the rounded master tile above. */
+            margin: 8px 0 22px;
             padding: 6px 10px 4px;
-            border-left: 0;
-            border-right: 0;
-            border-radius: 0;
             box-shadow: 0 8px 18px rgba(20, 30, 60, 0.08);
         }
         .ms-subs > summary { padding: 10px 6px; }
