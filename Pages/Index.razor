@@ -67,7 +67,10 @@
     </div>
 </div>
 
+<script src="/js/liquid-ripple.js"></script>
 <script src="/js/snow-tunnel.js"></script>
+<script src="/js/card-tilt.js"></script>
+<script src="/js/cursor-trail.js"></script>
 
 <style>
     /* Hero block — owns the mountain backdrop and hosts the snow
@@ -85,18 +88,24 @@
             url('/images/mountains-bg.jpg') center/cover fixed;
         overflow: hidden;
     }
+    /* Layer stack inside .home-hero (bottom → top):
+         z-index: 0  liquid-ripple-canvas  (injected by JS, distorts mountain bg)
+         z-index: 1  #snow-tunnel-canvas   (existing snow tunnel)
+         z-index: 2  .home-hero-content    (cards, must stay clickable)
+       The fixed cursor-trail canvas sits outside this stacking
+       context at z-index 9999 so it always rides on top. */
     .home-hero-canvas {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        z-index: 0;
+        z-index: 1;
         pointer-events: none; /* clicks fall through to the cards */
         display: block;
     }
     .home-hero-content {
         position: relative;
-        z-index: 1;
+        z-index: 2;
         max-width: 1200px;
         margin: 0 auto;
     }
