@@ -27,8 +27,12 @@ public sealed class SecurityHeadersMiddleware
     /// </remarks>
     private const string ContentSecurityPolicy =
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "style-src 'self' 'unsafe-inline'; " +
+        // unpkg.com is whitelisted for the Leaflet bundle used on the
+        // /map page — both the script and its companion stylesheet.
+        // Without this CSP blocks the CDN load and the map renders as
+        // an empty container.
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; " +
+        "style-src 'self' 'unsafe-inline' https://unpkg.com; " +
         "img-src 'self' data: blob: https:; " +
         "media-src 'self' blob:; " +
         "font-src 'self' data:; " +
