@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="ms-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#DDD6FE"/>
+    </linearGradient>
+    <linearGradient id="ms-ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0b1320"/>
+    </linearGradient>
+    <linearGradient id="ms-ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#ms-sky)"/>
+  <!-- Sun -->
+  <circle cx="98" cy="36" r="9" fill="#FDE68A" opacity="0.9"/>
+  <!-- Ground strip -->
+  <path d="M 8 102 L 120 102 L 120 112 L 8 112 Z" fill="url(#ms-ground)"/>
+
+  <!-- Top-left: runner silhouette (small, scaled down from running.svg) -->
+  <g transform="translate(8 24) scale(0.45)">
+    <!-- Head -->
+    <circle cx="74" cy="42" r="7" fill="url(#ms-ink)"/>
+    <!-- Torso -->
+    <path d="M 68 49 L 80 49 L 78 72 L 64 72 Z" fill="url(#ms-ink)"/>
+    <!-- Front arm -->
+    <path d="M 78 52 L 84 52 L 96 38 L 92 34 Z" fill="url(#ms-ink)"/>
+    <!-- Back arm -->
+    <path d="M 68 52 L 64 52 L 52 70 L 56 72 Z" fill="url(#ms-ink)"/>
+    <!-- Front leg -->
+    <path d="M 72 72 L 80 72 L 96 92 L 88 94 Z" fill="url(#ms-ink)"/>
+    <!-- Back leg -->
+    <path d="M 64 72 L 72 72 L 60 88 L 52 84 Z" fill="url(#ms-ink)"/>
+    <path d="M 52 84 L 60 88 L 50 96 L 44 90 Z" fill="url(#ms-ink)"/>
+  </g>
+
+  <!-- Top-right: bicycle silhouette (small) -->
+  <g transform="translate(56 24) scale(0.42)">
+    <!-- Rear wheel -->
+    <circle cx="38" cy="86" r="14" fill="none" stroke="url(#ms-ink)" stroke-width="4"/>
+    <circle cx="38" cy="86" r="2.5" fill="url(#ms-ink)"/>
+    <!-- Front wheel -->
+    <circle cx="92" cy="86" r="14" fill="none" stroke="url(#ms-ink)" stroke-width="4"/>
+    <circle cx="92" cy="86" r="2.5" fill="url(#ms-ink)"/>
+    <!-- Frame -->
+    <path d="M 38 86 L 62 60 L 78 60 L 92 86 Z M 62 60 L 70 86 L 38 86 Z"
+          fill="none" stroke="url(#ms-ink)" stroke-width="4" stroke-linejoin="round"/>
+    <!-- Saddle + handlebars -->
+    <path d="M 62 60 L 58 50 M 50 48 L 66 48" stroke="url(#ms-ink)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 78 60 L 84 48 M 78 48 L 92 48" stroke="url(#ms-ink)" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Bottom: stylised mountain peaks (hike) -->
+  <path d="M 8 102 L 30 70 L 46 88 L 64 56 L 84 80 L 102 64 L 120 102 Z"
+        fill="url(#ms-ink)" opacity="0.92"/>
+  <!-- Snow caps -->
+  <path d="M 60 60 L 64 56 L 68 60 L 64 65 Z" fill="#FFFFFF" opacity="0.85"/>
+  <path d="M 98 68 L 102 64 L 106 68 L 102 73 Z" fill="#FFFFFF" opacity="0.85"/>
+
+  <!-- Plus connector — three discs meeting in the middle -->
+  <circle cx="38" cy="78" r="4" fill="#FBBF24" stroke="#FFFFFF" stroke-width="1.5"/>
+  <circle cx="90" cy="78" r="4" fill="#10B981" stroke="#FFFFFF" stroke-width="1.5"/>
+  <circle cx="64" cy="92" r="4" fill="#3B82F6" stroke="#FFFFFF" stroke-width="1.5"/>
+
+  <!-- Ring border -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+</svg>

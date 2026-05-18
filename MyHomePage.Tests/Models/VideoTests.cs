@@ -169,6 +169,7 @@ public sealed class VideoCategoriesTests
     [TestCase("Calisthenics", "/calisthenics")]
     [TestCase("Running", "/running")]
     [TestCase("Bicycle", "/bicycle")]
+    [TestCase("Multi-sport", "/multisport")]
     [TestCase("unknown", "/")]
     public void GetUrl_MapsCategoryToExpectedPath(string category, string expected)
     {
