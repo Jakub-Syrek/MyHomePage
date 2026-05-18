@@ -70,10 +70,48 @@ try
             options.AccessDeniedPath = "/login";
             options.ExpireTimeSpan = TimeSpan.FromDays(7);
             options.SlidingExpiration = true;
+            // Auth cookie is the most security-sensitive cookie we hand
+            // out. HttpOnly stops JS from reading it (defence against
+            // XSS-driven session theft), Strict SameSite makes it
+            // unusable on any cross-site request (defence against CSRF
+            // session reuse) and SecurePolicy=Always means it never
+            // travels over plain HTTP — Railway terminates TLS at the
+            // edge but the cookie still needs the flag.
+            options.Cookie.Name = ".MyHomePage.Auth";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.IsEssential = true;
         });
 
     builder.Services.AddAuthorizationBuilder();
-    builder.Services.AddAntiforgery();
+    builder.Services.AddAntiforgery(options =>
+    {
+        // Same hardening as the auth cookie itself: HttpOnly so JS can't
+        // read it, Strict SameSite so the token never rides on a
+        // cross-site request, Secure so it never leaves over plain HTTP.
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    });
+
+    // Rate-limit the login endpoint so a leaked email can't be paired
+    // with brute-forced passwords. 6 attempts per minute per IP is
+    // tight enough to make automated guessing impractical while still
+    // accommodating a fat-fingered legitimate user.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.AddPolicy("login", httpContext =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 6,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+    });
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
 
@@ -331,6 +369,11 @@ try
         branch.UseAuthorization();
         branch.UseAntiforgery();
     });
+
+    // Rate limiter goes AFTER auth so we can partition by user when
+    // authenticated, but BEFORE the endpoint dispatch so /login still
+    // gets the IP-based cap before the handler runs.
+    app.UseRateLimiter();
 
     // ── Health endpoint for Railway / monitoring ──────────────────────────────
     app.MapGet("/health", () => Results.Ok(new

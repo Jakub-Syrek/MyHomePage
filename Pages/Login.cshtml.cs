@@ -2,13 +2,21 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using MyHomePage.Abstractions;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace MyHomePage.Pages;
 
-[IgnoreAntiforgeryToken]
+/// <summary>
+/// Login form for the cookie-based authentication scheme. CSRF
+/// protection is enforced via the framework-default antiforgery token
+/// (the matching &lt;input&gt; sits on the Razor view); the
+/// <c>EnableRateLimiting("login")</c> attribute caps POST attempts
+/// per IP to defeat brute-force credential stuffing.
+/// </summary>
+[EnableRateLimiting("login")]
 public class LoginModel : PageModel
 {
     private readonly ICredentialRepository _credentials;
